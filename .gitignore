@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Env / secrets — NUNCA commitar
+.env
+.env.local
+*.pem
+
+# SQLite database (dados reais, não versionar)
+*.db
+*.sqlite
+*.sqlite3
+backend/prisma/dev.db*
+
+# Build output
+dist/
+build/
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

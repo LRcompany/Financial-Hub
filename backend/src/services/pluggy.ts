@@ -1,0 +1,62 @@
+// Integração com a API da Pluggy (Open Finance).
+// Endpoints confirmados em docs.pluggy.ai e testados manualmente em 20/08/2026
+// (ver docs/blueprint.md — BTG confirmado com dado real, Sofisa sem investimento).
+
+const PLUGGY_BASE_URL = "https://api.pluggy.ai";
+
+let cachedApiKey: { key: string; expiresAt: number } | null = null;
+
+/** Autentica e retorna a API Key (válida por 2h) — cacheia em memória entre chamadas. */
+export async function getPluggyApiKey(): Promise<string> {
+  if (cachedApiKey && cachedApiKey.expiresAt > Date.now()) {
+    return cachedApiKey.key;
+  }
+
+  const response = await fetch(`${PLUGGY_BASE_URL}/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: process.env.PLUGGY_CLIENT_ID,
+      clientSecret: process.env.PLUGGY_CLIENT_SECRET,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha na autenticação Pluggy: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { apiKey: string };
+  // Cacheia por 1h50 (margem de segurança sobre as 2h reais)
+  cachedApiKey = { key: data.apiKey, expiresAt: Date.now() + 110 * 60 * 1000 };
+  return data.apiKey;
+}
+
+async function pluggyGet<T>(path: string): Promise<T> {
+  const apiKey = await getPluggyApiKey();
+  const response = await fetch(`${PLUGGY_BASE_URL}${path}`, {
+    headers: { "X-API-KEY": apiKey },
+  });
+  if (!response.ok) {
+    throw new Error(`Pluggy GET ${path} falhou: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+/** Detalhes + status de sincronização de uma conexão (item). Não existe endpoint pra listar todos — o itemId vem do Dashboard. */
+export function getItem(itemId: string) {
+  return pluggyGet(`/items/${itemId}`);
+}
+
+export function getAccounts(itemId: string) {
+  return pluggyGet(`/accounts?itemId=${itemId}`);
+}
+
+export function getInvestments(itemId: string) {
+  return pluggyGet(`/investments?itemId=${itemId}`);
+}
+
+// TODO: quando formos ligar o sync de verdade —
+// 1. Puxar GET /transactions?accountId= por conta
+// 2. Mapear pra Transaction (source: "pluggy", externalId: id da Pluggy)
+// 3. Rodar a sugestão de categoria (categorization.ts) antes de salvar
+// 4. Detectar pagamento de fatura (Caixa → C6) e marcar isTransfer: true

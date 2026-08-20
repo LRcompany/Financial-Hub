@@ -1,0 +1,267 @@
+// Schema inicial — mapeado a partir de docs/blueprint.md
+// SQLite não suporta enum nativo no Prisma, então campos que seriam enum
+// viram String com o conjunto de valores válidos documentado no comentário.
+// Validação desses valores fica na camada de aplicação (ex: Zod), não no banco.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Módulo 1: Financeiro Pessoal ----------
+
+model Transaction {
+  id          String   @id @default(uuid())
+  date        DateTime
+  type        String // income | expense
+  description String
+  amount      Float
+  source      String   @default("manual") // manual | pluggy | ofx_import
+  externalId  String? // id da transação na Pluggy/OFX, evita duplicar import
+  isTransfer  Boolean  @default(false) // true = não conta como gasto/receita real
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  recurrenceId String?
+  recurrence   Recurrence? @relation(fields: [recurrenceId], references: [id])
+
+  brokerId String?
+  broker   Broker? @relation(fields: [brokerId], references: [id])
+
+  taxPaymentId String?
+  taxPayment   TaxPayment? @relation(fields: [taxPaymentId], references: [id])
+
+  projectReceiptId String?
+  projectReceipt   ProjectReceipt? @relation(fields: [projectReceiptId], references: [id])
+
+  supplierPaymentId String?
+  supplierPayment   SupplierPayment? @relation(fields: [supplierPaymentId], references: [id])
+
+  loanReceivableId String?
+  loanReceivable   LoanReceivable? @relation(fields: [loanReceivableId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([categoryId])
+}
+
+model Recurrence {
+  id           String    @id @default(uuid())
+  frequency    String    @default("monthly") // monthly (único usado hoje)
+  installments Int? // número fixo de parcelas, null = recorrente sem fim
+  startDate    DateTime
+
+  transactions Transaction[]
+  projects     Project[]
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  name     String
+  type     String // income | expense
+  essential Boolean @default(false) // só relevante para expense
+  usage    String? // pessoal | trabalho
+
+  parentId String?
+  parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryToSubcategory")
+
+  transactions   Transaction[]
+  budgetTargets  BudgetTarget[]
+  categorizationRules CategorizationRule[]
+
+  @@unique([name, parentId])
+}
+
+model BudgetTarget {
+  id            String   @id @default(uuid())
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  month         Int
+  year          Int
+  plannedAmount Float
+
+  @@unique([categoryId, month, year])
+}
+
+model DailySpendGoal {
+  id     String @id @default(uuid())
+  amount Float
+}
+
+model Debt {
+  id                String            @id @default(uuid())
+  creditor          String
+  installmentAmount Float
+  installmentCount  Int
+  startDate         DateTime
+  installments      DebtInstallment[]
+}
+
+model DebtInstallment {
+  id         String   @id @default(uuid())
+  debtId     String
+  debt       Debt     @relation(fields: [debtId], references: [id])
+  dueDate    DateTime
+  paid       Boolean  @default(false)
+  paidAmount Float?
+}
+
+model LoanReceivable {
+  id              String                    @id @default(uuid())
+  borrower        String
+  principalAmount Float
+  loanDate        DateTime
+  repayments      LoanReceivableRepayment[]
+  transactions    Transaction[]
+}
+
+model LoanReceivableRepayment {
+  id               String         @id @default(uuid())
+  loanReceivableId String
+  loanReceivable   LoanReceivable @relation(fields: [loanReceivableId], references: [id])
+  amount           Float
+  paymentDate      DateTime
+}
+
+model Broker {
+  id                String   @id @default(uuid())
+  name              String   @unique // BTG, C6, Caixa, 99, Phantom, Nomad, Mercado Pago, Sofisa, Wise, INCO
+  scope             String // JSON array: ["transactions","credit_card","investments"]
+  dataSource        String // pluggy | manual_statement | onchain_query
+  pluggyConnectorId String?
+  onchainAddress    String?
+  lastSyncedAt      DateTime?
+
+  transactions     Transaction[]
+  positionSnapshots PositionSnapshot[]
+}
+
+model Security {
+  id                   String   @id @default(uuid())
+  name                 String
+  ticker               String?
+  type                 String // FII | Ação | Renda Fixa | Cripto | Moeda | Fundo
+  sector               String?
+  targetAllocationPct  Float?
+  targetDividendYield  Float?
+
+  positionSnapshots PositionSnapshot[]
+}
+
+model PositionSnapshot {
+  id             String   @id @default(uuid())
+  brokerId       String
+  broker         Broker   @relation(fields: [brokerId], references: [id])
+  securityId     String
+  security       Security @relation(fields: [securityId], references: [id])
+  month          Int
+  year           Int
+  investedAmount Float
+  marketValue    Float
+  dividends      Float?
+
+  @@unique([brokerId, securityId, month, year])
+}
+
+model WealthGoal {
+  id                         String @id @default(uuid())
+  monthlySavingsTarget       Float
+  annualReturnAssumptionPct  Float
+  targetAmount               Float
+}
+
+model CategorizationRule {
+  id         String   @id @default(uuid())
+  pattern    String // trecho da descrição, ex: "uber"
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  confidence Float    @default(0.5)
+}
+
+// ---------- Módulo 2: Projetos & Freelance ----------
+
+model Client {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  projects Project[]
+}
+
+model Project {
+  id               String    @id @default(uuid())
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id])
+  name             String
+  startDate        DateTime
+  endDate          DateTime?
+  contractValue    Float
+  hasInvoice       Boolean   @default(true)
+  installmentCount Int       @default(1)
+  status           String    @default("em_andamento") // em_andamento | pausado | finalizado | cancelado
+
+  recurrenceId String?
+  recurrence   Recurrence? @relation(fields: [recurrenceId], references: [id])
+
+  receipts       ProjectReceipt[]
+  supplierCosts  ProjectSupplierCost[]
+}
+
+model ProjectReceipt {
+  id                String   @id @default(uuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id])
+  installmentNumber Int      @default(1)
+  amount            Float // valor cheio, sem desconto
+  paymentDate       DateTime
+
+  transactions Transaction[]
+}
+
+model TaxPayment {
+  id               String   @id @default(uuid())
+  competenceMonth  Int
+  competenceYear   Int
+  totalRevenue     Float
+  amountPaid       Float
+  paymentDate      DateTime
+  // effectiveRate é calculada em runtime: amountPaid / totalRevenue
+
+  transactions Transaction[]
+
+  @@unique([competenceMonth, competenceYear])
+}
+
+model Supplier {
+  id                String                @id @default(uuid())
+  name              String                @unique
+  projectCosts      ProjectSupplierCost[]
+}
+
+model ProjectSupplierCost {
+  id               String   @id @default(uuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id])
+  supplierId       String
+  supplier         Supplier @relation(fields: [supplierId], references: [id])
+  agreedAmount     Float
+  installmentCount Int      @default(1)
+
+  payments SupplierPayment[]
+}
+
+model SupplierPayment {
+  id                     String              @id @default(uuid())
+  projectSupplierCostId  String
+  projectSupplierCost    ProjectSupplierCost @relation(fields: [projectSupplierCostId], references: [id])
+  installmentNumber      Int                 @default(1)
+  amount                 Float
+  paymentDate            DateTime
+
+  transactions Transaction[]
+}
