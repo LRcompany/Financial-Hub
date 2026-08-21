@@ -1,0 +1,137 @@
+/**
+ * Financial Hub — Design Tokens
+ *
+ * Fonte de verdade visual: o artifact "Design System" (Claude).
+ * Toda mudança de cor/tipo/forma é decidida e validada lá primeiro —
+ * este arquivo é o espelho exato pro código. Se um valor aqui diverge
+ * do artifact, o artifact está certo; atualize este arquivo pra bater.
+ *
+ * Última sincronização: 21/08/2026
+ */
+
+:root {
+  /* ---------- base ---------- */
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-tint: #F3F5FF;
+  --border: #E9EAEE;
+  --ink: #15171C;
+  --ink-soft: #6B7076;
+  --ink-faint: #9A9EA3;
+
+  /* ---------- acento ---------- */
+  --accent: #3E5BFA;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F1F3FF;
+  --accent-hover: #2E48E0;
+
+  /* fill neutro — botão/ícone secundário, nunca borda em botão */
+  --fill-muted: #F3F4F6;
+
+  /* ---------- semântico ---------- */
+  --success: #2F9E6E;
+  --success-soft: #E1F5EA;
+  --warning: #C98A1D;
+  --warning-soft: #FBEDD6;
+  --danger: #E0645A;
+  --danger-soft: #FBE6E4;
+
+  /* ---------- gradiente — assinatura visual dos gráficos ---------- */
+  --grad: linear-gradient(90deg, #F0605A 0%, #F2934A 22%, #F0C24B 42%, #7FC96B 62%, #3FB6A8 80%, #3E5BFA 100%);
+
+  /* ---------- glass — só em elemento flutuante (modal, sheet, tooltip, header fixo, tab bar) ---------- */
+  /* NUNCA em número/valor principal — precisão de leitura vem antes de estilo */
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-blur: blur(20px) saturate(160%);
+
+  /* ---------- forma ---------- */
+  --r-sm: 12px;  /* ícones, chips, campo de formulário */
+  --r-md: 20px;  /* cards */
+  --r-lg: 28px;  /* blocos grandes */
+  --r-full: 999px; /* botões, pills, toggle */
+
+  /* ---------- elevação — leve, só quando necessário ---------- */
+  --shadow-sm: 0 2px 10px rgba(21, 23, 28, 0.05);
+  --shadow-md: 0 12px 32px rgba(21, 23, 28, 0.08);
+
+  /* ---------- espaçamento (escala 4/8) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---------- tipografia ---------- */
+  /* Produção: Proxima Nova via Adobe Fonts (kit já disponível no plano Creative Cloud do Luiz —
+     falta só adicionar o <link> do projeto Adobe Fonts no index.html e confirmar o nome exato
+     que o kit expõe, geralmente algo como 'proxima-nova'). Inter é o fallback universal. */
+  --font-display: 'proxima-nova', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Peso máximo: Semibold. Nunca Bold/Black, em nenhum tamanho — hierarquia vem de tamanho, não peso. */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600; /* teto — não ultrapassar */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101215;
+    --surface: #191C21;
+    --surface-tint: #1E2440;
+    --border: #2A2D33;
+    --ink: #F3F4F6;
+    --ink-soft: #A6ABB2;
+    --ink-faint: #6D7278;
+
+    --accent: #6E85FF;
+    --accent-ink: #0B0D12;
+    --accent-soft: #232A52;
+    --accent-hover: #8598FF;
+    --fill-muted: #21242A;
+
+    --success: #59C793;
+    --success-soft: #16301F;
+    --warning: #E3AC4F;
+    --warning-soft: #362A11;
+    --danger: #F08A80;
+    --danger-soft: #3A1D1B;
+
+    --glass-bg: rgba(25, 28, 33, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.08);
+
+    --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #101215;
+  --surface: #191C21;
+  --surface-tint: #1E2440;
+  --border: #2A2D33;
+  --ink: #F3F4F6;
+  --ink-soft: #A6ABB2;
+  --ink-faint: #6D7278;
+
+  --accent: #6E85FF;
+  --accent-ink: #0B0D12;
+  --accent-soft: #232A52;
+  --accent-hover: #8598FF;
+  --fill-muted: #21242A;
+
+  --success: #59C793;
+  --success-soft: #16301F;
+  --warning: #E3AC4F;
+  --warning-soft: #362A11;
+  --danger: #F08A80;
+  --danger-soft: #3A1D1B;
+
+  --glass-bg: rgba(25, 28, 33, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
