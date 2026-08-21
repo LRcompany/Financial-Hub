@@ -14,6 +14,9 @@ Referência visual completa: artifact **Design System** (Claude) — cor, tipogr
 - **Ícone de interface**: [Lucide](https://lucide.dev) (ISC license), traço 2px, 14px de tamanho, cor herda de `currentColor`
 - **Ícone de categoria/transação**: emoji colorido — nunca Lucide aqui, cor é informação (reconhecer categoria de relance)
 - **Glassmorphism**: `backdrop-filter` real, só em elemento flutuante (modal, bottom sheet, tooltip de gráfico, header fixo ao rolar, tab bar). Nunca em número ou valor principal — precisão de leitura vem antes de estilo
+- **Espaçamento**: escala 4/8 (4, 8, 12, 16, 24, 32, 48px) — 16px entre elementos de um bloco, 24px entre blocos, 48px entre seções
+- **Barra de progresso**: cor semântica (verde/amarelo/vermelho) pra orçamento com limite; gradiente pra dívida/patrimônio (é evolução, não limite)
+- **Navegação inferior**: fixa, glass (é elemento flutuante), 5 itens — Início, Transações, Patrimônio, Projetos, Mais
 
 ## Pendências
 
