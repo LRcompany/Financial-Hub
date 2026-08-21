@@ -17,9 +17,13 @@ Referência visual completa: artifact **Design System** (Claude) — cor, tipogr
 - **Espaçamento**: escala 4/8 (4, 8, 12, 16, 24, 32, 48px) — 16px entre elementos de um bloco, 24px entre blocos, 48px entre seções
 - **Barra de progresso**: cor semântica (verde/amarelo/vermelho) pra orçamento com limite; gradiente pra dívida/patrimônio (é evolução, não limite)
 - **Navegação inferior**: fixa, glass (é elemento flutuante), 5 itens — Início, Transações, Patrimônio, Projetos, Mais
+- **Cor do valor de transação**: texto sempre preto/neutro — nunca vermelho/verde. A direção (entrada/saída) é indicada por uma setinha colorida ao lado do valor (← verde entrada, → vermelho saída), não pelo texto. Vermelho/verde no texto fica reservado só pra status real (pago, atrasado)
 
 ## Pendências
 
 - [ ] Confirmar o nome exato da família exposta pelo kit Adobe Fonts do Luiz (provavelmente `proxima-nova`) e adicionar o `<link>` do projeto no `index.html` quando o frontend for scaffoldado
 - [ ] Definir estado vazio, skeleton de carregamento, toast e estrutura de modal/bottom sheet
-- [ ] Decidir: cor em toda transação (vermelho/verde por padrão) ou neutro no dia a dia, cor só quando é status real (pago/atrasado) — ainda em aberto com o Luiz
+
+## Adiado (não é v1)
+
+- **Captura por voz + IA** (falar "gastei 25 no almoço" → lançamento automático, casado depois com a Pluggy): tecnicamente viável (Web Speech API + Claude API), mas adiado — Luiz decidiu não vale a pena um custo recorrente pra uma feature ainda não validada. Retomar se ele pedir de novo; nesse caso o botão flutuante (+) precisa ganhar essa opção extra, e a `Transaction` precisa de um campo `pending` + lógica de casamento com o sync da Pluggy.
