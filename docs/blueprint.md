@@ -223,9 +223,19 @@ Devolve `{monthsToGoal, projectedDate, usedExtrapolation}` + `yearlyBreakdown` (
 ### Frontend
 
 - `Dashboard.tsx` — 100% ligado nas rotas acima, zero `MOCK_*`. Card **Primeira Milhão** (resumo: % + data projetada, link "Ver tudo" pra Patrimônio); **Orçamento do mês** com total consolidado antes do detalhe por categoria.
-- `Patrimonio.tsx` (rota `/patrimonio`, antes placeholder) — página real: evolução, **alocação de investimentos** (pizza por tipo de ativo), destaques do mês, e a seção **Primeira Milhão** completa (formulário de meta geral + tabela de metas por ano, editável, com adicionar/remover + tabela da projeção ano a ano).
+- `Patrimonio.tsx` (rota `/patrimonio`, antes placeholder) — página real: evolução, **alocação de investimentos** (pizza por tipo de ativo), destaques do mês, **Todas as posições** (toda posição ativa, agrupada por tipo — Ações/FIIs/Renda Fixa/Fundo/Cripto/Moeda, com corretora + investido + valor atual — `GET /api/positions`), e a seção **Primeira Milhão** completa (formulário de meta geral + tabela de metas por ano, editável, com adicionar/remover + tabela da projeção ano a ano).
 - `Conexoes.tsx` (rota `/configuracoes`) — widget da Pluggy embutido, lista de bancos conectados com Sincronizar/Reconectar.
 - `CardHeader` (`components/CardHeader.tsx`) e `currency()` (`lib/format.ts`) viraram compartilhados — `Dashboard.module.css` virou `styles/cards.module.css`, o "kit de card" que qualquer página nova (Orçamento, Projetos) reaproveita em vez de duplicar.
+- **Botão de adicionar (+)**: não existe mais como FAB global do shell — só aparece dentro de Orçamento/Patrimônio/Projetos, e cada página decide o que "adicionar" significa nela (sem tela de escolher tipo primeiro). Em Patrimônio, abre `POST /api/positions` — lançamento manual, só faz sentido pra corretora sem sync automático (Nomad, Wise, Phantom...); banco conectado recebe o aporte sozinho no sync, nunca precisa ser digitado.
+
+### `services/activePositions.ts` — a fonte única de verdade pra "o que está ativo agora"
+
+Usado por `wealth-overview` e por `positions` — nunca duplicar essa lógica. Resolve dois problemas reais que apareceram construindo "Todas as posições" (24/08/2026):
+
+1. **Corretora sem sync recente**: se o snapshot mais novo de um broker tem mais de 2 meses, ele para de contar (senão uma corretora encerrada há anos, tipo XP Investimento parada desde 2022, ficaria pra sempre como "posição atual").
+2. **Broker que migrou de planilha manual pra Pluggy** (BTG, C6, 99, Sofisa): o histórico manual agregava por categoria ("AÇÕES" numa linha só) e a Pluggy reporta cada ativo individual — são o MESMO dinheiro, não dois. A partir do mês em que a Pluggy daquele broker começou (não retroativo — o histórico anterior continua manual normalmente), os `Security` com id `MANUAL:*` daquele broker somem do cálculo.
+
+Sem isso, o "Patrimônio total" oscilava entre contar tudo em dobro (R$1,14M) ou faltar Nomad/Phantom/Wise/Mercado Pago (R$549k) — o valor real é R$603.230,01.
 
 ### Import do histórico real (24/08/2026)
 
