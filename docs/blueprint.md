@@ -107,10 +107,15 @@ Qualquer instituição conectada — banco ou corretora. Usada tanto por `Transa
 | onchain_address | text \| null | endereço público (Phantom) |
 | last_synced_at | datetime | |
 
-**Conexão via Pluggy (24/08/2026 em diante — widget real, dentro do app):**
-Luiz tem BTG, C6, 99 e Sofisa como conexões possíveis na Pluggy (nem todas têm investimento, algumas são só conta/cartão). Conectar/reconectar qualquer uma delas não depende mais de mim testar uma por uma — a tela **Conexões** (`/configuracoes`) embute o widget oficial da Pluggy (`pluggy-connect-sdk`): Luiz escolhe o banco, faz login (senha/MFA) direto no iframe deles, e o app grava o `Broker` sozinho quando o widget retorna sucesso. Cada broker conectado ganha botão **Sincronizar** (puxa `/investments` de verdade e grava `PositionSnapshot`) e **Reconectar** (reautenticação, modo update do widget).
-- BTG → testado manualmente em 20/08/2026 antes do widget existir, confirmado com dado real de investimento.
-- C6, 99, Sofisa → conectáveis pelo mesmo fluxo agora; que produtos cada um efetivamente devolve (conta, cartão, investimento) só se sabe testando pela tela de Conexões — não é mais uma limitação de plano/slot, é só ainda não ter sido clicado.
+**Conexão via Pluggy — status real (sincronizado em 24/08/2026):**
+Luiz já tinha os 4 bancos conectados direto no app pessoal "Meu Pluggy" antes de existir a tela `/configuracoes` — os `itemId` foram registrados manualmente nos `Broker` e sincronizados via `POST /api/brokers/:id/sync`. Resultado real (`PositionSnapshot` gravados):
+- **BTG** → 58 posições sincronizadas.
+- **Sofisa** → 81 posições sincronizadas. **Corrige o teste manual de 20/08**, que tinha concluído "investimento não veio" — na verdade veio, só não tinha sido sincronizado pelo pipeline ainda.
+- **C6** → 1 posição.
+- **99** → 0 posições (sem produto de investimento nessa conta, como já era esperado pra esse tipo de conta).
+- Todos os 4 vieram com `connector.name = "MeuPluggy"` na resposta da Pluggy (é o conector genérico do app pessoal, não o nome do banco) — por isso o `Broker.name` usa o apelido real (BTG/C6/99/Sofisa) informado por Luiz, não o que a API devolve.
+
+A tela **Conexões** (`/configuracoes`, widget `pluggy-connect-sdk`) existe pra **daqui pra frente**: reconectar (MFA vencido) ou conectar um banco novo sem precisar desse processo manual — login bancário sempre dentro do iframe da Pluggy, nunca passa pelo nosso backend.
 - Mercado Pago → Pluggy confirma que **não** suporta investimentos (só conta) — resta como possível fonte de transação, não de patrimônio.
 - Nomad, Wise, INCO → extrato manual (sem conector na Pluggy).
 - Phantom → consulta direta na blockchain Solana via endereço público (não é Pluggy) — ainda não implementado.
