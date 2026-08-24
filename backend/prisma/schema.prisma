@@ -170,11 +170,21 @@ model PositionSnapshot {
   @@unique([brokerId, securityId, month, year])
 }
 
+// Meta geral (o "1º milhão" em si) — singleton, só o valor alvo.
 model WealthGoal {
-  id                         String @id @default(uuid())
-  monthlySavingsTarget       Float
-  annualReturnAssumptionPct  Float
-  targetAmount               Float
+  id           String @id @default(uuid())
+  targetAmount Float
+}
+
+// Meta ano a ano — espelha a aba "Primeira Milha(o)" da planilha: cada ano
+// tem seu próprio aporte planejado e retorno assumido (em vez de uma taxa
+// única valendo pra sempre). Ano sem linha aqui usa a última configurada
+// (extrapolação, sinalizada na resposta da API).
+model WealthGoalYearly {
+  id                        String @id @default(uuid())
+  year                      Int    @unique
+  savingsTarget             Float // quanto planeja guardar/aportar no ano
+  annualReturnAssumptionPct Float
 }
 
 model CategorizationRule {

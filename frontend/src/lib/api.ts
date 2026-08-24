@@ -8,6 +8,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(`Falha na requisição: ${path} (${response.status})`)
   }
+  if (response.status === 204) {
+    return undefined as T
+  }
   return response.json() as Promise<T>
 }
 
@@ -53,9 +56,28 @@ export interface BudgetSummary {
 
 export interface WealthGoal {
   id: string
-  monthlySavingsTarget: number
-  annualReturnAssumptionPct: number
   targetAmount: number
+}
+
+export interface WealthGoalYearly {
+  id: string
+  year: number
+  savingsTarget: number
+  annualReturnAssumptionPct: number
+}
+
+export interface YearBreakdown {
+  year: number
+  startBalance: number
+  contribution: number
+  endBalance: number
+  extrapolated: boolean
+}
+
+export interface Projection {
+  monthsToGoal: number
+  projectedDate: string
+  usedExtrapolation: boolean
 }
 
 export interface WealthOverview {
@@ -70,7 +92,9 @@ export interface WealthOverview {
   projectedDividendsLastMonth?: number | null
   movers: { ticker: string; changePct: number }[]
   wealthGoal: WealthGoal | null
-  projection: { monthsToGoal: number; projectedDate: string } | null
+  wealthGoalYearly: WealthGoalYearly[]
+  projection: Projection | null
+  yearlyBreakdown: YearBreakdown[]
 }
 
 export interface ProjectsSummary {
@@ -127,6 +151,15 @@ export const api = {
     return request<BudgetSummary>(`/budget-summary${query}`)
   },
   wealthOverview: () => request<WealthOverview>('/wealth-overview'),
+  wealthGoal: () => request<{ targetAmount: number | null; yearly: WealthGoalYearly[] }>('/wealth-goal'),
+  setWealthGoalTarget: (targetAmount: number) =>
+    request<WealthGoal>('/wealth-goal', { method: 'PUT', body: JSON.stringify({ targetAmount }) }),
+  setWealthGoalYearly: (year: number, savingsTarget: number, annualReturnAssumptionPct: number) =>
+    request<WealthGoalYearly>(`/wealth-goal/yearly/${year}`, {
+      method: 'PUT',
+      body: JSON.stringify({ savingsTarget, annualReturnAssumptionPct }),
+    }),
+  deleteWealthGoalYearly: (year: number) => request<void>(`/wealth-goal/yearly/${year}`, { method: 'DELETE' }),
   projectsSummary: (params?: { year?: number }) => {
     const query = params?.year ? `?year=${params.year}` : ''
     return request<ProjectsSummary>(`/projects-summary${query}`)

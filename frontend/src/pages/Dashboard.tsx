@@ -23,40 +23,14 @@ import {
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
-import styles from './Dashboard.module.css'
+import { CardHeader } from '../components/CardHeader'
+import { currency } from '../lib/format'
+import styles from '../styles/cards.module.css'
 
 /** "2026-08-21" -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por UTC). */
 function formatDayLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-}
-
-function currency(value: number) {
-  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function CardHeader({
-  icon: Icon,
-  title,
-  href,
-}: {
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>
-  title: string
-  href?: string
-}) {
-  return (
-    <div className={styles.cardHeader}>
-      <div className={styles.cardHeaderLeft}>
-        <Icon size={16} strokeWidth={2} />
-        <h2 className={styles.cardTitle}>{title}</h2>
-      </div>
-      {href && (
-        <a className={styles.cardLink} href={href}>
-          Ver tudo
-        </a>
-      )}
-    </div>
-  )
 }
 
 export function Dashboard() {
@@ -289,13 +263,13 @@ export function Dashboard() {
               </div>
 
               <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={Flag} title="Primeira Milhão" />
-                {!wealthGoal && (
+                <CardHeader icon={Flag} title="Primeira Milhão" href="/patrimonio" />
+                {(!wealthGoal || wealth.wealthGoalYearly.length === 0) && (
                   <div className={styles.emptyState}>
-                    Defina sua meta de patrimônio (aporte mensal, retorno esperado e valor alvo) pra ver a projeção.
+                    Configure sua meta (valor alvo + aporte/retorno por ano) na página de Patrimônio pra ver a projeção.
                   </div>
                 )}
-                {wealthGoal && (
+                {wealthGoal && wealth.wealthGoalYearly.length > 0 && (
                   <>
                     <div className={styles.dailyGoalTop}>
                       <div>
@@ -311,21 +285,19 @@ export function Dashboard() {
                       <div className={styles.progressFill} style={{ width: `${goalProgress}%`, background: 'var(--accent)' }} />
                     </div>
                     <div className={styles.chartMeta}>
-                      {wealth?.projection === null && (
-                        <span>
-                          no ritmo atual (R$ {currency(wealthGoal.monthlySavingsTarget)}/mês a {wealthGoal.annualReturnAssumptionPct}% a.a.),
-                          a meta não é alcançada nos próximos 50 anos
-                        </span>
+                      {wealth.projection === null && (
+                        <span>no ritmo das metas anuais configuradas, a meta não é alcançada nos próximos 50 anos</span>
                       )}
-                      {wealth?.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
-                      {wealth?.projection && wealth.projection.monthsToGoal > 0 && (
+                      {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
+                      {wealth.projection && wealth.projection.monthsToGoal > 0 && (
                         <span>
-                          no ritmo atual, você chega lá em{' '}
+                          você chega lá em{' '}
                           {new Date(wealth.projection.projectedDate).toLocaleDateString('pt-BR', {
                             month: 'long',
                             year: 'numeric',
                           })}{' '}
                           (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
+                          {wealth.projection.usedExtrapolation && ' — usando a meta do último ano configurado pra frente'}
                         </span>
                       )}
                     </div>

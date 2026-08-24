@@ -1,13 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
+import { projectFirstMillion } from "../services/wealthProjection.js";
 
 export const wealthRouter = Router();
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
 
 // GET /api/wealth-overview
 // Tudo calculado em cima de PositionSnapshot (populado pelo sync da Pluggy ou
@@ -20,8 +15,20 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   });
 
   if (periods.length === 0) {
-    const wealthGoal = await prisma.wealthGoal.findFirst();
-    return res.json({ hasData: false, wealthGoal, evolution: [], allocation: [], movers: [] });
+    const [wealthGoal, wealthGoalYearly] = await Promise.all([
+      prisma.wealthGoal.findFirst(),
+      prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
+    ]);
+    return res.json({
+      hasData: false,
+      wealthGoal,
+      wealthGoalYearly,
+      evolution: [],
+      allocation: [],
+      movers: [],
+      projection: null,
+      yearlyBreakdown: [],
+    });
   }
 
   const latest = periods[0];
@@ -115,24 +122,12 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
     .slice(0, 5);
 
-  // ---- projeção "primeira milhão" ----
-  const wealthGoal = await prisma.wealthGoal.findFirst();
-  let projection: { monthsToGoal: number; projectedDate: string } | null = null;
-  if (wealthGoal && total < wealthGoal.targetAmount) {
-    const monthlyRate = Math.pow(1 + wealthGoal.annualReturnAssumptionPct / 100, 1 / 12) - 1;
-    let balance = total;
-    let months = 0;
-    const MAX_MONTHS = 600; // 50 anos — teto de segurança
-    while (balance < wealthGoal.targetAmount && months < MAX_MONTHS) {
-      balance = balance * (1 + monthlyRate) + wealthGoal.monthlySavingsTarget;
-      months++;
-    }
-    if (months < MAX_MONTHS) {
-      projection = { monthsToGoal: months, projectedDate: addMonths(new Date(), months).toISOString() };
-    }
-  } else if (wealthGoal && total >= wealthGoal.targetAmount) {
-    projection = { monthsToGoal: 0, projectedDate: new Date().toISOString() };
-  }
+  // ---- projeção "primeira milhão" (meta ano a ano, ver services/wealthProjection.ts) ----
+  const [wealthGoal, wealthGoalYearly] = await Promise.all([
+    prisma.wealthGoal.findFirst(),
+    prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
+  ]);
+  const { projection, yearlyBreakdown } = projectFirstMillion(total, wealthGoal?.targetAmount ?? null, wealthGoalYearly);
 
   res.json({
     hasData: true,
@@ -146,6 +141,8 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     projectedDividendsLastMonth,
     movers,
     wealthGoal,
+    wealthGoalYearly,
     projection,
+    yearlyBreakdown,
   });
 });
