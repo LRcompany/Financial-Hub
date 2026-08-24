@@ -28,6 +28,14 @@ function lastNDaysLabels(n: number): string[] {
   return labels
 }
 
+function calendarMonthLabels(n: number): string[] {
+  const labels: string[] = []
+  for (let m = 0; m < n; m++) {
+    labels.push(new Date(2000, m, 1).toLocaleDateString('pt-BR', { month: 'short' }))
+  }
+  return labels
+}
+
 function lastNMonthsLabels(n: number): string[] {
   const labels: string[] = []
   for (let i = n - 1; i >= 0; i--) {
@@ -68,6 +76,9 @@ const MOCK_WEALTH_EVOLUTION = [
 
 const MOCK_MOVERS = [
   { ticker: 'HGLG11', changePct: 3.2 },
+  { ticker: 'MXRF11', changePct: 2.1 },
+  { ticker: 'VALE3', changePct: 0.6 },
+  { ticker: 'ITUB4', changePct: -0.9 },
   { ticker: 'PETR4', changePct: -1.8 },
 ]
 
@@ -88,6 +99,11 @@ const MOCK_PROJECT_STATS = {
   outstanding: 64400,
   outstandingLastMonth: 71000,
 }
+
+// Recebido por mês, de janeiro até o mês atual — mock, futuramente vem de
+// SUM(ProjectReceipt) por mês. Só até o mês corrente pra não mostrar meses
+// futuros como "zero" (pareceria queda, e é só ainda-não-aconteceu).
+const MOCK_MONTHLY_RECEIVED = [8920, 6024, 31779, 31491, 14200, 18600, 33662, 12800]
 
 // Receita por cliente no ano — mock (valores ilustrativos, não os reais da planilha)
 const MOCK_CLIENT_REVENUE = [
@@ -277,19 +293,17 @@ export function Dashboard() {
 
           <div className={styles.card}>
             <CardHeader icon={Coins} title="Aportes e proventos do mês" />
-            <div className={styles.statRow}>
-              <span>Investido este mês</span>
-              <span className={styles.statRowRight}>
-                <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
+            <div className={styles.statGrid} style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Investido este mês</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
                 <MonthDelta current={MOCK_WEALTH.investedThisMonth} previous={MOCK_WEALTH.investedLastMonth} />
-              </span>
-            </div>
-            <div className={styles.statRow}>
-              <span>Proventos previstos (mês)</span>
-              <span className={styles.statRowRight}>
-                <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Proventos previstos (mês)</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
                 <MonthDelta current={MOCK_WEALTH.projectedDividends} previous={MOCK_WEALTH.projectedDividendsLastMonth} />
-              </span>
+              </div>
             </div>
           </div>
 
@@ -354,11 +368,21 @@ export function Dashboard() {
           </div>
 
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={LineChart} title="Recebido por mês (ano)" />
+            <SmoothLineChart
+              values={MOCK_MONTHLY_RECEIVED}
+              labels={calendarMonthLabels(MOCK_MONTHLY_RECEIVED.length)}
+              gradientId="monthlyReceivedGradient"
+              className={styles.evolutionChart}
+            />
+          </div>
+
+          <div className={styles.card}>
             <CardHeader icon={PieChart} title="Receita por cliente (ano)" href="/projetos" />
             <ClientPieChart data={MOCK_CLIENT_REVENUE} />
           </div>
 
-          <div className={`${styles.card} ${styles.fullWidth}`}>
+          <div className={styles.card}>
             <CardHeader icon={Briefcase} title="Projetos ativos" href="/projetos" />
             {MOCK_PROJECTS.map((p) => (
               <div key={p.project} className={styles.projectRow}>

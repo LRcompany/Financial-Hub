@@ -8,6 +8,23 @@
   width: 100%;
 }
 
+.dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.dotActive {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
 .tooltip {
   position: absolute;
   transform: translate(-50%, -120%);

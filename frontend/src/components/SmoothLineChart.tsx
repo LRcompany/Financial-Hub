@@ -108,18 +108,21 @@ export function SmoothLineChart({
         <path d={linePath} fill="none" stroke={`url(#${gradientId})`} strokeWidth={3} strokeLinecap="round" />
 
         {hover && <line x1={hover[0]} y1={0} x2={hover[0]} y2={height} stroke="var(--border)" strokeWidth={1} />}
-
-        <circle
-          cx={points[points.length - 1][0]}
-          cy={points[points.length - 1][1]}
-          r={4}
-          fill="var(--accent)"
-          opacity={hoverIndex === null || hoverIndex === points.length - 1 ? 1 : 0.3}
-        />
-        {hover && hoverIndex !== points.length - 1 && (
-          <circle cx={hover[0]} cy={hover[1]} r={5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
-        )}
       </svg>
+
+      {/* Pontos como HTML por cima do SVG — um <circle> de SVG dentro de um viewBox
+          esticado (preserveAspectRatio="none") vira oval, não círculo. */}
+      <div
+        className={styles.dot}
+        style={{
+          left: `${(points[points.length - 1][0] / width) * 100}%`,
+          top: `${(points[points.length - 1][1] / height) * 100}%`,
+          opacity: hoverIndex === null || hoverIndex === points.length - 1 ? 1 : 0.3,
+        }}
+      />
+      {hover && hoverIndex !== points.length - 1 && (
+        <div className={`${styles.dot} ${styles.dotActive}`} style={{ left: `${(hover[0] / width) * 100}%`, top: `${(hover[1] / height) * 100}%` }} />
+      )}
 
       {hover && hoverIndex !== null && (
         <div
