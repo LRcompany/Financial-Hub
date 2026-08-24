@@ -63,6 +63,7 @@ const MOCK_BUDGET = [
 const MOCK_WEALTH = {
   total: 604427.43,
   previousTotal: 596000,
+  goal: 1000000,
   investedThisMonth: 7500,
   investedLastMonth: 7500,
   projectedDividends: 2140.6,
@@ -187,7 +188,7 @@ export function Dashboard() {
                 className={styles.progressFill}
                 style={{
                   width: `${Math.min((today / DAILY_GOAL) * 100, 100)}%`,
-                  background: today > DAILY_GOAL ? 'var(--danger)' : 'var(--success)',
+                  background: today > DAILY_GOAL ? 'var(--danger)' : 'var(--grad)',
                 }}
               />
             </div>
@@ -272,6 +273,29 @@ export function Dashboard() {
         <h1 className={styles.sectionTitle}>Patrimônio &amp; Investimentos</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={Coins} title="Aportes e proventos do mês" />
+            <div className={styles.statGrid3}>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Investido este mês</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
+                <MonthDelta current={MOCK_WEALTH.investedThisMonth} previous={MOCK_WEALTH.investedLastMonth} />
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Proventos previstos (mês)</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
+                <MonthDelta current={MOCK_WEALTH.projectedDividends} previous={MOCK_WEALTH.projectedDividendsLastMonth} />
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Progresso até o 1º milhão</span>
+                <span className={styles.statTileValue}>{((MOCK_WEALTH.total / MOCK_WEALTH.goal) * 100).toFixed(0)}%</span>
+                <span className={styles.chartMeta} style={{ margin: 0 }}>
+                  faltam R$ {currency(MOCK_WEALTH.goal - MOCK_WEALTH.total)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`${styles.card} ${styles.fullWidth}`}>
             <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
             <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
               R$ {currency(MOCK_WEALTH.total)}
@@ -291,23 +315,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className={styles.card}>
-            <CardHeader icon={Coins} title="Aportes e proventos do mês" />
-            <div className={styles.statGrid} style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <div className={styles.statTile}>
-                <span className={styles.heroLabel}>Investido este mês</span>
-                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
-                <MonthDelta current={MOCK_WEALTH.investedThisMonth} previous={MOCK_WEALTH.investedLastMonth} />
-              </div>
-              <div className={styles.statTile}>
-                <span className={styles.heroLabel}>Proventos previstos (mês)</span>
-                <span className={styles.statTileValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
-                <MonthDelta current={MOCK_WEALTH.projectedDividends} previous={MOCK_WEALTH.projectedDividendsLastMonth} />
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
+          <div className={`${styles.card} ${styles.fullWidth}`}>
             <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
             {MOCK_MOVERS.map((m) => (
               <div key={m.ticker} className={styles.moverRow}>
