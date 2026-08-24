@@ -12,6 +12,9 @@ node_modules/
 *.sqlite3
 backend/prisma/dev.db*
 
+# Import único da planilha real (dados pessoais + node_modules do script) — nunca versionar
+tmp-import/
+
 # Build output
 dist/
 build/

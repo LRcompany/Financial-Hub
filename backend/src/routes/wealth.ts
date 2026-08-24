@@ -70,19 +70,15 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     })
   );
 
-  // ---- aportes do mês: soma dos aumentos de valor investido por posição ----
-  function keyOf(s: { brokerId: string; securityId: string }) {
-    return `${s.brokerId}:${s.securityId}`;
-  }
-  function investedDelta(
-    current: { brokerId: string; securityId: string; investedAmount: number }[],
-    prior: { brokerId: string; securityId: string; investedAmount: number }[]
-  ) {
-    const priorMap = new Map(prior.map((s) => [keyOf(s), s.investedAmount]));
-    return current.reduce((sum, s) => {
-      const before = priorMap.get(keyOf(s)) ?? 0;
-      return sum + Math.max(0, s.investedAmount - before);
-    }, 0);
+  // ---- aportes do mês: variação do total investido (não posição por posição) ----
+  // Comparar por security individual quebra sempre que a identidade do ativo
+  // muda de fonte (ex: histórico manual agregava "AÇÕES" numa linha só, a
+  // Pluggy reporta cada ação separada) — o total de investedAmount não
+  // depende de identidade, só precisa das somas de cada período.
+  function investedDelta(current: { investedAmount: number }[], prior: { investedAmount: number }[]) {
+    const totalCurrent = current.reduce((sum, s) => sum + s.investedAmount, 0);
+    const totalPrior = prior.reduce((sum, s) => sum + s.investedAmount, 0);
+    return totalCurrent - totalPrior;
   }
   const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
   const investedLastMonth = previous ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
