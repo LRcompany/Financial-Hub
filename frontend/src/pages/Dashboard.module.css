@@ -1,3 +1,18 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -40,16 +55,6 @@
   margin-bottom: var(--space-4);
 }
 
-/* ---------- hero balance ---------- */
-.hero {
-  background: var(--surface-tint);
-  border-radius: var(--r-lg);
-  padding: var(--space-5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .heroLabel {
   font-size: 13px;
   color: var(--ink-soft);
@@ -62,16 +67,52 @@
   margin-top: 4px;
 }
 
-.heroCta {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-sm);
-  background: var(--accent);
-  color: var(--accent-ink);
+/* ---------- daily goal ---------- */
+.dailyGoalTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.dailyGoalMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.barChart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+  margin-top: var(--space-4);
+}
+
+.bar {
+  flex: 1;
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+/* ---------- movers (patrimônio destaques) ---------- */
+.moverRow {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.moverRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.moverTicker {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- spend chart (simple sparkline) ---------- */
