@@ -4,7 +4,7 @@ import styles from './AppLayout.module.css'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Início', icon: Home, end: true },
-  { to: '/transacoes', label: 'Transações', icon: Receipt },
+  { to: '/orcamento', label: 'Orçamento', icon: Receipt },
   { to: '/patrimonio', label: 'Patrimônio', icon: Wallet },
   { to: '/projetos', label: 'Projetos', icon: Briefcase },
   { to: '/configuracoes', label: 'Mais', icon: SlidersHorizontal },

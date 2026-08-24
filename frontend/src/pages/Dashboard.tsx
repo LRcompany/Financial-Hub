@@ -93,9 +93,9 @@ export function Dashboard() {
 
   return (
     <div className={styles.page}>
-      {/* ---------- Dia a dia ---------- */}
+      {/* ---------- Orçamento ---------- */}
       <section>
-        <h1 className={styles.sectionTitle}>Dia a dia</h1>
+        <h1 className={styles.sectionTitle}>Orçamento</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
             <CardHeader icon={Target} title="Meta diária de gasto" />
@@ -207,7 +207,7 @@ export function Dashboard() {
           </div>
 
           <div className={styles.card}>
-            <CardHeader icon={Receipt} title="Últimas transações" href="/transacoes" />
+            <CardHeader icon={Receipt} title="Últimas transações" href="/orcamento" />
 
             {transactionsError && (
               <div className={styles.emptyState}>Não consegui falar com o backend ainda — confirme se ele está rodando.</div>
