@@ -120,13 +120,15 @@ A tela **Conexões** (`/configuracoes`, widget `pluggy-connect-sdk`) existe pra 
 - Nomad, Wise, INCO → extrato manual (sem conector na Pluggy).
 - Phantom → consulta direta na blockchain Solana via endereço público (não é Pluggy) — ainda não implementado.
 
-### Security / PositionSnapshot / WealthGoal
+### Security / PositionSnapshot / WealthGoal / WealthGoalYearly
 
 ```
 Security: name, ticker, type (FII|Ação|Renda Fixa|Cripto|Moeda|Fundo), sector, target_allocation_pct, target_dividend_yield
 PositionSnapshot: broker_id, security_id, month, year, invested_amount, market_value, dividends
-WealthGoal: monthly_savings_target, annual_return_assumption_pct, target_amount
+WealthGoal: target_amount                                          (singleton — só o valor alvo do "1º milhão")
+WealthGoalYearly: year, savings_target, annual_return_assumption_pct (uma linha por ano — espelha a aba "Primeira Milha(o)" da planilha)
 ```
+`WealthGoal` era originalmente uma taxa/aporte único valendo pra sempre; virou `WealthGoalYearly` (24/08/2026) porque na planilha real cada ano tinha sua própria meta de aporte — ano sem linha configurada extrapola a última (ver fórmula abaixo).
 
 ### CategorizationRule
 Pré-populada com o padrão real da planilha (~1.170 linhas já categorizadas).
@@ -198,30 +200,40 @@ Log vivo do que já está de pé, pra não perder o fio conforme o projeto cresc
 | `GET /api/brokers`, `POST /api/brokers/:id/sync` | lista corretoras/bancos conectados; sync puxa `/investments` da Pluggy e grava `PositionSnapshot` |
 | `POST /api/pluggy/connect-token` | gera o token do widget (com ou sem `itemId`, pra conectar novo ou reautenticar) |
 | `POST /api/pluggy/link-broker` | grava/atualiza o `Broker` quando o widget retorna sucesso |
+| `GET/PUT /api/wealth-goal` | lê/define o valor alvo geral (singleton) |
+| `PUT/DELETE /api/wealth-goal/yearly/:year` | cria/atualiza/remove a meta (aporte + retorno assumido) de um ano específico |
 
 Todas calculam em cima do banco (Prisma/SQLite) — nenhum número fixo no código. Com o banco vazio, cada rota devolve zero/vazio de propósito (não é bug), e o Dashboard mostra estado vazio explicando o que falta (ex: "sincronize uma corretora").
 
-### Fórmula da projeção "Primeira Milhão" (`wealth-overview` → `projection`)
+### Fórmula da projeção "Primeira Milhão" (`services/wealthProjection.ts`, usada por `wealth-overview` → `projection`/`yearlyBreakdown`)
 
-Simulação mês a mês, não fórmula fechada — mais fácil de auditar e de trocar premissa depois:
+Simulação mês a mês (não fórmula fechada — mais fácil de auditar e de trocar premissa depois), usando a meta **do ano correspondente** a cada mês simulado — não uma taxa única pra sempre:
 
 ```
-taxa_mensal = (1 + WealthGoal.annual_return_assumption_pct/100) ^ (1/12) - 1
-saldo = patrimônio_total_atual
-repete até saldo >= WealthGoal.target_amount (teto de segurança: 600 meses / 50 anos):
-  saldo = saldo * (1 + taxa_mensal) + WealthGoal.monthly_savings_target
-  meses += 1
+pra cada mês simulado, a partir de hoje:
+  linha = WealthGoalYearly do ano daquele mês, OU a última configurada se aquele ano não tiver linha (extrapolação, sinalizada)
+  taxa_mensal = (1 + linha.annual_return_assumption_pct/100) ^ (1/12) - 1
+  aporte_mensal = linha.savings_target / 12
+  saldo = saldo * (1 + taxa_mensal) + aporte_mensal
+repete até saldo >= WealthGoal.target_amount (teto de segurança: 600 meses / 50 anos)
 ```
-Devolve `{monthsToGoal, projectedDate}`; se estourar o teto, o frontend mostra que no ritmo atual a meta não é alcançada em 50 anos (não trunca nem inventa uma data).
+Devolve `{monthsToGoal, projectedDate, usedExtrapolation}` + `yearlyBreakdown` (tabela ano a ano: saldo inicial, aporte, saldo final — a versão "explícita" que fica na página de Patrimônio). Se estourar o teto, ou se não houver nenhum `WealthGoalYearly` configurado, mostra que a meta não é alcançável nas premissas atuais em vez de inventar uma data.
 
 ### Frontend
 
-- `Dashboard.tsx` — 100% ligado nas rotas acima, zero `MOCK_*`. Card **Primeira Milhão** com % + data projetada; **Orçamento do mês** com total consolidado antes do detalhe por categoria; **Alocação de investimentos** (pizza por tipo de ativo).
+- `Dashboard.tsx` — 100% ligado nas rotas acima, zero `MOCK_*`. Card **Primeira Milhão** (resumo: % + data projetada, link "Ver tudo" pra Patrimônio); **Orçamento do mês** com total consolidado antes do detalhe por categoria.
+- `Patrimonio.tsx` (rota `/patrimonio`, antes placeholder) — página real: evolução, **alocação de investimentos** (pizza por tipo de ativo), destaques do mês, e a seção **Primeira Milhão** completa (formulário de meta geral + tabela de metas por ano, editável, com adicionar/remover + tabela da projeção ano a ano).
 - `Conexoes.tsx` (rota `/configuracoes`) — widget da Pluggy embutido, lista de bancos conectados com Sincronizar/Reconectar.
+- `CardHeader` (`components/CardHeader.tsx`) e `currency()` (`lib/format.ts`) viraram compartilhados — `Dashboard.module.css` virou `styles/cards.module.css`, o "kit de card" que qualquer página nova (Orçamento, Projetos) reaproveita em vez de duplicar.
 
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
 - [ ] Dividendos por posição (`PositionSnapshot.dividends`) não vêm no payload de `/investments` da Pluggy — precisa de uma chamada extra (`/investments/{id}/transactions`) pra popular; até lá, fica `null` (não é fake, é "ainda não coletado")
-- [ ] Seed dos dados reais que só existem nas planilhas (metas do `WealthGoal`, `BudgetTarget` por categoria, `Client`/`Project`/`ProjectReceipt` de Projetos) — depende de reabrir o acesso às planilhas "ORÇAMENTO — PESSOAL - 2026" e "PLANEJAMENTO - PESSOAL"
+- [ ] Seed dos dados reais que só existem nas planilhas: `WealthGoal`/`WealthGoalYearly` (aba "Primeira Milha(o)"), histórico de `PositionSnapshot` mês a mês de 2023 a hoje (aba "Investimento26" e equivalentes de 25/24/23 — só o passado; agosto/2026 em diante já é sync real da Pluggy), `BudgetTarget` por categoria, `Client`/`Project`/`ProjectReceipt` de Projetos — depende de reabrir o acesso à planilha "PLANEJAMENTO - PESSOAL" (link caiu do contexto numa compactação de conversa)
+
+## Decisões de navegação/IA
+
+- **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
+- Cada área principal (**Orçamento**, **Patrimônio**, **Projetos**) vai ganhar página própria com funções e visualizações específicas — o dashboard (Início) fica como resumo/atalho, o detalhe mora na página de cada área. `Patrimônio` é a primeira a sair do placeholder (ver "Frontend" acima); Orçamento e Projetos ainda são `PlaceholderPage`.
