@@ -55,6 +55,18 @@
   margin-bottom: var(--space-4);
 }
 
+.cardHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+}
+
+.cardHeaderLeft .cardTitle {
+  color: var(--ink);
+  margin: 0;
+}
+
 .heroLabel {
   font-size: 13px;
   color: var(--ink-soft);
@@ -79,20 +91,6 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-}
-
-.barChart {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 64px;
-  margin-top: var(--space-4);
-}
-
-.bar {
-  flex: 1;
-  min-height: 3px;
-  border-radius: 3px 3px 0 0;
 }
 
 /* ---------- evolution chart ---------- */
@@ -124,6 +122,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.statRowRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 /* ---------- stat tiles (projetos) ---------- */
 .statGrid {
   display: grid;
@@ -150,6 +155,8 @@
   font-weight: 600;
   font-size: 1.05rem;
   font-variant-numeric: tabular-nums;
+  display: block;
+  margin: 2px 0 4px;
 }
 
 /* ---------- movers (patrimônio destaques) ---------- */
@@ -172,10 +179,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- spend chart (simple sparkline) ---------- */
-.chart {
-  width: 100%;
-  height: 72px;
+.moverChange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .chartMeta {
@@ -215,6 +225,10 @@
 .progressFill {
   height: 100%;
   border-radius: var(--r-full);
+}
+
+.deltaRow {
+  margin-top: 6px;
 }
 
 /* ---------- projects ---------- */

@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  PieChart,
+  Receipt,
+  LineChart,
+  Coins,
+  Activity,
+  Briefcase,
+} from 'lucide-react'
 import { api, type Transaction } from '../lib/api'
+import { SmoothLineChart } from '../components/SmoothLineChart'
+import { MonthDelta } from '../components/MonthDelta'
 import styles from './Dashboard.module.css'
 
 // MOCK — sem endpoint de backend ainda. Estrutura já pronta pra virar fetch real
@@ -8,21 +22,22 @@ import styles from './Dashboard.module.css'
 const DAILY_GOAL = 150
 
 // Últimos 14 dias — mock, futuramente vem de SUM(Transaction) por dia
-const MOCK_DAILY_SPEND = [
-  62, 180, 45, 210, 98, 150, 34, 88, 172, 60, 140, 205, 76, 87.4,
-]
+const MOCK_DAILY_SPEND = [62, 180, 45, 210, 98, 150, 34, 88, 172, 60, 140, 205, 76, 87.4]
+const MOCK_MONTHLY_AVG = { current: 118.32, previous: 132.1 }
 
 const MOCK_BUDGET = [
-  { category: 'Moradia', spent: 3600, planned: 4535, color: 'var(--success)' },
-  { category: 'Supermercado', spent: 780, planned: 800, color: 'var(--warning)' },
-  { category: 'Compras', spent: 612, planned: 400, color: 'var(--danger)' },
+  { category: 'Moradia', spent: 3600, previousSpent: 3550, planned: 4535, color: 'var(--success)' },
+  { category: 'Supermercado', spent: 780, previousSpent: 690, planned: 800, color: 'var(--warning)' },
+  { category: 'Compras', spent: 612, previousSpent: 950, planned: 400, color: 'var(--danger)' },
 ]
 
 const MOCK_WEALTH = {
   total: 604427.43,
-  monthlyReturnPct: 1.2,
+  previousTotal: 596000,
   investedThisMonth: 7500,
+  investedLastMonth: 7500,
   projectedDividends: 2140.6,
+  projectedDividendsLastMonth: 1980.2,
 }
 
 // Últimos 12 meses — mock, futuramente vem de SUM(PositionSnapshot.marketValue) por mês
@@ -45,9 +60,11 @@ const MOCK_PROJECTS = [
 // Total a Receber já existiam lá) — mock aqui até o backend do módulo Projetos existir
 const MOCK_PROJECT_STATS = {
   receivedThisMonth: 12800,
+  receivedLastMonth: 9200,
   receivedThisYear: 182572.48,
   taxPaidThisYear: 6420.35,
   outstanding: 64400,
+  outstandingLastMonth: 71000,
 }
 
 function statusLabel(status: 'em_andamento' | 'pausado') {
@@ -56,6 +73,30 @@ function statusLabel(status: 'em_andamento' | 'pausado') {
 
 function currency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+}
+
+function CardHeader({
+  icon: Icon,
+  title,
+  href,
+}: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>
+  title: string
+  href?: string
+}) {
+  return (
+    <div className={styles.cardHeader}>
+      <div className={styles.cardHeaderLeft}>
+        <Icon size={16} strokeWidth={2} />
+        <h2 className={styles.cardTitle}>{title}</h2>
+      </div>
+      {href && (
+        <a className={styles.cardLink} href={href}>
+          Ver tudo
+        </a>
+      )}
+    </div>
+  )
 }
 
 export function Dashboard() {
@@ -72,7 +113,6 @@ export function Dashboard() {
 
   const today = MOCK_DAILY_SPEND[MOCK_DAILY_SPEND.length - 1]
   const diff = DAILY_GOAL - today
-  const maxSpend = Math.max(...MOCK_DAILY_SPEND, DAILY_GOAL)
 
   return (
     <div className={styles.page}>
@@ -81,6 +121,7 @@ export function Dashboard() {
         <h1 className={styles.sectionTitle}>Dia a dia</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={Target} title="Meta diária de gasto" />
             <div className={styles.dailyGoalTop}>
               <div>
                 <div className={styles.heroLabel}>Gasto de hoje</div>
@@ -101,32 +142,23 @@ export function Dashboard() {
               />
             </div>
             <div className={styles.chartMeta}>
-              <span style={{ color: diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                {diff >= 0 ? `R$ ${currency(diff)} abaixo da meta` : `R$ ${currency(-diff)} acima da meta`}
-              </span>
-              <span>últimos 14 dias</span>
+              <span>{diff >= 0 ? `R$ ${currency(diff)} abaixo da meta hoje` : `R$ ${currency(-diff)} acima da meta hoje`}</span>
+              <MonthDelta current={MOCK_MONTHLY_AVG.current} previous={MOCK_MONTHLY_AVG.previous} higherIsBetter={false} />
             </div>
-            <div className={styles.barChart}>
-              {MOCK_DAILY_SPEND.map((value, i) => (
-                <div
-                  key={i}
-                  className={styles.bar}
-                  style={{
-                    height: `${(value / maxSpend) * 100}%`,
-                    background: value > DAILY_GOAL ? 'var(--danger)' : 'var(--success)',
-                  }}
-                />
-              ))}
+            <SmoothLineChart
+              values={MOCK_DAILY_SPEND}
+              threshold={DAILY_GOAL}
+              gradientId="dailySpendGradient"
+              className={styles.evolutionChart}
+            />
+            <div className={styles.chartMeta}>
+              <span>últimos 14 dias</span>
+              <span>linha tracejada = meta de R$ {DAILY_GOAL}</span>
             </div>
           </div>
 
           <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Orçamento do mês</h2>
-              <a className={styles.cardLink} href="/orcamento">
-                Ver tudo
-              </a>
-            </div>
+            <CardHeader icon={PieChart} title="Orçamento do mês" href="/orcamento" />
             {MOCK_BUDGET.map((item) => (
               <div key={item.category} className={styles.progressRow}>
                 <div className={styles.progressLabel}>
@@ -144,17 +176,15 @@ export function Dashboard() {
                     }}
                   />
                 </div>
+                <div className={styles.deltaRow}>
+                  <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
+                </div>
               </div>
             ))}
           </div>
 
           <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Últimas transações</h2>
-              <a className={styles.cardLink} href="/transacoes">
-                Ver tudo
-              </a>
-            </div>
+            <CardHeader icon={Receipt} title="Últimas transações" href="/transacoes" />
 
             {loadError && (
               <div className={styles.emptyState}>Não consegui falar com o backend ainda — confirme se ele está rodando.</div>
@@ -191,48 +221,49 @@ export function Dashboard() {
         <h1 className={styles.sectionTitle}>Patrimônio &amp; Investimentos</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Evolução do patrimônio</h2>
-              <a className={styles.cardLink} href="/patrimonio">
-                Ver tudo
-              </a>
-            </div>
+            <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
             <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
               R$ {currency(MOCK_WEALTH.total)}
             </div>
             <div className={styles.chartMeta}>
-              <span>Rendimento do mês</span>
-              <span style={{ color: 'var(--success)' }}>+{MOCK_WEALTH.monthlyReturnPct}%</span>
+              <span>Patrimônio total</span>
+              <MonthDelta current={MOCK_WEALTH.total} previous={MOCK_WEALTH.previousTotal} />
             </div>
-            <WealthEvolutionChart values={MOCK_WEALTH_EVOLUTION} />
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Este mês</h2>
-            </div>
-            <div className={styles.statRow}>
-              <span>Investido</span>
-              <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
-            </div>
-            <div className={styles.statRow}>
-              <span>Proventos previstos</span>
-              <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
+            <SmoothLineChart values={MOCK_WEALTH_EVOLUTION} gradientId="wealthGradient" className={styles.evolutionChart} />
+            <div className={styles.chartMeta}>
+              <span>últimos 12 meses</span>
             </div>
           </div>
 
           <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Destaques do mês</h2>
-              <a className={styles.cardLink} href="/patrimonio">
-                Ver tudo
-              </a>
+            <CardHeader icon={Coins} title="Aportes e proventos do mês" />
+            <div className={styles.statRow}>
+              <span>Investido este mês</span>
+              <span className={styles.statRowRight}>
+                <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
+                <MonthDelta current={MOCK_WEALTH.investedThisMonth} previous={MOCK_WEALTH.investedLastMonth} />
+              </span>
             </div>
+            <div className={styles.statRow}>
+              <span>Proventos previstos (mês)</span>
+              <span className={styles.statRowRight}>
+                <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
+                <MonthDelta current={MOCK_WEALTH.projectedDividends} previous={MOCK_WEALTH.projectedDividendsLastMonth} />
+              </span>
+            </div>
+          </div>
+
+          <div className={styles.card}>
+            <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
             {MOCK_MOVERS.map((m) => (
               <div key={m.ticker} className={styles.moverRow}>
                 <span className={styles.moverTicker}>{m.ticker}</span>
-                <span className={m.changePct >= 0 ? styles.dirIn : styles.dirOut} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
-                  {m.changePct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                <span className={styles.moverChange}>
+                  {m.changePct >= 0 ? (
+                    <TrendingUp size={14} className={styles.dirIn} />
+                  ) : (
+                    <TrendingDown size={14} className={styles.dirOut} />
+                  )}
                   {m.changePct >= 0 ? '+' : ''}
                   {m.changePct}%
                 </span>
@@ -247,10 +278,12 @@ export function Dashboard() {
         <h1 className={styles.sectionTitle}>Projetos</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={Briefcase} title="Resumo financeiro dos projetos" />
             <div className={styles.statGrid}>
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>Recebido este mês</span>
                 <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.receivedThisMonth)}</span>
+                <MonthDelta current={MOCK_PROJECT_STATS.receivedThisMonth} previous={MOCK_PROJECT_STATS.receivedLastMonth} />
               </div>
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>Recebido no ano</span>
@@ -263,17 +296,17 @@ export function Dashboard() {
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>A receber</span>
                 <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.outstanding)}</span>
+                <MonthDelta
+                  current={MOCK_PROJECT_STATS.outstanding}
+                  previous={MOCK_PROJECT_STATS.outstandingLastMonth}
+                  higherIsBetter={false}
+                />
               </div>
             </div>
           </div>
 
           <div className={`${styles.card} ${styles.fullWidth}`}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Projetos ativos</h2>
-              <a className={styles.cardLink} href="/projetos">
-                Ver tudo
-              </a>
-            </div>
+            <CardHeader icon={Briefcase} title="Projetos ativos" href="/projetos" />
             {MOCK_PROJECTS.map((p) => (
               <div key={p.project} className={styles.projectRow}>
                 <div className={styles.projectBody}>
@@ -289,41 +322,5 @@ export function Dashboard() {
         </div>
       </section>
     </div>
-  )
-}
-
-/** Gráfico de linha simples com o gradiente-assinatura do Design System. */
-function WealthEvolutionChart({ values }: { values: number[] }) {
-  const width = 600
-  const height = 100
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * width
-    const y = height - ((v - min) / (max - min || 1)) * (height - 12) - 6
-    return `${x},${y}`
-  })
-
-  return (
-    <svg className={styles.evolutionChart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="wealthGradient" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#F0605A" />
-          <stop offset="22%" stopColor="#F2934A" />
-          <stop offset="42%" stopColor="#F0C24B" />
-          <stop offset="62%" stopColor="#7FC96B" />
-          <stop offset="80%" stopColor="#3FB6A8" />
-          <stop offset="100%" stopColor="#3E5BFA" />
-        </linearGradient>
-      </defs>
-      <polyline
-        points={points.join(' ')}
-        fill="none"
-        stroke="url(#wealthGradient)"
-        strokeWidth={3}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
