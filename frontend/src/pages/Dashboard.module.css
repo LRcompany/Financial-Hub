@@ -1,0 +1,233 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: 1.3fr 1fr;
+  }
+  .fullWidth {
+    grid-column: 1 / -1;
+  }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-4);
+}
+
+.cardLink {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+/* ---------- hero balance ---------- */
+.hero {
+  background: var(--surface-tint);
+  border-radius: var(--r-lg);
+  padding: var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.heroLabel {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.heroValue {
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.heroCta {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---------- spend chart (simple sparkline) ---------- */
+.chart {
+  width: 100%;
+  height: 72px;
+}
+
+.chartMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: var(--space-2);
+}
+
+/* ---------- progress rows ---------- */
+.progressRow + .progressRow {
+  margin-top: var(--space-4);
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.progressLabel span:last-child {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.progressTrack {
+  height: 8px;
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--r-full);
+}
+
+/* ---------- projects ---------- */
+.projectRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.projectRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.projectBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.projectClient {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.projectName {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+.chip.success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.chip.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+/* ---------- transaction list ---------- */
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.listRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.listIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  background: var(--fill-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.listBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.listTitle {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.listSub {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.listValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.dirIn {
+  color: var(--success);
+}
+
+.dirOut {
+  color: var(--danger);
+}
+
+.emptyState {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}

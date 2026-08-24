@@ -1,0 +1,180 @@
+.shell {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar {
+  display: none;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--border);
+}
+
+.greeting {
+  display: flex;
+  flex-direction: column;
+}
+
+.greeting .hello {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.greeting .title {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.iconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--fill-muted);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.content {
+  flex: 1;
+  padding: var(--space-4) var(--space-4) 100px;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---------- mobile bottom nav ---------- */
+.bottomNav {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 20;
+  display: flex;
+  justify-content: space-around;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: var(--space-2) var(--space-1);
+  box-shadow: var(--shadow-md);
+}
+
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 6px 10px;
+}
+
+.navItem span {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.navItemActive {
+  color: var(--accent);
+}
+
+.fab {
+  position: fixed;
+  right: var(--space-5);
+  bottom: 92px;
+  z-index: 21;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+/* ---------- desktop: sidebar instead of bottom nav ---------- */
+@media (min-width: 900px) {
+  .shell {
+    flex-direction: row;
+  }
+
+  .sidebar {
+    display: flex;
+    width: 240px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: var(--space-5) var(--space-4);
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .sidebarBrand {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: var(--space-6);
+    padding: 0 var(--space-3);
+  }
+
+  .sidebarItem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 10px var(--space-3);
+    border-radius: var(--r-sm);
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .sidebarItemActive {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .bottomNav {
+    display: none;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .content {
+    padding: var(--space-6) var(--space-6) var(--space-6);
+  }
+
+  .fab {
+    right: var(--space-6);
+    bottom: var(--space-6);
+  }
+}
