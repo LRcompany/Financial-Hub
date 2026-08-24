@@ -30,6 +30,69 @@ export interface Transaction {
   category: Category | null
 }
 
+export interface BudgetCategory {
+  categoryId: string
+  name: string
+  planned: number
+  spent: number
+  previousSpent: number
+}
+
+export interface BudgetSummary {
+  month: number
+  year: number
+  dailyGoal: number | null
+  todaySpent: number
+  monthlyAvgDailySpend: number
+  previousMonthlyAvgDailySpend: number
+  last14Days: { date: string; amount: number }[]
+  totalPlanned: number
+  totalSpent: number
+  categories: BudgetCategory[]
+}
+
+export interface WealthGoal {
+  id: string
+  monthlySavingsTarget: number
+  annualReturnAssumptionPct: number
+  targetAmount: number
+}
+
+export interface WealthOverview {
+  hasData: boolean
+  total?: number
+  previousTotal?: number
+  allocation: { label: string; value: number }[]
+  evolution: { label: string; value: number }[]
+  investedThisMonth?: number
+  investedLastMonth?: number | null
+  projectedDividends?: number | null
+  projectedDividendsLastMonth?: number | null
+  movers: { ticker: string; changePct: number }[]
+  wealthGoal: WealthGoal | null
+  projection: { monthsToGoal: number; projectedDate: string } | null
+}
+
+export interface ProjectsSummary {
+  receivedThisMonth: number
+  receivedLastMonth: number
+  receivedThisYear: number
+  avgMonthly12m: number
+  taxPaidThisYear: number
+  outstanding: number
+  outstandingLastMonth: number
+  monthlyReceived: { label: string; value: number }[]
+  clientRevenue: { label: string; value: number }[]
+  activeProjects: {
+    id: string
+    name: string
+    client: string
+    status: string
+    contractValue: number
+    received: number
+  }[]
+}
+
 export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
   transactions: (params?: { month?: number; year?: number }) => {
@@ -37,4 +100,13 @@ export const api = {
     return request<Transaction[]>(`/transactions${query}`)
   },
   categories: () => request<Category[]>('/categories'),
+  budgetSummary: (params?: { month?: number; year?: number }) => {
+    const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
+    return request<BudgetSummary>(`/budget-summary${query}`)
+  },
+  wealthOverview: () => request<WealthOverview>('/wealth-overview'),
+  projectsSummary: (params?: { year?: number }) => {
+    const query = params?.year ? `?year=${params.year}` : ''
+    return request<ProjectsSummary>(`/projects-summary${query}`)
+  },
 }

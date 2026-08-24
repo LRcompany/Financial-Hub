@@ -4,6 +4,10 @@ import cors from "cors";
 import { healthRouter } from "./routes/health.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { categoriesRouter } from "./routes/categories.js";
+import { budgetRouter } from "./routes/budget.js";
+import { wealthRouter } from "./routes/wealth.js";
+import { projectsRouter } from "./routes/projects.js";
+import { brokersRouter } from "./routes/brokers.js";
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3333;
@@ -16,6 +20,10 @@ app.use(express.json());
 app.use("/api", healthRouter);
 app.use("/api", transactionsRouter);
 app.use("/api", categoriesRouter);
+app.use("/api", budgetRouter);
+app.use("/api", wealthRouter);
+app.use("/api", projectsRouter);
+app.use("/api", brokersRouter);
 
 app.listen(port, () => {
   console.log(`Financial Hub backend rodando em http://localhost:${port}`);
