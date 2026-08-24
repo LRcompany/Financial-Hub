@@ -339,20 +339,9 @@ export function Dashboard() {
       <section>
         <h1 className={styles.sectionTitle}>Projetos</h1>
         <div className={styles.grid}>
-          {/* Hero — a informação principal da seção, isolada e em destaque */}
-          <div className={`${styles.card} ${styles.fullWidth} ${styles.heroCard}`}>
-            <CardHeader icon={Briefcase} title="Recebido no ano" />
-            <div className={styles.heroValue} style={{ fontSize: '2.2rem' }}>
-              R$ {currency(MOCK_PROJECT_STATS.receivedThisYear)}
-            </div>
-            <div className={styles.chartMeta}>
-              <span>Média mensal (últimos 12 meses)</span>
-              <span className={styles.statValue}>R$ {currency(MOCK_PROJECT_STATS.avgMonthly12m)}</span>
-            </div>
-          </div>
-
-          {/* Secundário — demais números, menor peso visual que o hero acima */}
+          {/* Status — mesma posição/padrão do "Aportes e proventos" em Patrimônio: primeiro, com título+ícone */}
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={Briefcase} title="Status financeiro dos projetos" />
             <div className={styles.statGrid3}>
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>Recebido este mês</span>
@@ -375,8 +364,16 @@ export function Dashboard() {
             </div>
           </div>
 
+          {/* Recebido no ano + Recebido por mês juntos — mesma info, mesmo padrão do "Evolução do patrimônio" */}
           <div className={`${styles.card} ${styles.fullWidth}`}>
-            <CardHeader icon={LineChart} title="Recebido por mês (ano)" />
+            <CardHeader icon={LineChart} title="Recebido no ano" />
+            <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
+              R$ {currency(MOCK_PROJECT_STATS.receivedThisYear)}
+            </div>
+            <div className={styles.chartMeta}>
+              <span>Média mensal (últimos 12 meses)</span>
+              <span className={styles.statValue}>R$ {currency(MOCK_PROJECT_STATS.avgMonthly12m)}</span>
+            </div>
             <SmoothLineChart
               values={MOCK_MONTHLY_RECEIVED}
               labels={calendarMonthLabels(MOCK_MONTHLY_RECEIVED.length)}

@@ -5,7 +5,7 @@
 }
 
 .sectionTitle {
-  font-size: 0.4rem;
+  font-size: 0.6rem;
   font-weight: 600;
   margin: 0 0 var(--space-6);
   color: var(--ink-soft);
@@ -126,12 +126,6 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-}
-
-/* ---------- hero card (destaque de seção, ex: Recebido no ano) ---------- */
-.heroCard {
-  background: var(--surface-tint);
-  border: none;
 }
 
 /* ---------- stat tiles (projetos) ---------- */
