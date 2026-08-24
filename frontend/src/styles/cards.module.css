@@ -354,3 +354,30 @@
   color: var(--ink-soft);
   font-size: 13.5px;
 }
+
+/* ---------- botão flutuante de adicionar — só dentro de Orçamento/Patrimônio/Projetos,
+   cada página decide o que "adicionar" significa nela, sem tela de escolher o tipo ---------- */
+.fab {
+  position: fixed;
+  right: var(--space-5);
+  bottom: 92px;
+  z-index: 21;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  .fab {
+    right: var(--space-6);
+    bottom: var(--space-6);
+  }
+}

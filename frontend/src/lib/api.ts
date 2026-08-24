@@ -123,6 +123,23 @@ export interface DailyGoalEntry {
   effectiveFrom: string
 }
 
+export interface Position {
+  broker: string
+  name: string
+  ticker: string | null
+  investedAmount: number
+  marketValue: number
+  currency: string
+  month: number
+  year: number
+}
+
+export interface PositionsByType {
+  type: string
+  total: number
+  positions: Position[]
+}
+
 export interface Broker {
   id: string
   name: string
@@ -173,4 +190,14 @@ export const api = {
     const query = params?.year ? `?year=${params.year}` : ''
     return request<ProjectsSummary>(`/projects-summary${query}`)
   },
+  positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
+  addPosition: (input: {
+    brokerName: string
+    securityName: string
+    type: string
+    currency: string
+    investedAmount: number
+    marketValue: number
+    ticker?: string
+  }) => request('/positions', { method: 'POST', body: JSON.stringify(input) }),
 }

@@ -125,3 +125,72 @@
   color: var(--ink-soft);
   cursor: pointer;
 }
+
+/* ---------- listagem de posições por tipo de ativo ---------- */
+.positionGroup + .positionGroup {
+  margin-top: var(--space-5);
+}
+
+.positionGroupHeader {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.usdTag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+}
+
+/* ---------- painel de adicionar posição manual ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .overlay {
+    align-items: center;
+  }
+}
+
+.sheet {
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--space-5);
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 640px) {
+  .sheet {
+    border-radius: var(--r-lg);
+  }
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}

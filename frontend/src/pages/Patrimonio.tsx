@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { LineChart, PieChart, Activity, Flag, TrendingUp, TrendingDown, Trash2 } from 'lucide-react'
-import { api, type WealthOverview } from '../lib/api'
+import { LineChart, PieChart, Activity, Flag, TrendingUp, TrendingDown, Trash2, Layers, Plus, X } from 'lucide-react'
+import { api, type WealthOverview, type PositionsByType } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
@@ -9,9 +9,24 @@ import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
 
+const SECURITY_TYPES = ['FII', 'Ação', 'Renda Fixa', 'Cripto', 'Moeda', 'Fundo', 'Outro']
+
 export function Patrimonio() {
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
   const [error, setError] = useState(false)
+
+  const [positions, setPositions] = useState<PositionsByType[]>([])
+
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({
+    brokerName: '',
+    securityName: '',
+    type: 'Renda Fixa',
+    currency: 'BRL',
+    investedAmount: '',
+    marketValue: '',
+  })
+  const [savingPosition, setSavingPosition] = useState(false)
 
   const [targetInput, setTargetInput] = useState('')
   const [savingTarget, setSavingTarget] = useState(false)
@@ -31,9 +46,33 @@ export function Patrimonio() {
         setTargetInput(w.wealthGoal ? String(w.wealthGoal.targetAmount) : '')
       })
       .catch(() => setError(true))
+    api.positions().then((p) => setPositions(p.byType)).catch(() => {})
   }
 
   useEffect(load, [])
+
+  async function saveNewPosition(e: React.FormEvent) {
+    e.preventDefault()
+    const investedAmount = Number(addForm.investedAmount)
+    const marketValue = Number(addForm.marketValue)
+    if (!addForm.brokerName || !addForm.securityName || !investedAmount || !marketValue) return
+    setSavingPosition(true)
+    try {
+      await api.addPosition({
+        brokerName: addForm.brokerName,
+        securityName: addForm.securityName,
+        type: addForm.type,
+        currency: addForm.currency,
+        investedAmount,
+        marketValue,
+      })
+      setAddForm({ brokerName: '', securityName: '', type: 'Renda Fixa', currency: 'BRL', investedAmount: '', marketValue: '' })
+      setShowAddForm(false)
+      load()
+    } finally {
+      setSavingPosition(false)
+    }
+  }
 
   async function saveTarget(e: React.FormEvent) {
     e.preventDefault()
@@ -127,8 +166,8 @@ export function Patrimonio() {
             <div className={cards.card}>
               <CardHeader icon={Activity} title="Destaques do mês" />
               {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
-              {wealth.movers.map((m) => (
-                <div key={m.ticker} className={cards.moverRow}>
+              {wealth.movers.map((m, i) => (
+                <div key={`${m.ticker}-${i}`} className={cards.moverRow}>
                   <span className={cards.moverTicker}>{m.ticker}</span>
                   <span className={cards.moverChange}>
                     {m.changePct >= 0 ? (
@@ -139,6 +178,45 @@ export function Patrimonio() {
                     {m.changePct >= 0 ? '+' : ''}
                     {m.changePct.toFixed(1)}%
                   </span>
+                </div>
+              ))}
+            </div>
+
+            {/* ---------- todas as posições, uma tabela por tipo de ativo ---------- */}
+            <div className={`${cards.card} ${cards.fullWidth}`}>
+              <CardHeader icon={Layers} title="Todas as posições" />
+              {positions.length === 0 && <div className={cards.emptyState}>Nenhuma posição pra listar ainda.</div>}
+              {positions.map((group) => (
+                <div key={group.type} className={styles.positionGroup}>
+                  <div className={styles.positionGroupHeader}>
+                    <span>{group.type}</span>
+                    <span>R$ {currency(group.total)}</span>
+                  </div>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>Ativo</th>
+                          <th>Corretora</th>
+                          <th>Investido</th>
+                          <th>Valor atual</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.positions.map((p, i) => (
+                          <tr key={`${p.broker}-${p.name}-${i}`}>
+                            <td>
+                              {p.ticker ?? p.name}
+                              {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                            </td>
+                            <td>{p.broker}</td>
+                            <td>R$ {currency(p.investedAmount)}</td>
+                            <td>R$ {currency(p.marketValue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
             </div>
@@ -295,6 +373,77 @@ export function Patrimonio() {
             )}
           </div>
       </div>
+
+      <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
+        <Plus size={22} strokeWidth={2} />
+      </button>
+
+      {showAddForm && (
+        <div className={styles.overlay} onClick={() => setShowAddForm(false)}>
+          <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.sheetHeader}>
+              <h3 className={styles.subheading} style={{ margin: 0 }}>
+                Adicionar posição manual
+              </h3>
+              <button className={styles.iconBtn} onClick={() => setShowAddForm(false)} aria-label="Fechar">
+                <X size={16} strokeWidth={2} />
+              </button>
+            </div>
+            <p className={cards.heroLabel}>
+              Só pra corretoras sem sync automático (Nomad, Wise, Phantom...) — se o banco já está conectado, o aporte
+              entra sozinho no próximo sync.
+            </p>
+            <form className={styles.addForm} onSubmit={saveNewPosition}>
+              <input
+                className={styles.input}
+                placeholder="Corretora (ex: Nomad)"
+                value={addForm.brokerName}
+                onChange={(e) => setAddForm({ ...addForm, brokerName: e.target.value })}
+              />
+              <input
+                className={styles.input}
+                placeholder="Nome do ativo"
+                value={addForm.securityName}
+                onChange={(e) => setAddForm({ ...addForm, securityName: e.target.value })}
+              />
+              <select className={styles.input} value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
+                {SECURITY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={styles.input}
+                value={addForm.currency}
+                onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
+              >
+                <option value="BRL">BRL</option>
+                <option value="USD">USD</option>
+              </select>
+              <input
+                className={styles.input}
+                type="number"
+                step="0.01"
+                placeholder={`Valor investido (${addForm.currency})`}
+                value={addForm.investedAmount}
+                onChange={(e) => setAddForm({ ...addForm, investedAmount: e.target.value })}
+              />
+              <input
+                className={styles.input}
+                type="number"
+                step="0.01"
+                placeholder={`Valor atual (${addForm.currency})`}
+                value={addForm.marketValue}
+                onChange={(e) => setAddForm({ ...addForm, marketValue: e.target.value })}
+              />
+              <button className={styles.saveBtn} type="submit" disabled={savingPosition}>
+                Adicionar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

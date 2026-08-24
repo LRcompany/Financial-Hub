@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { projectFirstMillion } from "../services/wealthProjection.js";
+import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
 
 export const wealthRouter = Router();
 
@@ -9,12 +10,9 @@ export const wealthRouter = Router();
 // lançamento manual) — sem número fixo. Enquanto não houver snapshot nenhum,
 // retorna hasData: false em vez de zero fake.
 wealthRouter.get("/wealth-overview", async (_req, res) => {
-  const periods = await prisma.positionSnapshot.groupBy({
-    by: ["month", "year"],
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-  });
+  const all = await fetchAllSnapshots();
 
-  if (periods.length === 0) {
+  if (all.length === 0) {
     const [wealthGoal, wealthGoalYearly] = await Promise.all([
       prisma.wealthGoal.findFirst(),
       prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
@@ -31,44 +29,34 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     });
   }
 
-  const latest = periods[0];
-  const previous = periods[1] ?? null;
-  const beforePrevious = periods[2] ?? null;
-
-  const [latestSnaps, previousSnaps, beforePreviousSnaps] = await Promise.all([
-    prisma.positionSnapshot.findMany({ where: latest, include: { security: true, broker: true } }),
-    previous
-      ? prisma.positionSnapshot.findMany({ where: previous, include: { security: true, broker: true } })
-      : Promise.resolve([]),
-    beforePrevious
-      ? prisma.positionSnapshot.findMany({ where: beforePrevious, include: { security: true, broker: true } })
-      : Promise.resolve([]),
-  ]);
+  const nowYm = yearMonth(all[0].year, all[0].month);
+  const latestSnaps = activeSnapshotsAsOf(all, nowYm);
+  const previousSnaps = activeSnapshotsAsOf(all, nowYm - 1);
+  const beforePreviousSnaps = activeSnapshotsAsOf(all, nowYm - 2);
 
   const total = latestSnaps.reduce((sum, s) => sum + s.marketValue, 0);
   const previousTotal = previousSnaps.reduce((sum, s) => sum + s.marketValue, 0);
 
-  // ---- alocação por tipo de ativo (mês mais recente) ----
+  // ---- alocação por tipo de ativo (posições ativas hoje) ----
   const allocationMap = new Map<string, number>();
   for (const s of latestSnaps) {
     allocationMap.set(s.security.type, (allocationMap.get(s.security.type) ?? 0) + s.marketValue);
   }
   const allocation = [...allocationMap.entries()].map(([label, value]) => ({ label, value }));
 
-  // ---- evolução (últimos 12 períodos com dado, mais antigo primeiro) ----
-  const last12 = [...periods].reverse().slice(-12);
-  const evolution = await Promise.all(
-    last12.map(async (p) => {
-      const agg = await prisma.positionSnapshot.aggregate({
-        where: { month: p.month, year: p.year },
-        _sum: { marketValue: true },
-      });
-      return {
-        label: new Date(p.year, p.month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-        value: agg._sum.marketValue ?? 0,
-      };
-    })
-  );
+  // ---- evolução: últimos 12 meses corridos, carregando o último valor ativo de cada mês ----
+  const evolution: { label: string; value: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const ym = nowYm - i;
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const snaps = activeSnapshotsAsOf(all, ym);
+    if (snaps.length === 0) continue; // nada existia ainda nesse mês, não polui o gráfico com zero fake
+    evolution.push({
+      label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+      value: snaps.reduce((sum, s) => sum + s.marketValue, 0),
+    });
+  }
 
   // ---- aportes do mês: variação do total investido (não posição por posição) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
@@ -81,7 +69,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     return totalCurrent - totalPrior;
   }
   const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
-  const investedLastMonth = previous ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
+  const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
 
   // ---- proventos: soma do campo dividends do período (null = ainda não coletado, não é 0) ----
   function dividendsSum(snaps: { dividends: number | null }[]): number | null {
@@ -90,7 +78,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     return withData.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
   }
   const projectedDividends = dividendsSum(latestSnaps);
-  const projectedDividendsLastMonth = previous ? dividendsSum(previousSnaps) : null;
+  const projectedDividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
 
   // ---- destaques do mês: maior variação % de valor de mercado por ativo ----
   function marketValueBySecurity(snaps: { securityId: string; marketValue: number; security: { name: string; ticker: string | null } }[]) {

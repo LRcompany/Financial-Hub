@@ -97,24 +97,6 @@
   color: var(--accent);
 }
 
-.fab {
-  position: fixed;
-  right: var(--space-5);
-  bottom: 92px;
-  z-index: 21;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-}
-
 /* ---------- desktop: sidebar instead of bottom nav ---------- */
 @media (min-width: 900px) {
   .shell {
@@ -169,10 +151,5 @@
 
   .content {
     padding: var(--space-6) var(--space-6) var(--space-6);
-  }
-
-  .fab {
-    right: var(--space-6);
-    bottom: var(--space-6);
   }
 }

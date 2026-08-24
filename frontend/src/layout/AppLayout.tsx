@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, Receipt, Wallet, Briefcase, SlidersHorizontal, Search, Bell, Plus } from 'lucide-react'
+import { Home, Receipt, Wallet, Briefcase, SlidersHorizontal, Search, Bell } from 'lucide-react'
 import styles from './AppLayout.module.css'
 
 const NAV_ITEMS = [
@@ -58,10 +58,6 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-
-      <button className={styles.fab} aria-label="Novo lançamento">
-        <Plus size={22} strokeWidth={2} />
-      </button>
 
       {/* Mobile: bottom tab bar (hidden on desktop via CSS) */}
       <nav className={styles.bottomNav}>
