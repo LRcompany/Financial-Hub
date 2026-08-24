@@ -15,7 +15,28 @@ import {
 import { api, type Transaction } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
+import { ClientPieChart } from '../components/ClientPieChart'
 import styles from './Dashboard.module.css'
+
+function lastNDaysLabels(n: number): string[] {
+  const labels: string[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }))
+  }
+  return labels
+}
+
+function lastNMonthsLabels(n: number): string[] {
+  const labels: string[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setMonth(d.getMonth() - i)
+    labels.push(d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }))
+  }
+  return labels
+}
 
 // MOCK — sem endpoint de backend ainda. Estrutura já pronta pra virar fetch real
 // quando os endpoints existirem (ver docs/blueprint.md — módulos ainda não implementados).
@@ -62,10 +83,23 @@ const MOCK_PROJECT_STATS = {
   receivedThisMonth: 12800,
   receivedLastMonth: 9200,
   receivedThisYear: 182572.48,
+  avgMonthly12m: 15214.37,
   taxPaidThisYear: 6420.35,
   outstanding: 64400,
   outstandingLastMonth: 71000,
 }
+
+// Receita por cliente no ano — mock (valores ilustrativos, não os reais da planilha)
+const MOCK_CLIENT_REVENUE = [
+  { label: 'HKEK', value: 98000 },
+  { label: 'MAAC', value: 31000 },
+  { label: 'One', value: 27000 },
+  { label: 'Cunha Ferraz', value: 22000 },
+  { label: 'Soilytix', value: 15000 },
+  { label: 'Pickleball Forum', value: 12000 },
+  { label: 'Aberto', value: 14000 },
+  { label: 'Fraiha', value: 9000 },
+]
 
 function statusLabel(status: 'em_andamento' | 'pausado') {
   return status === 'em_andamento' ? 'Em andamento' : 'Pausado'
@@ -147,6 +181,7 @@ export function Dashboard() {
             </div>
             <SmoothLineChart
               values={MOCK_DAILY_SPEND}
+              labels={lastNDaysLabels(MOCK_DAILY_SPEND.length)}
               threshold={DAILY_GOAL}
               gradientId="dailySpendGradient"
               className={styles.evolutionChart}
@@ -229,7 +264,12 @@ export function Dashboard() {
               <span>Patrimônio total</span>
               <MonthDelta current={MOCK_WEALTH.total} previous={MOCK_WEALTH.previousTotal} />
             </div>
-            <SmoothLineChart values={MOCK_WEALTH_EVOLUTION} gradientId="wealthGradient" className={styles.evolutionChart} />
+            <SmoothLineChart
+              values={MOCK_WEALTH_EVOLUTION}
+              labels={lastNMonthsLabels(MOCK_WEALTH_EVOLUTION.length)}
+              gradientId="wealthGradient"
+              className={styles.evolutionChart}
+            />
             <div className={styles.chartMeta}>
               <span>últimos 12 meses</span>
             </div>
@@ -277,17 +317,25 @@ export function Dashboard() {
       <section>
         <h1 className={styles.sectionTitle}>Projetos</h1>
         <div className={styles.grid}>
+          {/* Hero — a informação principal da seção, isolada e em destaque */}
+          <div className={`${styles.card} ${styles.fullWidth} ${styles.heroCard}`}>
+            <CardHeader icon={Briefcase} title="Recebido no ano" />
+            <div className={styles.heroValue} style={{ fontSize: '2.2rem' }}>
+              R$ {currency(MOCK_PROJECT_STATS.receivedThisYear)}
+            </div>
+            <div className={styles.chartMeta}>
+              <span>Média mensal (últimos 12 meses)</span>
+              <span className={styles.statValue}>R$ {currency(MOCK_PROJECT_STATS.avgMonthly12m)}</span>
+            </div>
+          </div>
+
+          {/* Secundário — demais números, menor peso visual que o hero acima */}
           <div className={`${styles.card} ${styles.fullWidth}`}>
-            <CardHeader icon={Briefcase} title="Resumo financeiro dos projetos" />
-            <div className={styles.statGrid}>
+            <div className={styles.statGrid3}>
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>Recebido este mês</span>
                 <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.receivedThisMonth)}</span>
                 <MonthDelta current={MOCK_PROJECT_STATS.receivedThisMonth} previous={MOCK_PROJECT_STATS.receivedLastMonth} />
-              </div>
-              <div className={styles.statTile}>
-                <span className={styles.heroLabel}>Recebido no ano</span>
-                <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.receivedThisYear)}</span>
               </div>
               <div className={styles.statTile}>
                 <span className={styles.heroLabel}>Imposto pago no ano</span>
@@ -303,6 +351,11 @@ export function Dashboard() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className={`${styles.card} ${styles.fullWidth}`}>
+            <CardHeader icon={PieChart} title="Receita por cliente (ano)" href="/projetos" />
+            <ClientPieChart data={MOCK_CLIENT_REVENUE} />
           </div>
 
           <div className={`${styles.card} ${styles.fullWidth}`}>

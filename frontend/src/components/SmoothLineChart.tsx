@@ -1,3 +1,6 @@
+import { useRef, useState } from 'react'
+import styles from './SmoothLineChart.module.css'
+
 const GRADIENT_STOPS = [
   { offset: '0%', color: '#F0605A' },
   { offset: '22%', color: '#F2934A' },
@@ -27,16 +30,30 @@ function smoothPath(points: [number, number][]): string {
 
 interface SmoothLineChartProps {
   values: number[]
+  /** Rótulo de cada ponto pro tooltip (ex: "21 ago"). Sem isso, usa "Ponto N". */
+  labels?: string[]
   /** Linha de referência tracejada (ex: meta diária) — omitir quando não fizer sentido (ex: patrimônio). */
   threshold?: number
   height?: number
   gradientId: string
   className?: string
+  valuePrefix?: string
 }
 
-export function SmoothLineChart({ values, threshold, height = 90, gradientId, className }: SmoothLineChartProps) {
+export function SmoothLineChart({
+  values,
+  labels,
+  threshold,
+  height = 90,
+  gradientId,
+  className,
+  valuePrefix = 'R$ ',
+}: SmoothLineChartProps) {
   const width = 600
   const padY = 10
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
   const allValues = threshold ? [...values, threshold] : values
   const min = Math.min(...allValues)
   const max = Math.max(...allValues)
@@ -51,37 +68,71 @@ export function SmoothLineChart({ values, threshold, height = 90, gradientId, cl
   const areaPath = `${linePath} L${points[points.length - 1][0]},${height} L0,${height} Z`
   const thresholdY = threshold !== undefined ? height - padY - ((threshold - min) / range) * (height - padY * 2) : null
 
+  function updateHoverFromClientX(clientX: number) {
+    const rect = wrapRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const ratio = (clientX - rect.left) / rect.width
+    const index = Math.round(ratio * (values.length - 1))
+    setHoverIndex(Math.max(0, Math.min(values.length - 1, index)))
+  }
+
+  const hover = hoverIndex !== null ? points[hoverIndex] : null
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={className}>
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-          {GRADIENT_STOPS.map((s) => (
-            <stop key={s.offset} offset={s.offset} stopColor={s.color} />
-          ))}
-        </linearGradient>
-        <linearGradient id={`${gradientId}-fill`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.14" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
+    <div
+      ref={wrapRef}
+      className={`${styles.wrap} ${className ?? ''}`}
+      onMouseMove={(e) => updateHoverFromClientX(e.clientX)}
+      onMouseLeave={() => setHoverIndex(null)}
+      onTouchMove={(e) => updateHoverFromClientX(e.touches[0].clientX)}
+      onTouchEnd={() => setHoverIndex(null)}
+    >
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={styles.svg} style={{ height }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            {GRADIENT_STOPS.map((s) => (
+              <stop key={s.offset} offset={s.offset} stopColor={s.color} />
+            ))}
+          </linearGradient>
+          <linearGradient id={`${gradientId}-fill`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
 
-      {thresholdY !== null && (
-        <line
-          x1={0}
-          y1={thresholdY}
-          x2={width}
-          y2={thresholdY}
-          stroke="var(--ink-faint)"
-          strokeWidth={1}
-          strokeDasharray="4 4"
+        {thresholdY !== null && (
+          <line x1={0} y1={thresholdY} x2={width} y2={thresholdY} stroke="var(--ink-faint)" strokeWidth={1} strokeDasharray="4 4" />
+        )}
+
+        <path d={areaPath} fill={`url(#${gradientId}-fill)`} stroke="none" />
+        <path d={linePath} fill="none" stroke={`url(#${gradientId})`} strokeWidth={3} strokeLinecap="round" />
+
+        {hover && <line x1={hover[0]} y1={0} x2={hover[0]} y2={height} stroke="var(--border)" strokeWidth={1} />}
+
+        <circle
+          cx={points[points.length - 1][0]}
+          cy={points[points.length - 1][1]}
+          r={4}
+          fill="var(--accent)"
+          opacity={hoverIndex === null || hoverIndex === points.length - 1 ? 1 : 0.3}
         />
+        {hover && hoverIndex !== points.length - 1 && (
+          <circle cx={hover[0]} cy={hover[1]} r={5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+        )}
+      </svg>
+
+      {hover && hoverIndex !== null && (
+        <div
+          className={styles.tooltip}
+          style={{ left: `${(hover[0] / width) * 100}%`, top: `${(hover[1] / height) * 100}%` }}
+        >
+          <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
+          <div className={styles.tooltipValue}>
+            {valuePrefix}
+            {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
       )}
-
-      <path d={areaPath} fill={`url(#${gradientId}-fill)`} stroke="none" />
-      <path d={linePath} fill="none" stroke={`url(#${gradientId})`} strokeWidth={3} strokeLinecap="round" />
-
-      {/* ponto final em destaque */}
-      <circle cx={points[points.length - 1][0]} cy={points[points.length - 1][1]} r={4} fill="var(--accent)" />
-    </svg>
+    </div>
   )
 }

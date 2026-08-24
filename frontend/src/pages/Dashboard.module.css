@@ -129,6 +129,12 @@
   gap: 2px;
 }
 
+/* ---------- hero card (destaque de seção, ex: Recebido no ano) ---------- */
+.heroCard {
+  background: var(--surface-tint);
+  border: none;
+}
+
 /* ---------- stat tiles (projetos) ---------- */
 .statGrid {
   display: grid;
@@ -139,6 +145,18 @@
 @media (min-width: 640px) {
   .statGrid {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.statGrid3 {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .statGrid3 {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
