@@ -107,13 +107,13 @@ Qualquer instituição conectada — banco ou corretora. Usada tanto por `Transa
 | onchain_address | text \| null | endereço público (Phantom) |
 | last_synced_at | datetime | |
 
-**Status de ingestão real (testado em 20/08/2026):**
-- BTG → Pluggy, **testado e confirmado** (contas + investimentos vieram com dado real)
-- C6, Sofisa → conectadas na Pluggy; Sofisa testada e investimento **não veio** (Pluggy documenta suporte a CDB/Fundos, mas não apareceu — provável falta de consentimento granular); C6 ainda não testada
-- Mercado Pago → Pluggy confirma que **não** suporta investimentos (só conta)
-- 99 → ainda não testada (só resta 1 conexão livre no plano grátis, limite de 5)
-- Nomad, Wise, INCO → extrato manual
-- Phantom → consulta direta na blockchain Solana via endereço público (não é Pluggy)
+**Conexão via Pluggy (24/08/2026 em diante — widget real, dentro do app):**
+Luiz tem BTG, C6, 99 e Sofisa como conexões possíveis na Pluggy (nem todas têm investimento, algumas são só conta/cartão). Conectar/reconectar qualquer uma delas não depende mais de mim testar uma por uma — a tela **Conexões** (`/configuracoes`) embute o widget oficial da Pluggy (`pluggy-connect-sdk`): Luiz escolhe o banco, faz login (senha/MFA) direto no iframe deles, e o app grava o `Broker` sozinho quando o widget retorna sucesso. Cada broker conectado ganha botão **Sincronizar** (puxa `/investments` de verdade e grava `PositionSnapshot`) e **Reconectar** (reautenticação, modo update do widget).
+- BTG → testado manualmente em 20/08/2026 antes do widget existir, confirmado com dado real de investimento.
+- C6, 99, Sofisa → conectáveis pelo mesmo fluxo agora; que produtos cada um efetivamente devolve (conta, cartão, investimento) só se sabe testando pela tela de Conexões — não é mais uma limitação de plano/slot, é só ainda não ter sido clicado.
+- Mercado Pago → Pluggy confirma que **não** suporta investimentos (só conta) — resta como possível fonte de transação, não de patrimônio.
+- Nomad, Wise, INCO → extrato manual (sem conector na Pluggy).
+- Phantom → consulta direta na blockchain Solana via endereço público (não é Pluggy) — ainda não implementado.
 
 ### Security / PositionSnapshot / WealthGoal
 
@@ -177,8 +177,46 @@ SupplierPayment: project_supplier_cost_id, installment_number, amount, payment_d
 
 O DAS mantém a data real do pagamento (ex: agosto) mas carrega `tax_payment_id`, que aponta pro `TaxPayment` com `competence_month` correto (ex: julho) — o overview mostra "DAS — referente a julho" sem bagunçar a data real do gasto.
 
+## Status de implementação
+
+Log vivo do que já está de pé, pra não perder o fio conforme o projeto cresce — atualizar sempre que uma rota ou tela nova entrar no ar.
+
+### Backend (rotas reais, sem mock)
+
+| Rota | O que faz |
+|---|---|
+| `GET/POST /api/transactions` | lista/cria lançamento |
+| `GET /api/categories` | árvore categoria-mãe + subcategorias |
+| `GET /api/budget-summary?month&year` | orçamento total do mês + por categoria, comparado com o mês anterior; meta diária + gasto real dos últimos 14 dias |
+| `GET /api/wealth-overview` | patrimônio total, evolução (12 meses), alocação por tipo de ativo, destaques do mês (maior variação % por security), aportes/proventos do mês, e a projeção do 1º milhão |
+| `GET /api/projects-summary?year` | recebido no mês/ano, imposto pago, a receber, recebido por mês (série), receita por cliente, projetos ativos |
+| `GET /api/brokers`, `POST /api/brokers/:id/sync` | lista corretoras/bancos conectados; sync puxa `/investments` da Pluggy e grava `PositionSnapshot` |
+| `POST /api/pluggy/connect-token` | gera o token do widget (com ou sem `itemId`, pra conectar novo ou reautenticar) |
+| `POST /api/pluggy/link-broker` | grava/atualiza o `Broker` quando o widget retorna sucesso |
+
+Todas calculam em cima do banco (Prisma/SQLite) — nenhum número fixo no código. Com o banco vazio, cada rota devolve zero/vazio de propósito (não é bug), e o Dashboard mostra estado vazio explicando o que falta (ex: "sincronize uma corretora").
+
+### Fórmula da projeção "Primeira Milhão" (`wealth-overview` → `projection`)
+
+Simulação mês a mês, não fórmula fechada — mais fácil de auditar e de trocar premissa depois:
+
+```
+taxa_mensal = (1 + WealthGoal.annual_return_assumption_pct/100) ^ (1/12) - 1
+saldo = patrimônio_total_atual
+repete até saldo >= WealthGoal.target_amount (teto de segurança: 600 meses / 50 anos):
+  saldo = saldo * (1 + taxa_mensal) + WealthGoal.monthly_savings_target
+  meses += 1
+```
+Devolve `{monthsToGoal, projectedDate}`; se estourar o teto, o frontend mostra que no ritmo atual a meta não é alcançada em 50 anos (não trunca nem inventa uma data).
+
+### Frontend
+
+- `Dashboard.tsx` — 100% ligado nas rotas acima, zero `MOCK_*`. Card **Primeira Milhão** com % + data projetada; **Orçamento do mês** com total consolidado antes do detalhe por categoria; **Alocação de investimentos** (pizza por tipo de ativo).
+- `Conexoes.tsx` (rota `/configuracoes`) — widget da Pluggy embutido, lista de bancos conectados com Sincronizar/Reconectar.
+
 ## Pendências (não travadas ainda)
 
-- [ ] Confirmar se C6 e 99 suportam investimentos via Pluggy (só resta 1 slot de conexão livre)
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
+- [ ] Dividendos por posição (`PositionSnapshot.dividends`) não vêm no payload de `/investments` da Pluggy — precisa de uma chamada extra (`/investments/{id}/transactions`) pra popular; até lá, fica `null` (não é fake, é "ainda não coletado")
+- [ ] Seed dos dados reais que só existem nas planilhas (metas do `WealthGoal`, `BudgetTarget` por categoria, `Client`/`Project`/`ProjectReceipt` de Projetos) — depende de reabrir o acesso às planilhas "ORÇAMENTO — PESSOAL - 2026" e "PLANEJAMENTO - PESSOAL"

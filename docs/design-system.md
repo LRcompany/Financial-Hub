@@ -15,9 +15,12 @@ Referência visual completa: artifact **Design System** (Claude) — cor, tipogr
 - **Ícone de categoria/transação**: emoji colorido — nunca Lucide aqui, cor é informação (reconhecer categoria de relance)
 - **Glassmorphism**: `backdrop-filter` real, só em elemento flutuante (modal, bottom sheet, tooltip de gráfico, header fixo ao rolar, tab bar). Nunca em número ou valor principal — precisão de leitura vem antes de estilo
 - **Espaçamento**: escala 4/8 (4, 8, 12, 16, 24, 32, 48px) — 16px entre elementos de um bloco, 24px entre blocos, 48px entre seções
-- **Barra de progresso**: cor semântica (verde/amarelo/vermelho) pra orçamento com limite; gradiente pra dívida/patrimônio (é evolução, não limite)
+- **Barra de progresso**: sempre cor neutra (`var(--accent)`, o azul-índigo único) — nunca cor semântica por categoria (ex: Moradia verde, Supermercado amarelo não faz sentido, cor de categoria não é status). O gradiente de 6 cores fica reservado só pros gráficos de linha mais complexos (evolução de patrimônio, recebido no ano, gasto diário) — nunca em barra de progresso simples
 - **Navegação inferior**: fixa, glass (é elemento flutuante), 5 itens — Início, Transações, Patrimônio, Projetos, Mais
 - **Cor do valor de transação**: texto sempre preto/neutro — nunca vermelho/verde. A direção (entrada/saída) é indicada por uma setinha colorida ao lado do valor (← verde entrada, → vermelho saída), não pelo texto. Vermelho/verde no texto fica reservado só pra status real (pago, atrasado)
+- **Comparativo com mês anterior (`MonthDelta`)**: mesma regra do item acima, generalizada — qualquer número que mostra "melhor/pior que o mês passado" usa uma setinha colorida (↑/↓) pra indicar a direção, e o texto do valor/percentual ao lado fica sempre neutro. Nunca pinta o texto de verde/vermelho, em nenhum card do dashboard
+- **Título de seção do dashboard** (`.sectionTitle` — "DIA A DIA", "PATRIMÔNIO & INVESTIMENTOS", "PROJETOS"): `0.6rem`, uppercase, `letter-spacing: 0.06em`, cor `--ink-soft`, peso 600
+- **Logo**: o raio roxo→azul (`frontend/public/favicon.svg`) é a marca do app — usado como favicon, ícone do PWA (192px/512px, gerados a partir do próprio SVG) e ao lado do wordmark "Financial Hub" no sidebar (desktop) e no header (mobile)
 
 ## Pendências
 
