@@ -43,10 +43,6 @@ export function AppLayout() {
         <header className={styles.header}>
           <div className={styles.greeting}>
             <span className={styles.hello}>{greeting()}</span>
-            <span className={styles.title}>
-              <img src="/favicon.svg" alt="" width={18} height={18} className={styles.titleLogo} />
-              Financial Hub
-            </span>
           </div>
           <div className={styles.headerActions}>
             <button className={styles.iconBtn} aria-label="Buscar transação">

@@ -33,18 +33,6 @@
   color: var(--ink-soft);
 }
 
-.greeting .title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-
-.titleLogo {
-  flex-shrink: 0;
-}
-
 .headerActions {
   display: flex;
   align-items: center;
