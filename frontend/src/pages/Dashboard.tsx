@@ -55,9 +55,9 @@ const MOCK_DAILY_SPEND = [62, 180, 45, 210, 98, 150, 34, 88, 172, 60, 140, 205, 
 const MOCK_MONTHLY_AVG = { current: 118.32, previous: 132.1 }
 
 const MOCK_BUDGET = [
-  { category: 'Moradia', spent: 3600, previousSpent: 3550, planned: 4535, color: 'var(--success)' },
-  { category: 'Supermercado', spent: 780, previousSpent: 690, planned: 800, color: 'var(--warning)' },
-  { category: 'Compras', spent: 612, previousSpent: 950, planned: 400, color: 'var(--danger)' },
+  { category: 'Moradia', spent: 3600, previousSpent: 3550, planned: 4535 },
+  { category: 'Supermercado', spent: 780, previousSpent: 690, planned: 800 },
+  { category: 'Compras', spent: 612, previousSpent: 950, planned: 400 },
 ]
 
 const MOCK_WEALTH = {
@@ -188,7 +188,7 @@ export function Dashboard() {
                 className={styles.progressFill}
                 style={{
                   width: `${Math.min((today / DAILY_GOAL) * 100, 100)}%`,
-                  background: today > DAILY_GOAL ? 'var(--danger)' : 'var(--grad)',
+                  background: 'var(--accent)',
                 }}
               />
             </div>
@@ -224,7 +224,7 @@ export function Dashboard() {
                     className={styles.progressFill}
                     style={{
                       width: `${Math.min((item.spent / item.planned) * 100, 100)}%`,
-                      background: item.color,
+                      background: 'var(--accent)',
                     }}
                   />
                 </div>
