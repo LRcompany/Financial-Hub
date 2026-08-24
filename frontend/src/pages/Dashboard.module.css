@@ -95,6 +95,63 @@
   border-radius: 3px 3px 0 0;
 }
 
+/* ---------- evolution chart ---------- */
+.evolutionChart {
+  width: 100%;
+  height: 72px;
+  margin-top: var(--space-4);
+}
+
+/* ---------- stat row (patrimônio "este mês") ---------- */
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.statRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.statValue {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- stat tiles (projetos) ---------- */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .statGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.statTile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-3);
+}
+
+.statTileValue {
+  font-weight: 600;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- movers (patrimônio destaques) ---------- */
 .moverRow {
   display: flex;

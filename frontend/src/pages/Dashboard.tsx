@@ -18,7 +18,17 @@ const MOCK_BUDGET = [
   { category: 'Compras', spent: 612, planned: 400, color: 'var(--danger)' },
 ]
 
-const MOCK_WEALTH = { total: 604427.43, monthlyReturnPct: 1.2 }
+const MOCK_WEALTH = {
+  total: 604427.43,
+  monthlyReturnPct: 1.2,
+  investedThisMonth: 7500,
+  projectedDividends: 2140.6,
+}
+
+// Últimos 12 meses — mock, futuramente vem de SUM(PositionSnapshot.marketValue) por mês
+const MOCK_WEALTH_EVOLUTION = [
+  512000, 498000, 531000, 545000, 560000, 552000, 571000, 583000, 590000, 578000, 596000, 604427,
+]
 
 const MOCK_MOVERS = [
   { ticker: 'HGLG11', changePct: 3.2 },
@@ -30,6 +40,15 @@ const MOCK_PROJECTS = [
   { client: 'MAAC', project: 'MKT Collaterals', status: 'pausado' as const },
   { client: 'Pickleball Forum', project: 'Rental - Ago', status: 'em_andamento' as const },
 ]
+
+// Ligado ao próprio dashboard "Visão Geral" da planilha de Projetos (Total Recebido /
+// Total a Receber já existiam lá) — mock aqui até o backend do módulo Projetos existir
+const MOCK_PROJECT_STATS = {
+  receivedThisMonth: 12800,
+  receivedThisYear: 182572.48,
+  taxPaidThisYear: 6420.35,
+  outstanding: 64400,
+}
 
 function statusLabel(status: 'em_andamento' | 'pausado') {
   return status === 'em_andamento' ? 'Em andamento' : 'Pausado'
@@ -171,9 +190,9 @@ export function Dashboard() {
       <section>
         <h1 className={styles.sectionTitle}>Patrimônio &amp; Investimentos</h1>
         <div className={styles.grid}>
-          <div className={styles.card}>
+          <div className={`${styles.card} ${styles.fullWidth}`}>
             <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Patrimônio total</h2>
+              <h2 className={styles.cardTitle}>Evolução do patrimônio</h2>
               <a className={styles.cardLink} href="/patrimonio">
                 Ver tudo
               </a>
@@ -184,6 +203,21 @@ export function Dashboard() {
             <div className={styles.chartMeta}>
               <span>Rendimento do mês</span>
               <span style={{ color: 'var(--success)' }}>+{MOCK_WEALTH.monthlyReturnPct}%</span>
+            </div>
+            <WealthEvolutionChart values={MOCK_WEALTH_EVOLUTION} />
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>Este mês</h2>
+            </div>
+            <div className={styles.statRow}>
+              <span>Investido</span>
+              <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.investedThisMonth)}</span>
+            </div>
+            <div className={styles.statRow}>
+              <span>Proventos previstos</span>
+              <span className={styles.statValue}>R$ {currency(MOCK_WEALTH.projectedDividends)}</span>
             </div>
           </div>
 
@@ -213,6 +247,27 @@ export function Dashboard() {
         <h1 className={styles.sectionTitle}>Projetos</h1>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
+            <div className={styles.statGrid}>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Recebido este mês</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.receivedThisMonth)}</span>
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Recebido no ano</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.receivedThisYear)}</span>
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>Imposto pago no ano</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.taxPaidThisYear)}</span>
+              </div>
+              <div className={styles.statTile}>
+                <span className={styles.heroLabel}>A receber</span>
+                <span className={styles.statTileValue}>R$ {currency(MOCK_PROJECT_STATS.outstanding)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`${styles.card} ${styles.fullWidth}`}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Projetos ativos</h2>
               <a className={styles.cardLink} href="/projetos">
@@ -234,5 +289,41 @@ export function Dashboard() {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Gráfico de linha simples com o gradiente-assinatura do Design System. */
+function WealthEvolutionChart({ values }: { values: number[] }) {
+  const width = 600
+  const height = 100
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width
+    const y = height - ((v - min) / (max - min || 1)) * (height - 12) - 6
+    return `${x},${y}`
+  })
+
+  return (
+    <svg className={styles.evolutionChart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="wealthGradient" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#F0605A" />
+          <stop offset="22%" stopColor="#F2934A" />
+          <stop offset="42%" stopColor="#F0C24B" />
+          <stop offset="62%" stopColor="#7FC96B" />
+          <stop offset="80%" stopColor="#3FB6A8" />
+          <stop offset="100%" stopColor="#3E5BFA" />
+        </linearGradient>
+      </defs>
+      <polyline
+        points={points.join(' ')}
+        fill="none"
+        stroke="url(#wealthGradient)"
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
