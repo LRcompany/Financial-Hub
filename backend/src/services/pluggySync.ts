@@ -10,6 +10,7 @@
 
 import { prisma } from "../prisma.js";
 import { getInvestments } from "./pluggy.js";
+import { getUsdToBrlRate } from "./fx.js";
 
 interface PluggyInvestment {
   id: string;
@@ -20,6 +21,7 @@ interface PluggyInvestment {
   balance: number;
   amountOriginal?: number | null;
   amount?: number | null;
+  currencyCode?: string; // "BRL" | "USD" | ...
 }
 
 function mapSecurityType(inv: PluggyInvestment): string {
@@ -40,19 +42,35 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
+  // Só busca a cotação se algum ativo desse sync realmente vier em moeda
+  // estrangeira — evita chamada desnecessária pro caso comum (tudo em BRL).
+  const needsFx = results.some((inv) => inv.currencyCode && inv.currencyCode !== "BRL");
+  const usdRate = needsFx ? await getUsdToBrlRate() : null;
+
   for (const inv of results) {
+    const currency = inv.currencyCode ?? "BRL";
+    // Hoje só sabemos converter USD (é o único caso real — Nomad/Phantom).
+    // Outra moeda estrangeira ainda não suportada: grava sem converter e
+    // deixa fxRateToBRL null, pra não fingir uma conversão que não fizemos.
+    const fxRate = currency === "USD" ? usdRate : null;
+    const convert = (v: number) => (fxRate ? v * fxRate : v);
+
     // id sintético e determinístico (pluggy:<id do ativo>) — garante que o upsert
     // sempre bate no mesmo Security em syncs futuros, sem duplicar.
     const security = await prisma.security.upsert({
       where: { id: `pluggy:${inv.id}` },
-      update: { name: inv.name, ticker: inv.code ?? null },
+      update: { name: inv.name, ticker: inv.code ?? null, currency },
       create: {
         id: `pluggy:${inv.id}`,
         name: inv.name,
         ticker: inv.code ?? null,
         type: mapSecurityType(inv),
+        currency,
       },
     });
+
+    const investedAmount = convert(inv.amountOriginal ?? inv.amount ?? inv.balance);
+    const marketValue = convert(inv.balance);
 
     await prisma.positionSnapshot.upsert({
       where: {
@@ -63,18 +81,8 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
           year,
         },
       },
-      update: {
-        investedAmount: inv.amountOriginal ?? inv.amount ?? inv.balance,
-        marketValue: inv.balance,
-      },
-      create: {
-        brokerId: broker.id,
-        securityId: security.id,
-        month,
-        year,
-        investedAmount: inv.amountOriginal ?? inv.amount ?? inv.balance,
-        marketValue: inv.balance,
-      },
+      update: { investedAmount, marketValue, fxRateToBRL: fxRate },
+      create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount, marketValue, fxRateToBRL: fxRate },
     });
   }
 

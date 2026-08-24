@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { to: '/orcamento', label: 'Orçamento', icon: Receipt },
   { to: '/patrimonio', label: 'Patrimônio', icon: Wallet },
   { to: '/projetos', label: 'Projetos', icon: Briefcase },
-  { to: '/configuracoes', label: 'Mais', icon: SlidersHorizontal },
+  { to: '/configuracoes', label: 'Configurações', icon: SlidersHorizontal },
 ]
 
 function greeting(): string {

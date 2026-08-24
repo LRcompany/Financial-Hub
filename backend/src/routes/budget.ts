@@ -3,6 +3,17 @@ import { prisma } from "../prisma.js";
 
 export const budgetRouter = Router();
 
+/** Meta vigente numa data: a linha mais recente com effectiveFrom <= date. */
+function goalAt(goals: { amount: number; effectiveFrom: Date }[], date: Date): number | null {
+  let applicable: { amount: number; effectiveFrom: Date } | null = null;
+  for (const g of goals) {
+    if (g.effectiveFrom <= date && (!applicable || g.effectiveFrom > applicable.effectiveFrom)) {
+      applicable = g;
+    }
+  }
+  return applicable?.amount ?? null;
+}
+
 // GET /api/budget-summary?month=8&year=2026
 // Orçamento mensal (soma dos BudgetTarget do mês) + gasto real por categoria +
 // meta/gasto diário — tudo calculado a partir de Transaction, sem valor fixo.
@@ -17,9 +28,9 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const prevMonthStart = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
   const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
 
-  const [targets, dailyGoalRow] = await Promise.all([
+  const [targets, dailyGoals] = await Promise.all([
     prisma.budgetTarget.findMany({ where: { month, year }, include: { category: true } }),
-    prisma.dailySpendGoal.findFirst(),
+    prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
   ]);
 
   const categories = await Promise.all(
@@ -75,14 +86,14 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     }),
   ]);
 
-  const last14Days: { date: string; amount: number }[] = [];
+  const last14Days: { date: string; amount: number; goal: number | null }[] = [];
   for (let i = 0; i < 14; i++) {
     const day = new Date(fourteenDaysAgo.getTime() + i * 24 * 60 * 60 * 1000);
     const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
     const amount = last28Transactions
       .filter((t) => t.date >= day && t.date < dayEnd)
       .reduce((sum, t) => sum + t.amount, 0);
-    last14Days.push({ date: day.toISOString().slice(0, 10), amount });
+    last14Days.push({ date: day.toISOString().slice(0, 10), amount, goal: goalAt(dailyGoals, day) });
   }
   const previous14Days: number[] = [];
   for (let i = 0; i < 14; i++) {
@@ -100,7 +111,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   res.json({
     month,
     year,
-    dailyGoal: dailyGoalRow?.amount ?? null,
+    dailyGoal: goalAt(dailyGoals, now),
     todaySpent: todayAgg._sum.amount ?? 0,
     monthlyAvgDailySpend,
     previousMonthlyAvgDailySpend,
@@ -109,4 +120,30 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     totalSpent,
     categories,
   });
+});
+
+// GET /api/daily-goal/history — histórico completo, mais recente primeiro
+budgetRouter.get("/daily-goal/history", async (_req, res) => {
+  const goals = await prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "desc" } });
+  res.json(goals);
+});
+
+// POST /api/daily-goal — body { amount }. NUNCA atualiza uma linha existente:
+// sempre cria uma nova, vigente a partir de hoje — dias passados continuam
+// avaliados pela meta que valia neles.
+budgetRouter.post("/daily-goal", async (req, res) => {
+  const { amount } = req.body ?? {};
+  if (typeof amount !== "number" || amount <= 0) {
+    return res.status(400).json({ error: "amount precisa ser um número positivo" });
+  }
+  const today = new Date();
+  const effectiveFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const goal = await prisma.dailySpendGoal.create({ data: { amount, effectiveFrom } });
+  res.status(201).json(goal);
+});
+
+// DELETE /api/daily-goal/:id — corrige um lançamento errado (não é o fluxo normal de "mudar a meta")
+budgetRouter.delete("/daily-goal/:id", async (req, res) => {
+  await prisma.dailySpendGoal.deleteMany({ where: { id: req.params.id } });
+  res.status(204).end();
 });

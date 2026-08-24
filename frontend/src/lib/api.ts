@@ -48,7 +48,7 @@ export interface BudgetSummary {
   todaySpent: number
   monthlyAvgDailySpend: number
   previousMonthlyAvgDailySpend: number
-  last14Days: { date: string; amount: number }[]
+  last14Days: { date: string; amount: number; goal: number | null }[]
   totalPlanned: number
   totalSpent: number
   categories: BudgetCategory[]
@@ -117,6 +117,12 @@ export interface ProjectsSummary {
   }[]
 }
 
+export interface DailyGoalEntry {
+  id: string
+  amount: number
+  effectiveFrom: string
+}
+
 export interface Broker {
   id: string
   name: string
@@ -160,6 +166,9 @@ export const api = {
       body: JSON.stringify({ savingsTarget, annualReturnAssumptionPct }),
     }),
   deleteWealthGoalYearly: (year: number) => request<void>(`/wealth-goal/yearly/${year}`, { method: 'DELETE' }),
+  dailyGoalHistory: () => request<DailyGoalEntry[]>('/daily-goal/history'),
+  setDailyGoal: (amount: number) => request<DailyGoalEntry>('/daily-goal', { method: 'POST', body: JSON.stringify({ amount }) }),
+  deleteDailyGoal: (id: string) => request<void>(`/daily-goal/${id}`, { method: 'DELETE' }),
   projectsSummary: (params?: { year?: number }) => {
     const query = params?.year ? `?year=${params.year}` : ''
     return request<ProjectsSummary>(`/projects-summary${query}`)

@@ -90,9 +90,13 @@ model BudgetTarget {
   @@unique([categoryId, month, year])
 }
 
+// Append-only: cada mudança cria uma linha nova, nunca sobrescreve a
+// anterior — "qual era a meta vigente no dia X" é sempre uma consulta
+// (maior effectiveFrom <= X), nunca um valor único perdido no tempo.
 model DailySpendGoal {
-  id     String @id @default(uuid())
-  amount Float
+  id            String   @id @default(uuid())
+  amount        Float
+  effectiveFrom DateTime
 }
 
 model Debt {
@@ -149,6 +153,7 @@ model Security {
   ticker               String?
   type                 String // FII | Ação | Renda Fixa | Cripto | Moeda | Fundo
   sector               String?
+  currency             String   @default("BRL") // BRL | USD — Nomad/Phantom são cotados em USD
   targetAllocationPct  Float?
   targetDividendYield  Float?
 
@@ -163,8 +168,9 @@ model PositionSnapshot {
   security       Security @relation(fields: [securityId], references: [id])
   month          Int
   year           Int
-  investedAmount Float
-  marketValue    Float
+  investedAmount Float // sempre em BRL — já convertido na gravação se a security for USD
+  marketValue    Float // idem
+  fxRateToBRL    Float? // cotação USD/BRL usada na conversão daquele mês; null quando currency já é BRL
   dividends      Float?
 
   @@unique([brokerId, securityId, month, year])
