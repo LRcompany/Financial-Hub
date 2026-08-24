@@ -132,7 +132,7 @@ export function SmoothLineChart({
           <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
           <div className={styles.tooltipValue}>
             {valuePrefix}
-            {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
       )}

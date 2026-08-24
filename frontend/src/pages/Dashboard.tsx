@@ -32,7 +32,7 @@ function formatDayLabel(iso: string): string {
 }
 
 function currency(value: number) {
-  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function CardHeader({
@@ -112,7 +112,7 @@ export function Dashboard() {
                   <div className={styles.dailyGoalMeta}>
                     <span className={styles.heroLabel}>Meta diária</span>
                     <span style={{ fontWeight: 600 }}>
-                      {budget.dailyGoal != null ? `R$ ${budget.dailyGoal.toLocaleString('pt-BR')}` : 'não definida'}
+                      {budget.dailyGoal != null ? `R$ ${currency(budget.dailyGoal)}` : 'não definida'}
                     </span>
                   </div>
                 </div>
@@ -167,7 +167,7 @@ export function Dashboard() {
                   <div className={styles.progressLabel}>
                     <span>Total do mês</span>
                     <span>
-                      R$ {budget.totalSpent.toLocaleString('pt-BR')} / R$ {budget.totalPlanned.toLocaleString('pt-BR')}
+                      R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
                     </span>
                   </div>
                   <div className={styles.progressTrack}>
@@ -185,7 +185,7 @@ export function Dashboard() {
                     <div className={styles.progressLabel}>
                       <span>{item.name}</span>
                       <span>
-                        R$ {item.spent.toLocaleString('pt-BR')} / R$ {item.planned.toLocaleString('pt-BR')}
+                        R$ {currency(item.spent)} / R$ {currency(item.planned)}
                       </span>
                     </div>
                     <div className={styles.progressTrack}>

@@ -60,7 +60,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
           <div className={styles.tooltip}>
             <div className={styles.tooltipLabel}>{active.label}</div>
             <div className={styles.tooltipValue}>
-              R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className={styles.tooltipLabel}>{((active.value / total) * 100).toFixed(0)}%</div>
           </div>
@@ -78,7 +78,9 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
           >
             <span className={styles.legendDot} style={{ background: s.color }} />
             <span className={styles.legendName}>{s.label}</span>
-            <span className={styles.legendValue}>R$ {s.value.toLocaleString('pt-BR')}</span>
+            <span className={styles.legendValue}>
+              R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
         ))}
       </div>
