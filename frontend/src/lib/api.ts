@@ -93,8 +93,30 @@ export interface ProjectsSummary {
   }[]
 }
 
+export interface Broker {
+  id: string
+  name: string
+  scope: string
+  dataSource: string
+  pluggyConnectorId: string | null
+  onchainAddress: string | null
+  lastSyncedAt: string | null
+}
+
 export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
+  brokers: () => request<Broker[]>('/brokers'),
+  syncBroker: (id: string) => request<{ synced: true; count: number }>(`/brokers/${id}/sync`, { method: 'POST' }),
+  pluggyConnectToken: (itemId?: string) =>
+    request<{ accessToken: string }>('/pluggy/connect-token', {
+      method: 'POST',
+      body: JSON.stringify(itemId ? { itemId } : {}),
+    }),
+  linkPluggyBroker: (itemId: string, connectorName: string) =>
+    request<Broker>('/pluggy/link-broker', {
+      method: 'POST',
+      body: JSON.stringify({ itemId, connectorName }),
+    }),
   transactions: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<Transaction[]>(`/transactions${query}`)

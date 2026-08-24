@@ -55,7 +55,25 @@ export function getInvestments(itemId: string) {
   return pluggyGet(`/investments?itemId=${itemId}`);
 }
 
-// TODO: quando formos ligar o sync de verdade —
+/**
+ * Cria um Connect Token pro widget (docs.pluggy.ai/reference/connect-token-create).
+ * Sem itemId: abre o widget pra conectar um banco novo.
+ * Com itemId: abre em modo "atualização" daquela conexão existente (reautenticar/MFA vencido).
+ */
+export async function createConnectToken(itemId?: string): Promise<{ accessToken: string }> {
+  const apiKey = await getPluggyApiKey();
+  const response = await fetch(`${PLUGGY_BASE_URL}/connect_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+    body: JSON.stringify(itemId ? { itemId } : {}),
+  });
+  if (!response.ok) {
+    throw new Error(`Falha ao criar connect token: ${response.status}`);
+  }
+  return response.json() as Promise<{ accessToken: string }>;
+}
+
+// TODO: quando formos ligar o sync de transações —
 // 1. Puxar GET /transactions?accountId= por conta
 // 2. Mapear pra Transaction (source: "pluggy", externalId: id da Pluggy)
 // 3. Rodar a sugestão de categoria (categorization.ts) antes de salvar

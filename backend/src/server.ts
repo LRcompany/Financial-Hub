@@ -8,6 +8,7 @@ import { budgetRouter } from "./routes/budget.js";
 import { wealthRouter } from "./routes/wealth.js";
 import { projectsRouter } from "./routes/projects.js";
 import { brokersRouter } from "./routes/brokers.js";
+import { pluggyConnectRouter } from "./routes/pluggyConnect.js";
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3333;
@@ -24,6 +25,7 @@ app.use("/api", budgetRouter);
 app.use("/api", wealthRouter);
 app.use("/api", projectsRouter);
 app.use("/api", brokersRouter);
+app.use("/api", pluggyConnectRouter);
 
 app.listen(port, () => {
   console.log(`Financial Hub backend rodando em http://localhost:${port}`);

@@ -22,7 +22,10 @@ export function AppLayout() {
     <div className={styles.shell}>
       {/* Desktop: sidebar. Some items also power the mobile bottom nav below. */}
       <aside className={styles.sidebar}>
-        <div className={styles.sidebarBrand}>Financial Hub</div>
+        <div className={styles.sidebarBrand}>
+          <img src="/favicon.svg" alt="" width={22} height={22} />
+          Financial Hub
+        </div>
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -40,7 +43,10 @@ export function AppLayout() {
         <header className={styles.header}>
           <div className={styles.greeting}>
             <span className={styles.hello}>{greeting()}</span>
-            <span className={styles.title}>Financial Hub</span>
+            <span className={styles.title}>
+              <img src="/favicon.svg" alt="" width={18} height={18} className={styles.titleLogo} />
+              Financial Hub
+            </span>
           </div>
           <div className={styles.headerActions}>
             <button className={styles.iconBtn} aria-label="Buscar transação">
