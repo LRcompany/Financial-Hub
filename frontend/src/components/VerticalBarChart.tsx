@@ -23,14 +23,18 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
   const restTotal = sorted.slice(max).reduce((sum, d) => sum + d.value, 0)
   const bars = restTotal > 0 ? [...visible, { label: 'Outros', value: restTotal, breakdown: sorted.slice(max) }] : visible
   const maxValue = Math.max(...bars.map((b) => b.value), 1)
+  // Da esquerda pra direita: menor -> maior (inverte a ordenação decrescente
+  // usada só pra achar o destaque/truncar "Outros"). O destaque segue o
+  // VALOR, não a posição — continua marcando o maior onde quer que ele caia.
+  const ordered = [...bars].reverse()
 
   return (
     <div className={styles.chart}>
-      {bars.map((b, i) => (
+      {ordered.map((b) => (
         <div key={b.label} className={styles.col}>
           <span className={styles.pct}>{((b.value / total) * 100).toFixed(1)}%</span>
           <div
-            className={`${styles.bar} ${i === 0 ? styles.barHighlight : ''}`}
+            className={`${styles.bar} ${b.value === maxValue ? styles.barHighlight : ''}`}
             style={{ height: `${Math.max((b.value / maxValue) * 100, 6)}%` }}
             title={`R$ ${currency(b.value)}`}
           />
@@ -41,7 +45,7 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
                 : null
             }
           >
-            <span className={i === 0 ? styles.labelHighlight : styles.label}>{b.label}</span>
+            <span className={b.value === maxValue ? styles.labelHighlight : styles.label}>{b.label}</span>
           </HoverCard>
         </div>
       ))}

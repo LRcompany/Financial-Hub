@@ -25,6 +25,7 @@ import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
 import { StatementUploadModal } from '../components/StatementUploadModal'
+import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -447,8 +448,10 @@ export function Patrimonio() {
                           <th>Ativo</th>
                           <th>Corretora</th>
                           <th>Cotas/qtd.</th>
+                          <th>Preço unit.</th>
                           <th>Investido</th>
                           <th>Valor atual</th>
+                          <th>Rentab.</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -463,11 +466,8 @@ export function Patrimonio() {
                               </HoverCard>
                             </td>
                             <td>{p.broker}</td>
-                            <td>
-                              {p.quantity != null && p.unitValue != null
-                                ? `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} × R$ ${currency(p.unitValue)}`
-                                : '—'}
-                            </td>
+                            <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
+                            <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
                             <td>
                               R$ {currency(p.investedAmount)}
                               {p.currency === 'USD' && p.fxRateToBRL && (
@@ -485,6 +485,9 @@ export function Patrimonio() {
                               {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
                                 <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
                               )}
+                            </td>
+                            <td>
+                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
                             </td>
                           </tr>
                         ))}

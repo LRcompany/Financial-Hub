@@ -314,6 +314,21 @@ Luiz pediu pra revisar tudo e sincronizar de novo "sem divergência". Achados re
 
 **USD nos totais** (Nomad e Cripto, pedido explícito): `GET /api/fx-rate` novo (cotação atual, só pra exibição) — Cripto usa essa cotação corrente pra mostrar US$ ao lado do R$ em cada posição e no total da box; Nomad usa a taxa já gravada por posição (mais precisa, é a taxa real de quando cada posição foi registrada) tanto por linha quanto no total da box.
 
+### Rentabilidade real via planilha + ajustes de tabela/gráfico (25/08, quarta rodada)
+
+**Causa raiz do "investido = atual" em Ação/FII**: confirmado — a Pluggy não manda `amountOriginal`/`amount` pra investimento tipo EQUITY (só pra Renda Fixa), então o sync caía no fallback `balance` pros dois campos. Sem custo de aquisição real disponível pela API, usamos a planilha "PLANEJAMENTO - PESSOAL.xlsx" (abas `Ações`/`FIIs`, bloco "agosto / 26", coluna "Valor Aplicado") como fonte — é onde o Luiz mantém o controle manual de quanto realmente aportou por ativo.
+
+- **FII**: 9 tickers, todos batem 1:1 por ticker exato (HGLG11, KNRI11, VISC11, MXRF11, HGRE11, XPLG11, KNCR11, ALZR11, HTMX11) — aplicado sem ressalva.
+- **Ação**: 12 de 15 posições batem por ticker (PETR4, ITUB4, VALE3, BBSE3, CXSE3, EQTL3, GGBR4, CPFE3, VBBR3, CMIG4, DIRR3 exatos; JBSS32↔JBSS3 da planilha assumido como a mesma JBS, provável mudança de notação de classe — aplicado com essa ressalva). **3 ficaram de fora, propositalmente**: AXIA3 (R$9.325,80) e AXIA7 (R$1.600,53) — a planilha só rastreia uma linha "AXIA6" (outra classe/série do mesmo papel, valor não bate com a soma das duas), e CPLE3 (R$3.599,18) — a planilha rastreia "CPLE6". Ticker com sufixo diferente (3/6/7) é uma classe de ação distinta na B3, não necessariamente a mesma posição — Investido continua igual ao Atual (rentabilidade 0%) até o Luiz confirmar o mapeamento certo.
+- **Nomad**: a planilha só rastreia um valor agregado da carteira inteira (aba `INVESTIMENTO26`, bloco "AGOSTO", linha NOMAD: US$7.068,13 investido). Sem detalhamento por bond/ETF, distribuído **proporcionalmente pelo peso atual em USD** de cada uma das 4 posições (ex: o ETF é 73,7% do valor atual, herda 73,7% do investido). Resultado: todas as 4 posições mostram a mesma rentabilidade (8,6%) — é consequência do método (uma única rentabilidade agregada dividida proporcionalmente), não 4 retornos calculados independentemente; fica documentado aqui pra não estranhar depois.
+- **Cripto**: a mesma planilha tem uma linha "PHANTOM / CRYPTO" pra agosto (US$2.157,57 investido → US$257,14 atual) que **diverge muito** do valor real verificado on-chain hoje (R$1.559,42 ≈ US$307) — não foi aplicada. Reconstruir custo de aquisição real exigiria minerar o histórico de transações on-chain (data de cada compra/swap, por rede) pra buscar o preço histórico de cada uma via CoinGecko — viável em princípio, mas é um recurso novo (hoje só consultamos saldo atual, não histórico de transação), não construído ainda.
+
+**Coluna "Rentab."** (`components/ReturnBadge.tsx`): mesmo padrão visual do `MonthDelta` (seta colorida indica direção, texto sempre neutro — regra do Design System) — reaproveita `MonthDelta.module.css`. Mostra "—" quando não há investido conhecido (0), nunca uma rentabilidade fingida.
+
+**Tabela de posição**: "Cotas/qtd." e o preço unitário eram uma string só (`52318 × R$ 1,24`) — separados em duas colunas (`Cotas/qtd.` / `Preço unit.`).
+
+**`VerticalBarChart`**: ordem invertida — antes maior à esquerda (ordenação decrescente usada direto pra desenhar), agora menor à esquerda → maior à direita. O destaque (gradiente + pill preto) segue o VALOR, não mais a posição no array, pra continuar marcando o maior onde quer que ele caia depois da inversão.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
