@@ -406,7 +406,7 @@ export function Patrimonio() {
                       <SmoothLineChart
                         values={history.map((h) => h.value)}
                         labels={history.map((h) => h.label)}
-                        gradientId={`history-${group.type}`}
+                        gradientId={`history-${group.type.replace(/\s+/g, '-')}`}
                         className={cards.evolutionChart}
                       />
                     </div>
