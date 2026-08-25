@@ -142,6 +142,10 @@ model Broker {
   pluggyConnectorId String?
   onchainAddress    String?
   lastSyncedAt      DateTime?
+  // true pra corretora que deve virar sua própria box em Patrimônio, em vez
+  // de espalhar as posições por tipo de ativo (Nomad: bonds e ETF ficam
+  // juntos, não bonds em "Renda Fixa" e ETF em "Fundo" — é uma carteira só).
+  standalone        Boolean  @default(false)
 
   transactions     Transaction[]
   positionSnapshots PositionSnapshot[]

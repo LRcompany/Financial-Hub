@@ -3,6 +3,7 @@ import { PluggyConnect } from 'pluggy-connect-sdk'
 import { Plus, RefreshCw, Landmark, Target } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
+import { Input } from '../components/Input'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
@@ -111,8 +112,7 @@ export function Settings() {
           </div>
 
           <form className={styles.inlineForm} onSubmit={saveDailyGoal}>
-            <input
-              className={cards.input}
+            <Input
               type="number"
               step="0.01"
               placeholder="Nova meta diária (R$)"

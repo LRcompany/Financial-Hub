@@ -22,16 +22,6 @@
   margin-top: var(--space-3);
 }
 
-.formLabel {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  flex: 1;
-  min-width: 160px;
-}
-
 .tableWrap {
   overflow-x: auto;
 }

@@ -20,7 +20,10 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { RankedBarList } from '../components/RankedBarList'
+import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
+import { Input } from '../components/Input'
+import { Select } from '../components/Select'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
@@ -35,6 +38,11 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
   Cripto: Bitcoin,
   Moeda: DollarSign,
 }
+
+// Tipos onde "por ativo" vira barra vertical full-width em vez da barra
+// horizontal ranqueada — Ação/FII costumam ter dezena de posição, a versão
+// vertical ocupando a largura toda cabe mais opção e lê melhor.
+const VERTICAL_BAR_TYPES = new Set(['Ação', 'FII'])
 
 /** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior primeiro. */
 function groupByKey(positions: Position[], keyFn: (p: Position) => string) {
@@ -296,7 +304,7 @@ export function Patrimonio() {
             {positions.map((group) => {
               const brokerBreakdown = groupByKey(group.positions, (p) => p.broker)
               const assetBreakdown = groupByKey(group.positions, (p) => assetLabel(displayName(p, group.type)))
-              const Icon = TYPE_ICONS[group.type] ?? PieChart
+              const Icon = group.isBroker ? Landmark : (TYPE_ICONS[group.type] ?? PieChart)
 
               // Corretora única no grupo — não tem o que comparar (é tudo o
               // mesmo lugar), mas dá pra ver a evolução no tempo.
@@ -332,7 +340,17 @@ export function Patrimonio() {
                     </div>
                   )}
 
-                  {(brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
+                  {/* Ação/FII: barra vertical 100% da largura, fora da grid de
+                      2 colunas — cabe mais ativo e lê melhor que a barra
+                      horizontal quando tem dezena de posição. */}
+                  {VERTICAL_BAR_TYPES.has(group.type) && assetBreakdown.length > 1 && (
+                    <div style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
+                      <h4 className={styles.chartLabel}>Por ativo</h4>
+                      <VerticalBarChart data={assetBreakdown} max={12} />
+                    </div>
+                  )}
+
+                  {!VERTICAL_BAR_TYPES.has(group.type) && (brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
                     <div className={styles.chartsRow} style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
                       {brokerBreakdown.length > 1 && (
                         <div>
@@ -394,17 +412,14 @@ export function Patrimonio() {
             <CardHeader icon={Flag} title="Primeira Milhão" />
 
             <form className={styles.targetForm} onSubmit={saveTarget}>
-              <label className={styles.formLabel}>
-                Meta geral (R$)
-                <input
-                  className={cards.input}
-                  type="number"
-                  step="0.01"
-                  placeholder="1000000"
-                  value={targetInput}
-                  onChange={(e) => setTargetInput(e.target.value)}
-                />
-              </label>
+              <Input
+                label="Meta geral (R$)"
+                type="number"
+                step="0.01"
+                placeholder="1000000"
+                value={targetInput}
+                onChange={(e) => setTargetInput(e.target.value)}
+              />
               <button className={cards.saveBtn} type="submit" disabled={savingTarget}>
                 Salvar meta
               </button>
@@ -479,23 +494,20 @@ export function Patrimonio() {
             </div>
 
             <form className={styles.yearForm} onSubmit={saveYear}>
-              <input
-                className={cards.input}
+              <Input
                 type="number"
                 placeholder="Ano"
                 value={yearForm.year}
                 onChange={(e) => setYearForm({ ...yearForm, year: e.target.value })}
               />
-              <input
-                className={cards.input}
+              <Input
                 type="number"
                 step="0.01"
                 placeholder="Aporte no ano (R$)"
                 value={yearForm.savingsTarget}
                 onChange={(e) => setYearForm({ ...yearForm, savingsTarget: e.target.value })}
               />
-              <input
-                className={cards.input}
+              <Input
                 type="number"
                 step="0.1"
                 placeholder="Retorno assumido (% a.a.)"
@@ -560,43 +572,35 @@ export function Patrimonio() {
               entra sozinho no próximo sync.
             </p>
             <form className={styles.addForm} onSubmit={saveNewPosition}>
-              <input
-                className={cards.input}
+              <Input
                 placeholder="Corretora (ex: Nomad)"
                 value={addForm.brokerName}
                 onChange={(e) => setAddForm({ ...addForm, brokerName: e.target.value })}
               />
-              <input
-                className={cards.input}
+              <Input
                 placeholder="Nome do ativo"
                 value={addForm.securityName}
                 onChange={(e) => setAddForm({ ...addForm, securityName: e.target.value })}
               />
-              <select className={cards.input} value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
+              <Select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
                 {SECURITY_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
                 ))}
-              </select>
-              <select
-                className={cards.input}
-                value={addForm.currency}
-                onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
-              >
+              </Select>
+              <Select value={addForm.currency} onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}>
                 <option value="BRL">BRL</option>
                 <option value="USD">USD</option>
-              </select>
-              <input
-                className={cards.input}
+              </Select>
+              <Input
                 type="number"
                 step="0.01"
                 placeholder={`Valor investido (${addForm.currency})`}
                 value={addForm.investedAmount}
                 onChange={(e) => setAddForm({ ...addForm, investedAmount: e.target.value })}
               />
-              <input
-                className={cards.input}
+              <Input
                 type="number"
                 step="0.01"
                 placeholder={`Valor atual (${addForm.currency})`}

@@ -143,6 +143,7 @@ export interface Position {
 
 export interface PositionsByType {
   type: string
+  isBroker: boolean
   total: number
   positions: Position[]
 }

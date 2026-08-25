@@ -382,36 +382,9 @@
   }
 }
 
-/* ---------- campo de formulário — padrão único, não duplicar por página ---------- */
-.input {
-  height: 38px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 0 var(--space-3);
-  font-size: 13.5px;
-  font-family: inherit;
-  color: var(--ink);
-  background: var(--surface);
-  flex: 1;
-  min-width: 160px;
-}
-
-.input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
-/* remove as setinhas nativas de input number — destoam do resto do app,
-   que não usa nenhum controle de sistema operacional */
-.input::-webkit-outer-spin-button,
-.input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.input[type='number'] {
-  -moz-appearance: textfield;
-}
+/* Campo de formulário (input/select) mora em components/Input.tsx +
+   Input.module.css — único lugar que define tamanho/borda/foco. Não
+   estilizar <input>/<select> direto em nenhuma página. */
 
 .saveBtn {
   height: 38px;

@@ -1,0 +1,43 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.label {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 var(--space-3);
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* setinhas nativas de number destoam do resto do app — nenhum outro
+   controle aqui usa estilo de sistema operacional */
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.input[type='number'] {
+  -moz-appearance: textfield;
+}

@@ -224,7 +224,7 @@ Devolve `{monthsToGoal, projectedDate, usedExtrapolation}` + `yearlyBreakdown` (
 
 - `Dashboard.tsx` — 100% ligado nas rotas acima, zero `MOCK_*`. Card **Primeira Milhão** (resumo: % + data projetada, link "Ver tudo" pra Patrimônio); **Orçamento do mês** com total consolidado antes do detalhe por categoria.
 - `Patrimonio.tsx` (rota `/patrimonio`, antes placeholder) — página real: evolução, **alocação de investimentos** (pizza por tipo de ativo), destaques do mês, e a seção **Primeira Milhão** completa (formulário de meta geral + tabela de metas por ano, editável, com adicionar/remover + tabela da projeção ano a ano).
-  - **Uma box por tipo de ativo** (25/08) — cada tipo (Renda Fixa, Ação, FII, Fundo, Cripto, Moeda) vira seu próprio card. "Por corretora" continua pizza (poucas fatias, funciona bem); "**por ativo**" virou `RankedBarList` (barra ranqueada, top 8 + "Outros") em vez de uma segunda pizza — pizza com 15-25 fatias (Ação tinha 15, Renda Fixa competia com ela) ficava ilegível e repetitiva ao lado da primeira. Fonte: `GET /api/positions` (agrupa por tipo, mesma regra de "posição ativa" de `wealth-overview`).
+  - **Uma box por tipo de ativo** (25/08) — cada tipo (Renda Fixa, FII, Ação, Fundo, Cripto) ou corretora `standalone` (Nomad) vira seu próprio card. "Por corretora" continua pizza (poucas fatias, funciona bem). "**Por ativo**": `RankedBarList` (barra horizontal ranqueada, top 8 + "Outros") pra a maioria; **Ação e FII usam `VerticalBarChart`** (barra vertical 100% da largura, maior barra destacada com gradiente do accent + rótulo em pill preto, até 12 itens + "Outros") — pizza/barra horizontal ficava ilegível com 15-25 posições. Fonte: `GET /api/positions` (agrupa por tipo, mesma regra de "posição ativa" de `wealth-overview`).
   - **Evolução por corretora** — quando o grupo só tem 1 corretora (Moeda→Nomad, Cripto→Phantom, Fundo→o fundo da BTG), não tem o que comparar por corretora/ativo, mas mostra a evolução mensal daquela corretora (`SmoothLineChart`, via `GET /api/positions/history?broker=`). Resolve concretamente "eu não invisto em Moeda, invisto na Nomad" — o gráfico já é por corretora, o tipo "Moeda" só existe pra classificar o ativo.
   - `assetLabel()` agrupa nomes tipo "CDB - BANCO SOFISA S.A." em "CDB" (corta no primeiro " - ") — sem isso a Sofisa sozinha gera 81 fatias/barras iguais.
   - `displayName()` só usa o `ticker` da Pluggy pra Ação/FII (é um ticker de verdade ali — PETR4, HGLG11); pra Renda Fixa/Fundo o "código" da Pluggy é um ISIN/CNPJ interno sem significado pra leitura, então usa o `name` completo.
@@ -249,13 +249,17 @@ Luiz mandou o extrato oficial da Nomad (PDF, julho/2026). A posição "USD" agre
 
 Total conferido: US$ 7.675,52 bate exato com o "Total Net Worth" do extrato. `investedAmount` foi setado igual ao `marketValue` pra cada um — o extrato não traz preço de aquisição (é um resumo de posição, não nota de corretagem), então não tem como saber o ganho/perda real; assumir isso seria inventar número. Se Luiz mandar as notas de compra depois, dá pra corrigir.
 
-### Phantom on-chain real (25/08)
+### Phantom on-chain real (25/08, ampliado no mesmo dia)
 
 `services/solana.ts` — consulta pública na blockchain Solana (RPC `api.mainnet-beta.solana.com`, sem chave), só com o endereço público da carteira (nunca a seed phrase). `Broker.dataSource = "onchain_query"` + `onchainAddress` preenchidos pro Phantom; `POST /api/brokers/:id/sync` já sabe rotear pra Pluggy ou on-chain de acordo com o `dataSource`.
-- Cobre só o saldo nativo de SOL por enquanto (não os tokens SPL/outras criptos na mesma carteira — precisaria de `getTokenAccountsByOwner` + preço por token, ainda não construído).
-- Preço em BRL via CoinGecko (`simple/price`, público, sem chave).
+- **SOL nativo + tokens SPL** (`getTokenAccountsByOwner`) — cobre a carteira inteira, não só SOL. Cada token achado é precificado via CoinGecko (`simple/token_price/solana` pelo endereço do contrato) e nomeado via `coins/solana/contract/{mint}`; token sem preço no CoinGecko (memecoin muito nova, sem liquidez) é **ignorado, não vira posição com valor 0 fake** — o sync devolve `tokensUnpriced` pra saber quantos ficaram de fora.
+- Preço do SOL em BRL via CoinGecko (`simple/price`, público, sem chave).
 - `investedAmount`: a blockchain não guarda preço de compra — herda o valor do snapshot anterior (mantém uma base de custo), ou usa o valor de mercado na primeira vez (equivale a "ainda não sei o ganho/perda", não inventa um número).
-- A posição estimada antiga da planilha (R$1.258,11) foi substituída pelo saldo real (R$1,77 — a carteira tem bem menos SOL do que a estimativa manual supunha).
+- A posição estimada antiga da planilha (R$1.258,11) foi substituída pelo saldo real (R$5,06 — SOL R$1,74 + um token SPL real, "Lux Token", R$3,32 — bem menos do que a estimativa manual supunha).
+
+### Corretora "standalone" — Nomad vira sua própria box (25/08)
+
+`Broker.standalone` (bool) — corretora marcada assim não entra no agrupamento por tipo de ativo em `/api/positions`; vira sua própria box, com TODAS as posições dela juntas não importa o tipo. Motivo: Nomad tem bond (Renda Fixa) e ETF (Fundo) — Luiz não pensa nisso como "duas gavetas diferentes", é uma carteira só, numa corretora só. `positions.ts` decide a chave de agrupamento por `broker.standalone ? broker.name : security.type` e marca `isBroker: true` na resposta pro frontend saber que aquele "type" ali é na verdade um nome de corretora (troca o ícone pra `Landmark`, não mostra pizza "por corretora" — só tem uma mesmo). Hoje só a Nomad tem essa flag.
 
 ### `services/activePositions.ts` — a fonte única de verdade pra "o que está ativo agora"
 

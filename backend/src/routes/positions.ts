@@ -46,7 +46,10 @@ positionsRouter.get("/positions", async (_req, res) => {
     // ativo zerado (CDB vencido, lote resgatado) — a Pluggy continua devolvendo
     // a posição histórica com saldo 0, não é uma posição de verdade pra listar
     if (s.marketValue <= 0 && s.investedAmount <= 0) continue;
-    const list = byType.get(s.security.type) ?? [];
+    // Corretora "standalone" (Nomad) vira sua própria box em vez de espalhar
+    // por tipo — bond e ETF são a mesma carteira, não Renda Fixa + Fundo.
+    const groupKey = s.broker.standalone ? s.broker.name : s.security.type;
+    const list = byType.get(groupKey) ?? [];
     list.push({
       broker: s.broker.name,
       name: s.security.name,
@@ -64,12 +67,17 @@ positionsRouter.get("/positions", async (_req, res) => {
       fixedAnnualRate: s.security.fixedAnnualRate,
       ratePeriodicity: s.security.ratePeriodicity,
     });
-    byType.set(s.security.type, list);
+    byType.set(groupKey, list);
   }
 
+  const standaloneBrokerNames = new Set(
+    (await prisma.broker.findMany({ where: { standalone: true }, select: { name: true } })).map((b) => b.name)
+  );
+
   const result = [...byType.entries()]
-    .map(([type, positions]) => ({
-      type,
+    .map(([key, positions]) => ({
+      type: key,
+      isBroker: standaloneBrokerNames.has(key),
       total: positions.reduce((sum, p) => sum + p.marketValue, 0),
       positions: positions.sort((a, b) => b.marketValue - a.marketValue),
     }))
