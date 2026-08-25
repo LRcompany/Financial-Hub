@@ -14,8 +14,11 @@ import { getEvmNativeBalance, getEthPriceBRL, getEvmTokenBalances, getEvmTokenBa
 async function upsertPosition(
   brokerId: string,
   securityId: string,
-  name: string,
-  ticker: string,
+  // null = a fonte (CoinGecko) não respondeu agora — nunca sobrescreve um
+  // nome/ticker bom já salvo com um fallback ruim (endereço cru). Só usado
+  // pra token SPL/ERC-20; nativo (SOL/BTC/ETH) sempre manda string.
+  name: string | null,
+  ticker: string | null,
   marketValue: number,
   quantity: number,
   unitValue: number
@@ -25,8 +28,11 @@ async function upsertPosition(
   const year = now.getFullYear();
   const security = await prisma.security.upsert({
     where: { id: securityId },
-    update: { name, ticker, type: "Cripto", currency: "BRL" },
-    create: { id: securityId, name, ticker, type: "Cripto", currency: "BRL" },
+    update: { ...(name ? { name } : {}), ...(ticker ? { ticker } : {}), type: "Cripto", currency: "BRL" },
+    // Na criação não tem valor anterior pra preservar — se a CoinGecko falhar
+    // bem no primeiro sync desse token, usa o endereço truncado mesmo (raro,
+    // e um próximo sync bem-sucedido já corrige o nome).
+    create: { id: securityId, name: name ?? securityId.split(":").pop()!, ticker: ticker ?? null, type: "Cripto", currency: "BRL" },
   });
   const previous = await prisma.positionSnapshot.findFirst({
     where: { brokerId, securityId: security.id },

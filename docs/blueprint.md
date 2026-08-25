@@ -329,6 +329,17 @@ Luiz pediu pra revisar tudo e sincronizar de novo "sem divergência". Achados re
 
 **`VerticalBarChart`**: ordem invertida — antes maior à esquerda (ordenação decrescente usada direto pra desenhar), agora menor à esquerda → maior à direita. O destaque (gradiente + pill preto) segue o VALOR, não mais a posição no array, pra continuar marcando o maior onde quer que ele caia depois da inversão.
 
+### Custo real de cripto via histórico on-chain (25/08, quinta rodada)
+
+Luiz deu as datas de compra do Token.com (10, 12, 18, 19/02/2025) e disse que Ethereum e Solana também tiveram compra/venda nesse período. Em vez de pedir os valores de cada uma, mineramos direto da blockchain (mais preciso que depender de memória):
+
+- **Token.com (Base)**: `getTransactionReceipt` + decodificação do log `Transfer` (topic `0xddf252ad...`) do contrato do token, pra cada transação da carteira em fev/2025 (o Blockscout não tinha esse token indexado — 0 resultados no endpoint de token-transfers — então fomos direto no RPC). Achamos **6 compras** (não 4 — 10/02 e 12/02 tiveram 2 cada), somando exatamente **261.734,12 TOKEN — bate com o saldo atual até a casa decimal**, confirmando que nunca vendeu nada dessa posição. Custo: 5 das 6 pernas exatas via USDC on-chain, 1 estimada pelo preço implícito da compra do mesmo dia (~3h de diferença). Convertido pra BRL usando a cotação USD/BRL **do dia de cada compra** (`getUsdToBrlRateOnDate`, já existia pro upload de extrato), não uma taxa única. Total investido: **R$11.206,05** (vs. R$356,83 hoje — rentabilidade real: **-96,8%**, uma queda de preço real de ~$0,0075→$0,00026 por token).
+- **Solana**: histórico da carteira inteiro (32 transações) também 100% confinado a fev/2025, batendo com o que o Luiz falou. Achamos a compra de Lux Token, mas a segunda perna (a maior, +25.992 LUX) não teve uma variação de SOL nativo compatível com o valor — provavelmente passou por uma conta de SOL "wrapped" (WSOL) que não é capturada pela leitura simples de saldo nativo que fizemos. Como a posição vale R$3,32 hoje, não valeu o esforço de rastrear a rota completa — investedAmount ficou como estava (valor de mercado do primeiro sync).
+- **Ethereum (mainnet)**: sem posição ativa hoje (saldo 0, confirmado antes) — não há o que aplicar custo, mesmo com compra/venda no passado; seria um dado de "posição encerrada", não uma tabela que a Patrimônio mostra hoje.
+- **Bitcoin**: Luiz não deu data de compra — investedAmount continua como estava (herdado do primeiro sync), rentabilidade 0% até ele confirmar quando comprou.
+
+**Bug real achado no meio do caminho**: um rate limit do CoinGecko durante um sync anterior fez `getTokenInfo`/`getEvmTokenInfo` caírem no fallback (nome = endereço do contrato cru) — e como o `security.upsert` sempre sobrescrevia `name`/`ticker` no `update`, isso **gravou permanentemente** o endereço como nome do Lux Token, mesmo depois do CoinGecko voltar ao ar (o sync seguinte não tinha motivo pra corrigir um nome que "já existia"). Corrigido: `getTokenInfo`/`getEvmTokenInfo` agora retornam `null` (não mais o endereço) quando a CoinGecko falha, e `onchainSync.ts` só inclui `name`/`ticker` no `update` quando não é null — nunca mais sobrescreve um nome bom com um fallback ruim.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

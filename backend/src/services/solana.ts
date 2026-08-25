@@ -54,8 +54,12 @@ export async function getSplTokenBalances(address: string): Promise<TokenBalance
 }
 
 interface TokenInfo {
-  name: string;
-  symbol: string;
+  // null = não deu pra buscar agora (CoinGecko fora do ar/rate limit) — quem
+  // chama decide o que fazer (nunca sobrescrever um nome bom já salvo com
+  // esse fallback; ver onchainSync.ts). Já aconteceu de verdade: um rate
+  // limit bem na hora do sync gravou o endereço cru como nome permanente.
+  name: string | null;
+  symbol: string | null;
   priceBRL: number | null; // null = CoinGecko não tem esse token listado, não dá pra precificar
 }
 
@@ -73,17 +77,17 @@ export async function getTokenInfo(mint: string): Promise<TokenInfo> {
     // segue sem preço — não trava o sync todo por causa de 1 token
   }
 
-  let name = mint;
-  let symbol = mint.slice(0, 4).toUpperCase();
+  let name: string | null = null;
+  let symbol: string | null = null;
   try {
     const res = await fetch(`https://api.coingecko.com/api/v3/coins/solana/contract/${mint}`);
     if (res.ok) {
       const info = (await res.json()) as { name?: string; symbol?: string };
-      if (info.name) name = info.name;
-      if (info.symbol) symbol = info.symbol.toUpperCase();
+      name = info.name ?? null;
+      symbol = info.symbol ? info.symbol.toUpperCase() : null;
     }
   } catch {
-    // fica com o endereço truncado como nome — melhor que travar
+    // null mesmo — melhor não ter nome novo do que gravar o endereço cru
   }
 
   return { name, symbol, priceBRL };

@@ -84,8 +84,11 @@ export async function getEvmTokenBalanceDirect(chain: EvmChain, contract: string
 }
 
 interface EvmTokenInfo {
-  name: string;
-  symbol: string;
+  // null = não deu pra buscar agora (CoinGecko fora do ar/rate limit) — quem
+  // chama decide o que fazer (nunca sobrescrever um nome bom já salvo com
+  // esse fallback; ver onchainSync.ts).
+  name: string | null;
+  symbol: string | null;
   priceBRL: number | null;
 }
 
@@ -105,17 +108,17 @@ export async function getEvmTokenInfo(chain: EvmChain, contract: string): Promis
     // segue sem preço — não trava o sync todo por causa de 1 token
   }
 
-  let name = contract;
-  let symbol = contract.slice(0, 6).toUpperCase();
+  let name: string | null = null;
+  let symbol: string | null = null;
   try {
     const res = await fetch(`https://api.coingecko.com/api/v3/coins/${platform}/contract/${contract}`);
     if (res.ok) {
       const info = (await res.json()) as { name?: string; symbol?: string };
-      if (info.name) name = info.name;
-      if (info.symbol) symbol = info.symbol.toUpperCase();
+      name = info.name ?? null;
+      symbol = info.symbol ? info.symbol.toUpperCase() : null;
     }
   } catch {
-    // fica com o endereço truncado como nome — melhor que travar
+    // null mesmo — melhor não ter nome novo do que gravar o endereço cru
   }
 
   return { name, symbol, priceBRL };
