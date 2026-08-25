@@ -130,6 +130,7 @@ export interface Position {
   investedAmount: number
   marketValue: number
   currency: string
+  fxRateToBRL: number | null
   month: number
   year: number
   quantity: number | null

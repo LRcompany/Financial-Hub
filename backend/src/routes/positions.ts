@@ -31,6 +31,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       investedAmount: number;
       marketValue: number;
       currency: string;
+      fxRateToBRL: number | null;
       month: number;
       year: number;
       quantity: number | null;
@@ -57,6 +58,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       investedAmount: s.investedAmount,
       marketValue: s.marketValue,
       currency: s.security.currency,
+      fxRateToBRL: s.fxRateToBRL,
       month: s.month,
       year: s.year,
       quantity: s.quantity,

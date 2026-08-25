@@ -22,6 +22,7 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { RankedBarList } from '../components/RankedBarList'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
+import { HoverCard, HoverRow } from '../components/HoverCard'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -44,11 +45,29 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
 // vertical ocupando a largura toda cabe mais opção e lê melhor.
 const VERTICAL_BAR_TYPES = new Set(['Ação', 'FII'])
 
-/** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior primeiro. */
-function groupByKey(positions: Position[], keyFn: (p: Position) => string) {
-  const map = new Map<string, number>()
-  for (const p of positions) map.set(keyFn(p), (map.get(keyFn(p)) ?? 0) + p.marketValue)
-  return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+/** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior
+ * primeiro. `breakdown` traz o detalhe por sub-chave (o inverso da
+ * agrupada — ex: agrupando por ativo, o breakdown é por corretora) pra
+ * alimentar o hover quando o bucket junta mais de uma posição. */
+function groupByKey(positions: Position[], keyFn: (p: Position) => string, subKeyFn: (p: Position) => string) {
+  const map = new Map<string, Position[]>()
+  for (const p of positions) {
+    const key = keyFn(p)
+    const list = map.get(key) ?? []
+    list.push(p)
+    map.set(key, list)
+  }
+  return [...map.entries()]
+    .map(([label, items]) => {
+      const subMap = new Map<string, number>()
+      for (const p of items) subMap.set(subKeyFn(p), (subMap.get(subKeyFn(p)) ?? 0) + p.marketValue)
+      return {
+        label,
+        value: items.reduce((sum, p) => sum + p.marketValue, 0),
+        breakdown: [...subMap.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+      }
+    })
+    .sort((a, b) => b.value - a.value)
 }
 
 /** "CDB - BANCO SOFISA S.A." -> "CDB" — a Pluggy detalha o emissor no nome,
@@ -73,9 +92,11 @@ function displayName(p: Position, groupType: string) {
 // ambíguo, o tipo é a informação que importa ali.
 const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
 
-/** Popup de detalhe ao passar o mouse — cada campo só aparece se a Pluggy
- * realmente mandou aquele dado (nunca mostra "—" pra tudo que falta). */
-function AssetHoverDetails({ p }: { p: Position }) {
+/** Conteúdo do hover de detalhe do ativo — cada campo só aparece se a Pluggy
+ * (ou o registro manual) realmente tem aquele dado (nunca mostra "—" pra
+ * tudo que falta). Usa o `HoverCard` genérico do projeto — mesmo padrão em
+ * qualquer lista com detalhe extra pra mostrar no hover do nome do item. */
+function assetHoverContent(p: Position) {
   const rows: { label: string; value: string }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
   if (p.fixedAnnualRate != null) {
@@ -86,18 +107,11 @@ function AssetHoverDetails({ p }: { p: Position }) {
   if (p.quantity != null && p.unitValue != null) {
     rows.push({ label: 'Posição', value: `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a R$ ${currency(p.unitValue)}` })
   }
+  if (p.currency === 'USD' && p.fxRateToBRL) {
+    rows.push({ label: 'Valor em USD', value: `US$ ${currency(p.marketValue / p.fxRateToBRL)} (câmbio R$ ${p.fxRateToBRL.toFixed(2)})` })
+  }
   if (rows.length === 0) return null
-
-  return (
-    <div className={styles.hoverPopup}>
-      {rows.map((r) => (
-        <div key={r.label} className={styles.hoverRow}>
-          <span className={styles.hoverLabel}>{r.label}</span>
-          <span>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  )
+  return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)
 }
 
 export function Patrimonio() {
@@ -302,8 +316,16 @@ export function Patrimonio() {
               </div>
             )}
             {positions.map((group) => {
-              const brokerBreakdown = groupByKey(group.positions, (p) => p.broker)
-              const assetBreakdown = groupByKey(group.positions, (p) => assetLabel(displayName(p, group.type)))
+              const brokerBreakdown = groupByKey(
+                group.positions,
+                (p) => p.broker,
+                (p) => assetLabel(displayName(p, group.type))
+              )
+              const assetBreakdown = groupByKey(
+                group.positions,
+                (p) => assetLabel(displayName(p, group.type)),
+                (p) => p.broker
+              )
               const Icon = group.isBroker ? Landmark : (TYPE_ICONS[group.type] ?? PieChart)
 
               // Corretora única no grupo — não tem o que comparar (é tudo o
@@ -327,9 +349,12 @@ export function Patrimonio() {
 
                   {/* Evolução primeiro — é a visão geral (como isso mudou no
                       tempo); a composição atual (por corretora/ativo) vem
-                      depois, como detalhe. */}
+                      depois, como detalhe. Espaçamento entre blocos sempre
+                      --space-5 (24px), nunca condicional a 0 — cada bloco
+                      (valor total, evolução, composição, tabela) respira
+                      igual, tenha ou não o bloco anterior renderizado. */}
                   {singleBroker && history && history.length >= 2 && (
-                    <div style={{ marginTop: 'var(--space-4)' }}>
+                    <div style={{ marginTop: 'var(--space-5)' }}>
                       <h4 className={styles.chartLabel}>Evolução</h4>
                       <SmoothLineChart
                         values={history.map((h) => h.value)}
@@ -342,16 +367,18 @@ export function Patrimonio() {
 
                   {/* Ação/FII: barra vertical 100% da largura, fora da grid de
                       2 colunas — cabe mais ativo e lê melhor que a barra
-                      horizontal quando tem dezena de posição. */}
+                      horizontal quando tem dezena de posição. max alto o
+                      bastante pra mostrar todo mundo (a barra estreita
+                      sozinha via flex), sem truncar em "Outros" à toa. */}
                   {VERTICAL_BAR_TYPES.has(group.type) && assetBreakdown.length > 1 && (
-                    <div style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
+                    <div style={{ marginTop: 'var(--space-5)' }}>
                       <h4 className={styles.chartLabel}>Por ativo</h4>
-                      <VerticalBarChart data={assetBreakdown} max={12} />
+                      <VerticalBarChart data={assetBreakdown} />
                     </div>
                   )}
 
                   {!VERTICAL_BAR_TYPES.has(group.type) && (brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
-                    <div className={styles.chartsRow} style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
+                    <div className={styles.chartsRow} style={{ marginTop: 'var(--space-5)' }}>
                       {brokerBreakdown.length > 1 && (
                         <div>
                           <h4 className={styles.chartLabel}>Por corretora</h4>
@@ -367,7 +394,7 @@ export function Patrimonio() {
                     </div>
                   )}
 
-                  <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
+                  <div className={styles.tableWrap} style={{ marginTop: 'var(--space-5)' }}>
                     <table className={styles.table}>
                       <thead>
                         <tr>
@@ -382,11 +409,12 @@ export function Patrimonio() {
                         {group.positions.map((p, i) => (
                           <tr key={`${p.broker}-${p.name}-${i}`}>
                             <td>
-                              <span className={styles.assetCell}>
-                                {displayName(p, group.type)}
-                                {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
-                                <AssetHoverDetails p={p} />
-                              </span>
+                              <HoverCard content={assetHoverContent(p)}>
+                                <span className={styles.assetName}>
+                                  {displayName(p, group.type)}
+                                  {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                                </span>
+                              </HoverCard>
                             </td>
                             <td>{p.broker}</td>
                             <td>
@@ -394,8 +422,18 @@ export function Patrimonio() {
                                 ? `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} × R$ ${currency(p.unitValue)}`
                                 : '—'}
                             </td>
-                            <td>R$ {currency(p.investedAmount)}</td>
-                            <td>R$ {currency(p.marketValue)}</td>
+                            <td>
+                              R$ {currency(p.investedAmount)}
+                              {p.currency === 'USD' && p.fxRateToBRL && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                              )}
+                            </td>
+                            <td>
+                              R$ {currency(p.marketValue)}
+                              {p.currency === 'USD' && p.fxRateToBRL && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
