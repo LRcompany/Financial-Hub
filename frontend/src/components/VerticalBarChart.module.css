@@ -28,7 +28,11 @@
 
 .bar {
   width: 100%;
-  max-width: 64px;
+  /* Teto generoso — com poucas categorias (Renda Fixa: CDB/Tesouro/CRA/
+     Debêntures, só 4) a coluna fica bem larga; um teto baixo deixava a
+     barra fina boiando num vão grande, parecendo quebrado comparado com
+     caixas de muito ativo (Ação, 15 tickers, preenche a coluna inteira). */
+  max-width: 140px;
   border-radius: var(--r-lg);
   background: var(--accent-soft);
 }
