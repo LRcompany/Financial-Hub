@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
-import { syncOnchainWallet } from "../services/solana.js";
+import { syncOnchainWallet } from "../services/onchainSync.js";
 
 export const brokersRouter = Router();
 

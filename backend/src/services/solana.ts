@@ -1,7 +1,7 @@
 // Consulta pública na blockchain Solana — sem Pluggy, sem chave de API.
 // Só o endereço público da carteira (nunca a seed phrase/chave privada).
-import { prisma } from "../prisma.js";
-
+// A orquestração do sync (upsert de posição, roteamento por chain) mora em
+// services/onchainSync.ts — aqui só as funções de consulta pura à rede.
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 
 export async function getSolBalance(address: string): Promise<number> {
@@ -89,61 +89,3 @@ export async function getTokenInfo(mint: string): Promise<TokenInfo> {
   return { name, symbol, priceBRL };
 }
 
-/**
- * Sincroniza a carteira Phantom inteira direto da blockchain: SOL nativo +
- * qualquer token SPL com saldo. Token sem preço no CoinGecko é ignorado (não
- * grava com valor 0 fake) — o retorno informa quantos ficaram de fora.
- */
-export async function syncOnchainWallet(brokerId: string) {
-  const broker = await prisma.broker.findUniqueOrThrow({ where: { id: brokerId } });
-  if (!broker.onchainAddress) throw new Error("Broker sem endereço on-chain configurado");
-
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-
-  // A blockchain não guarda preço de compra — sem como saber o custo real de
-  // aquisição. Herda o investedAmount do snapshot anterior (mantém a mesma
-  // base de custo ao longo do tempo); na primeira vez, usa o valor de mercado
-  // (equivale a "ainda não sei o ganho/perda", não inventa um número).
-  async function upsertPosition(securityId: string, name: string, ticker: string, marketValue: number, quantity: number, unitValue: number) {
-    const security = await prisma.security.upsert({
-      where: { id: securityId },
-      update: { name, ticker, type: "Cripto", currency: "BRL" },
-      create: { id: securityId, name, ticker, type: "Cripto", currency: "BRL" },
-    });
-    const previous = await prisma.positionSnapshot.findFirst({
-      where: { brokerId: broker.id, securityId: security.id },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-    });
-    const investedAmount = previous?.investedAmount ?? marketValue;
-    await prisma.positionSnapshot.upsert({
-      where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId: security.id, month, year } },
-      update: { marketValue, investedAmount, quantity, unitValue },
-      create: { brokerId: broker.id, securityId: security.id, month, year, marketValue, investedAmount, quantity, unitValue },
-    });
-  }
-
-  const [solBalance, solPriceBRL, tokenBalances] = await Promise.all([
-    getSolBalance(broker.onchainAddress),
-    getSolPriceBRL(),
-    getSplTokenBalances(broker.onchainAddress),
-  ]);
-  await upsertPosition(`onchain:${broker.id}:SOL`, "Solana (SOL)", "SOL", solBalance * solPriceBRL, solBalance, solPriceBRL);
-
-  let tokensSynced = 0;
-  let tokensUnpriced = 0;
-  for (const t of tokenBalances) {
-    const info = await getTokenInfo(t.mint);
-    if (info.priceBRL == null) {
-      tokensUnpriced++;
-      continue;
-    }
-    await upsertPosition(`onchain:${broker.id}:${t.mint}`, info.name, info.symbol, t.amount * info.priceBRL, t.amount, info.priceBRL);
-    tokensSynced++;
-  }
-
-  await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: now } });
-
-  return { solBalance, solPriceBRL, tokensFound: tokenBalances.length, tokensSynced, tokensUnpriced };
-}

@@ -141,6 +141,11 @@ model Broker {
   dataSource        String // pluggy | manual_statement | onchain_query
   pluggyConnectorId String?
   onchainAddress    String?
+  // Rede da carteira on-chain (dataSource = "onchain_query"): solana | bitcoin
+  // | ethereum | base. Endereço EVM (ethereum/base) é o mesmo formato pras
+  // duas redes, mas saldo/token são consultados em cada rede separadamente
+  // — por isso é 1 Broker por rede, mesmo repetindo o onchainAddress.
+  chain             String?
   lastSyncedAt      DateTime?
   // true pra corretora que deve virar sua própria box em Patrimônio, em vez
   // de espalhar as posições por tipo de ativo (Nomad: bonds e ETF ficam
