@@ -26,6 +26,11 @@ interface PluggyInvestment {
   lastTwelveMonthsRate?: number | null;
   quantity?: number | null;
   value?: number | null;
+  isin?: string | null;
+  issuer?: string | null;
+  dueDate?: string | null;
+  fixedAnnualRate?: number | null;
+  ratePeriodicity?: string | null;
 }
 
 // Tickers de FII conhecidos da carteira — a Pluggy manda esses como
@@ -78,13 +83,28 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
       // type entra no update também — se o mapeamento melhorar depois (como
       // agora, corrigindo FII que a Pluggy manda como EQUITY comum), o
       // próximo sync corrige sozinho, sem precisar de script manual de novo.
-      update: { name: inv.name, ticker: inv.code ?? null, currency, type: mapSecurityType(inv) },
+      update: {
+        name: inv.name,
+        ticker: inv.code ?? null,
+        currency,
+        type: mapSecurityType(inv),
+        isin: inv.isin ?? null,
+        issuer: inv.issuer ?? null,
+        dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+        fixedAnnualRate: inv.fixedAnnualRate ?? null,
+        ratePeriodicity: inv.ratePeriodicity ?? null,
+      },
       create: {
         id: `pluggy:${inv.id}`,
         name: inv.name,
         ticker: inv.code ?? null,
         type: mapSecurityType(inv),
         currency,
+        isin: inv.isin ?? null,
+        issuer: inv.issuer ?? null,
+        dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+        fixedAnnualRate: inv.fixedAnnualRate ?? null,
+        ratePeriodicity: inv.ratePeriodicity ?? null,
       },
     });
 

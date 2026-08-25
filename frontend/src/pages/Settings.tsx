@@ -112,14 +112,14 @@ export function Settings() {
 
           <form className={styles.inlineForm} onSubmit={saveDailyGoal}>
             <input
-              className={styles.input}
+              className={cards.input}
               type="number"
               step="0.01"
               placeholder="Nova meta diária (R$)"
               value={dailyGoalInput}
               onChange={(e) => setDailyGoalInput(e.target.value)}
             />
-            <button className={styles.saveBtn} type="submit" disabled={savingGoal}>
+            <button className={cards.saveBtn} type="submit" disabled={savingGoal}>
               Salvar a partir de hoje
             </button>
           </form>

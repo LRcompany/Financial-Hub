@@ -17,23 +17,25 @@ export const yearMonth = (y: number, m: number) => y * 12 + m;
  * de cada (broker, security) que já existia até aquele ponto, contando só se
  * ainda estava "vivo" (dentro da janela de atividade).
  *
- * Regra extra pra broker que migrou de planilha manual pra sync da Pluggy
- * (BTG, C6, 99, Sofisa): uma vez que existe QUALQUER snapshot `pluggy:*`
- * pra aquele broker, os Security antigos `MANUAL:*` do MESMO broker somem —
- * senão o mesmo dinheiro conta duas vezes (a linha agregada manual "AÇÕES" e
- * as ações individuais que a Pluggy reporta são o mesmo saldo, não dois).
+ * Regra extra pra broker que migrou de planilha manual pra fonte automática
+ * (Pluggy — BTG, C6, 99, Sofisa — ou consulta on-chain — Phantom): uma vez
+ * que existe QUALQUER snapshot `pluggy:*`/`onchain:*` pra aquele broker, os
+ * Security antigos `MANUAL:*` do MESMO broker somem — senão o mesmo dinheiro
+ * conta duas vezes (a linha manual estimada e o dado automático são o mesmo
+ * saldo, não dois).
  */
 export function activeSnapshotsAsOf(all: Snap[], cutoffYm: number): Snap[] {
-  // "Esse broker já tinha dado da Pluggy nesse ponto do tempo?" — não pode
-  // ser uma checagem global (senão exclui a Pluggy do passado inteiro, antes
-  // dela sequer existir, e o histórico manual desaparece com ela). Só exclui
-  // o manual de um mês em que a Pluggy JÁ estava rodando pra aquele broker.
-  const pluggyStartYmByBroker = new Map<string, number>();
+  // "Esse broker já tinha dado automático nesse ponto do tempo?" — não pode
+  // ser uma checagem global (senão exclui a fonte automática do passado
+  // inteiro, antes dela sequer existir, e o histórico manual desaparece com
+  // ela). Só exclui o manual de um mês em que o automático JÁ estava rodando
+  // pra aquele broker.
+  const automatedStartYmByBroker = new Map<string, number>();
   for (const s of all) {
-    if (!s.securityId.startsWith("pluggy:")) continue;
+    if (!s.securityId.startsWith("pluggy:") && !s.securityId.startsWith("onchain:")) continue;
     const symd = yearMonth(s.year, s.month);
-    const current = pluggyStartYmByBroker.get(s.brokerId);
-    if (current === undefined || symd < current) pluggyStartYmByBroker.set(s.brokerId, symd);
+    const current = automatedStartYmByBroker.get(s.brokerId);
+    if (current === undefined || symd < current) automatedStartYmByBroker.set(s.brokerId, symd);
   }
 
   const seen = new Set<string>();
@@ -43,8 +45,8 @@ export function activeSnapshotsAsOf(all: Snap[], cutoffYm: number): Snap[] {
     if (symd > cutoffYm) continue;
 
     if (s.securityId.startsWith("MANUAL:")) {
-      const pluggyStart = pluggyStartYmByBroker.get(s.brokerId);
-      if (pluggyStart !== undefined && cutoffYm >= pluggyStart) continue;
+      const automatedStart = automatedStartYmByBroker.get(s.brokerId);
+      if (automatedStart !== undefined && cutoffYm >= automatedStart) continue;
     }
 
     const key = `${s.brokerId}:${s.securityId}`;

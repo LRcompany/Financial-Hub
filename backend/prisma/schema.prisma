@@ -157,6 +157,16 @@ model Security {
   targetAllocationPct  Float?
   targetDividendYield  Float?
 
+  // Detalhe pro popup de hover — a Pluggy manda isso de verdade pra renda
+  // fixa (emissor, vencimento, taxa) e pra ação/FII (ISIN, gestora). Fica
+  // aqui no Security (não no Snapshot) porque é característica do ativo,
+  // não algo que muda mês a mês.
+  isin            String?
+  issuer          String? // emissor (CDB/debênture) ou gestora (FII)
+  dueDate         DateTime? // vencimento — só renda fixa
+  fixedAnnualRate Float? // taxa contratada (% a.a.) — só renda fixa
+  ratePeriodicity String? // ex: DAILY
+
   positionSnapshots PositionSnapshot[]
 }
 

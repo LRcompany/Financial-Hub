@@ -234,19 +234,37 @@ Devolve `{monthsToGoal, projectedDate, usedExtrapolation}` + `yearlyBreakdown` (
 
 - **FII classificado como Ação**: a Pluggy manda FII (HGLG11, MXRF11, KNRI11, etc.) como `type: EQUITY` igual ação comum, sem `subtype: REAL_ESTATE_FUND` — `mapSecurityType()` agora reconhece por uma lista de prefixos de ticker conhecidos (`KNOWN_FII_PREFIXES`) antes de cair no type/subtype da Pluggy. 18 securities corrigidas retroativamente + `type` agora entra no `update` do upsert (não só no `create`), então um resync futuro corrige sozinho se a lista de prefixos crescer.
 - **Mercado Pago removido** — Luiz não usa mais, broker + snapshots apagados do banco.
-- **99 "EMERGENCIA" renomeado pra "CDB - 99"** — o saldo que rende no 99 é conceitualmente um CDB; sem o prefixo "CDB - " ele aparecia como fatia própria em vez de somar no grupo CDB do `assetLabel()`.
+- **"EMERGENCIA" (99, Sofisa, Wise) renomeado pra "CDB - Liquidez Diária"** — é conceitualmente sempre um CDB de liquidez diária (confirmado por Luiz), em qualquer corretora; sem o prefixo "CDB - " cada um aparecia como fatia própria em vez de somar no grupo CDB do `assetLabel()`.
 - `Conexoes.tsx` (rota `/configuracoes`) — widget da Pluggy embutido, lista de bancos conectados com Sincronizar/Reconectar.
 - `CardHeader` (`components/CardHeader.tsx`) e `currency()` (`lib/format.ts`) viraram compartilhados — `Dashboard.module.css` virou `styles/cards.module.css`, o "kit de card" que qualquer página nova (Orçamento, Projetos) reaproveita em vez de duplicar.
 - **Botão de adicionar (+)**: não existe mais como FAB global do shell — só aparece dentro de Orçamento/Patrimônio/Projetos, e cada página decide o que "adicionar" significa nela (sem tela de escolher tipo primeiro). Em Patrimônio, abre `POST /api/positions` — lançamento manual, só faz sentido pra corretora sem sync automático (Nomad, Wise, Phantom...); banco conectado recebe o aporte sozinho no sync, nunca precisa ser digitado.
+
+### Nomad real (25/08) — extrato substitui estimativa da planilha
+
+Luiz mandou o extrato oficial da Nomad (PDF, julho/2026). A posição "USD" agregada (estimativa do histórico manual) virou 4 posições reais e conferidas contra o documento:
+- **NVIDIA CORP. 1.55%, 06/15/2028** (bond) — Renda Fixa
+- **BRAZIL (FEDERATIVE REPUBLIC) 6.25%, 03/18/2031** (bond soberano) — Renda Fixa
+- **ISHARES TR CORE 30 70 ETF** (ticker AOK) — Fundo
+- **FDIC Insured Deposit** (caixa) — Moeda
+
+Total conferido: US$ 7.675,52 bate exato com o "Total Net Worth" do extrato. `investedAmount` foi setado igual ao `marketValue` pra cada um — o extrato não traz preço de aquisição (é um resumo de posição, não nota de corretagem), então não tem como saber o ganho/perda real; assumir isso seria inventar número. Se Luiz mandar as notas de compra depois, dá pra corrigir.
+
+### Phantom on-chain real (25/08)
+
+`services/solana.ts` — consulta pública na blockchain Solana (RPC `api.mainnet-beta.solana.com`, sem chave), só com o endereço público da carteira (nunca a seed phrase). `Broker.dataSource = "onchain_query"` + `onchainAddress` preenchidos pro Phantom; `POST /api/brokers/:id/sync` já sabe rotear pra Pluggy ou on-chain de acordo com o `dataSource`.
+- Cobre só o saldo nativo de SOL por enquanto (não os tokens SPL/outras criptos na mesma carteira — precisaria de `getTokenAccountsByOwner` + preço por token, ainda não construído).
+- Preço em BRL via CoinGecko (`simple/price`, público, sem chave).
+- `investedAmount`: a blockchain não guarda preço de compra — herda o valor do snapshot anterior (mantém uma base de custo), ou usa o valor de mercado na primeira vez (equivale a "ainda não sei o ganho/perda", não inventa um número).
+- A posição estimada antiga da planilha (R$1.258,11) foi substituída pelo saldo real (R$1,77 — a carteira tem bem menos SOL do que a estimativa manual supunha).
 
 ### `services/activePositions.ts` — a fonte única de verdade pra "o que está ativo agora"
 
 Usado por `wealth-overview` e por `positions` — nunca duplicar essa lógica. Resolve dois problemas reais que apareceram construindo "Todas as posições" (24/08/2026):
 
 1. **Corretora sem sync recente**: se o snapshot mais novo de um broker tem mais de 2 meses, ele para de contar (senão uma corretora encerrada há anos, tipo XP Investimento parada desde 2022, ficaria pra sempre como "posição atual").
-2. **Broker que migrou de planilha manual pra Pluggy** (BTG, C6, 99, Sofisa): o histórico manual agregava por categoria ("AÇÕES" numa linha só) e a Pluggy reporta cada ativo individual — são o MESMO dinheiro, não dois. A partir do mês em que a Pluggy daquele broker começou (não retroativo — o histórico anterior continua manual normalmente), os `Security` com id `MANUAL:*` daquele broker somem do cálculo.
+2. **Broker que migrou de planilha manual pra fonte automática** — Pluggy (BTG, C6, 99, Sofisa) ou on-chain (Phantom): o histórico manual agregava por categoria ("AÇÕES"/"CRYPTO" numa linha só) e a fonte automática reporta cada ativo individual (ou o saldo real da blockchain) — são o MESMO dinheiro, não dois. A partir do mês em que a fonte automática daquele broker começou (não retroativo — o histórico anterior continua manual normalmente), os `Security` com id `MANUAL:*` daquele broker somem do cálculo. Qualquer id `pluggy:*` ou `onchain:*` conta como "fonte automática" pra essa regra.
 
-Sem isso, o "Patrimônio total" oscilava entre contar tudo em dobro (R$1,14M) ou faltar Nomad/Phantom/Wise/Mercado Pago (R$549k) — o valor real é R$603.230,01.
+Sem isso, o "Patrimônio total" oscilava entre contar tudo em dobro ou faltar corretora inteira. Valor real após Nomad (extrato) e Phantom (on-chain): **R$601.559,81**.
 
 ### Import do histórico real (24/08/2026)
 

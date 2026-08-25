@@ -58,6 +58,40 @@ function displayName(p: Position, groupType: string) {
   return TICKER_TYPES.has(groupType) && p.ticker ? p.ticker : p.name
 }
 
+// "Moeda" não é um tipo de investimento de verdade pro Luiz — é só como o
+// ativo é classificado (moeda estrangeira parada). Nesse caso específico o
+// nome da corretora conta mais que o tipo. Ação/FII/Fundo continuam pelo
+// tipo mesmo com corretora única — "BTG" duas vezes (Ação e FII) seria
+// ambíguo, o tipo é a informação que importa ali.
+const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
+
+/** Popup de detalhe ao passar o mouse — cada campo só aparece se a Pluggy
+ * realmente mandou aquele dado (nunca mostra "—" pra tudo que falta). */
+function AssetHoverDetails({ p }: { p: Position }) {
+  const rows: { label: string; value: string }[] = []
+  if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
+  if (p.fixedAnnualRate != null) {
+    rows.push({ label: 'Taxa contratada', value: `${p.fixedAnnualRate}% a.a.${p.ratePeriodicity ? ` · ${p.ratePeriodicity}` : ''}` })
+  }
+  if (p.dueDate) rows.push({ label: 'Vencimento', value: new Date(p.dueDate).toLocaleDateString('pt-BR') })
+  if (p.isin) rows.push({ label: 'ISIN', value: p.isin })
+  if (p.quantity != null && p.unitValue != null) {
+    rows.push({ label: 'Posição', value: `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a R$ ${currency(p.unitValue)}` })
+  }
+  if (rows.length === 0) return null
+
+  return (
+    <div className={styles.hoverPopup}>
+      {rows.map((r) => (
+        <div key={r.label} className={styles.hoverRow}>
+          <span className={styles.hoverLabel}>{r.label}</span>
+          <span>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function Patrimonio() {
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
   const [error, setError] = useState(false)
@@ -181,6 +215,14 @@ export function Patrimonio() {
   const total = wealth.total ?? 0
   const goalProgress = wealth.wealthGoal ? Math.min((total / wealth.wealthGoal.targetAmount) * 100, 100) : 0
 
+  // Mesma regra das boxes abaixo: corretora única vira o nome dela em vez do
+  // tipo genérico ("Moeda" não é onde eu invisto, é só classificação do ativo).
+  const allocationData = positions.map((group) => {
+    const brokers = new Set(group.positions.map((p) => p.broker))
+    const label = BROKER_AS_LABEL_TYPES.has(group.type) && brokers.size === 1 ? [...brokers][0] : group.type
+    return { label, value: group.total }
+  })
+
   return (
     <div className={cards.page}>
       <h1 className={styles.pageTitle}>Patrimônio</h1>
@@ -219,8 +261,8 @@ export function Patrimonio() {
 
             <div className={cards.card}>
               <CardHeader icon={PieChart} title="Alocação de investimentos" />
-              {wealth.allocation.length > 0 ? (
-                <ClientPieChart data={wealth.allocation} />
+              {allocationData.length > 0 ? (
+                <ClientPieChart data={allocationData} />
               ) : (
                 <div className={cards.emptyState}>Sem posições pra mostrar alocação ainda.</div>
               )}
@@ -261,9 +303,11 @@ export function Patrimonio() {
               const singleBroker = brokerBreakdown.length === 1 ? brokerBreakdown[0].label : null
               const history = singleBroker ? brokerHistories[singleBroker] : undefined
 
+              const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
+
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader icon={Icon} title={group.type} />
+                  <CardHeader icon={Icon} title={title} />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
@@ -273,8 +317,23 @@ export function Patrimonio() {
                     </span>
                   </div>
 
+                  {/* Evolução primeiro — é a visão geral (como isso mudou no
+                      tempo); a composição atual (por corretora/ativo) vem
+                      depois, como detalhe. */}
+                  {singleBroker && history && history.length >= 2 && (
+                    <div style={{ marginTop: 'var(--space-4)' }}>
+                      <h4 className={styles.chartLabel}>Evolução</h4>
+                      <SmoothLineChart
+                        values={history.map((h) => h.value)}
+                        labels={history.map((h) => h.label)}
+                        gradientId={`history-${group.type}`}
+                        className={cards.evolutionChart}
+                      />
+                    </div>
+                  )}
+
                   {(brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
-                    <div className={styles.chartsRow}>
+                    <div className={styles.chartsRow} style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
                       {brokerBreakdown.length > 1 && (
                         <div>
                           <h4 className={styles.chartLabel}>Por corretora</h4>
@@ -287,18 +346,6 @@ export function Patrimonio() {
                           <RankedBarList data={assetBreakdown} />
                         </div>
                       )}
-                    </div>
-                  )}
-
-                  {singleBroker && history && history.length >= 2 && (
-                    <div style={{ marginTop: 'var(--space-4)' }}>
-                      <h4 className={styles.chartLabel}>Evolução — {singleBroker}</h4>
-                      <SmoothLineChart
-                        values={history.map((h) => h.value)}
-                        labels={history.map((h) => h.label)}
-                        gradientId={`history-${group.type}`}
-                        className={cards.evolutionChart}
-                      />
                     </div>
                   )}
 
@@ -317,8 +364,11 @@ export function Patrimonio() {
                         {group.positions.map((p, i) => (
                           <tr key={`${p.broker}-${p.name}-${i}`}>
                             <td>
-                              {displayName(p, group.type)}
-                              {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                              <span className={styles.assetCell}>
+                                {displayName(p, group.type)}
+                                {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                                <AssetHoverDetails p={p} />
+                              </span>
                             </td>
                             <td>{p.broker}</td>
                             <td>
@@ -347,7 +397,7 @@ export function Patrimonio() {
               <label className={styles.formLabel}>
                 Meta geral (R$)
                 <input
-                  className={styles.input}
+                  className={cards.input}
                   type="number"
                   step="0.01"
                   placeholder="1000000"
@@ -355,7 +405,7 @@ export function Patrimonio() {
                   onChange={(e) => setTargetInput(e.target.value)}
                 />
               </label>
-              <button className={styles.saveBtn} type="submit" disabled={savingTarget}>
+              <button className={cards.saveBtn} type="submit" disabled={savingTarget}>
                 Salvar meta
               </button>
             </form>
@@ -430,14 +480,14 @@ export function Patrimonio() {
 
             <form className={styles.yearForm} onSubmit={saveYear}>
               <input
-                className={styles.input}
+                className={cards.input}
                 type="number"
                 placeholder="Ano"
                 value={yearForm.year}
                 onChange={(e) => setYearForm({ ...yearForm, year: e.target.value })}
               />
               <input
-                className={styles.input}
+                className={cards.input}
                 type="number"
                 step="0.01"
                 placeholder="Aporte no ano (R$)"
@@ -445,14 +495,14 @@ export function Patrimonio() {
                 onChange={(e) => setYearForm({ ...yearForm, savingsTarget: e.target.value })}
               />
               <input
-                className={styles.input}
+                className={cards.input}
                 type="number"
                 step="0.1"
                 placeholder="Retorno assumido (% a.a.)"
                 value={yearForm.annualReturnAssumptionPct}
                 onChange={(e) => setYearForm({ ...yearForm, annualReturnAssumptionPct: e.target.value })}
               />
-              <button className={styles.saveBtn} type="submit" disabled={savingYear}>
+              <button className={cards.saveBtn} type="submit" disabled={savingYear}>
                 Adicionar/atualizar ano
               </button>
             </form>
@@ -511,18 +561,18 @@ export function Patrimonio() {
             </p>
             <form className={styles.addForm} onSubmit={saveNewPosition}>
               <input
-                className={styles.input}
+                className={cards.input}
                 placeholder="Corretora (ex: Nomad)"
                 value={addForm.brokerName}
                 onChange={(e) => setAddForm({ ...addForm, brokerName: e.target.value })}
               />
               <input
-                className={styles.input}
+                className={cards.input}
                 placeholder="Nome do ativo"
                 value={addForm.securityName}
                 onChange={(e) => setAddForm({ ...addForm, securityName: e.target.value })}
               />
-              <select className={styles.input} value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
+              <select className={cards.input} value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
                 {SECURITY_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -530,7 +580,7 @@ export function Patrimonio() {
                 ))}
               </select>
               <select
-                className={styles.input}
+                className={cards.input}
                 value={addForm.currency}
                 onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}
               >
@@ -538,7 +588,7 @@ export function Patrimonio() {
                 <option value="USD">USD</option>
               </select>
               <input
-                className={styles.input}
+                className={cards.input}
                 type="number"
                 step="0.01"
                 placeholder={`Valor investido (${addForm.currency})`}
@@ -546,14 +596,14 @@ export function Patrimonio() {
                 onChange={(e) => setAddForm({ ...addForm, investedAmount: e.target.value })}
               />
               <input
-                className={styles.input}
+                className={cards.input}
                 type="number"
                 step="0.01"
                 placeholder={`Valor atual (${addForm.currency})`}
                 value={addForm.marketValue}
                 onChange={(e) => setAddForm({ ...addForm, marketValue: e.target.value })}
               />
-              <button className={styles.saveBtn} type="submit" disabled={savingPosition}>
+              <button className={cards.saveBtn} type="submit" disabled={savingPosition}>
                 Adicionar
               </button>
             </form>

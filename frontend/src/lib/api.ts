@@ -134,6 +134,11 @@ export interface Position {
   year: number
   quantity: number | null
   unitValue: number | null
+  isin: string | null
+  issuer: string | null
+  dueDate: string | null
+  fixedAnnualRate: number | null
+  ratePeriodicity: string | null
 }
 
 export interface PositionsByType {

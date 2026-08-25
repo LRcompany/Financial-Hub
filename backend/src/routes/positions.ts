@@ -24,7 +24,23 @@ positionsRouter.get("/positions", async (_req, res) => {
 
   const byType = new Map<
     string,
-    { broker: string; name: string; ticker: string | null; investedAmount: number; marketValue: number; currency: string; month: number; year: number; quantity: number | null; unitValue: number | null }[]
+    {
+      broker: string;
+      name: string;
+      ticker: string | null;
+      investedAmount: number;
+      marketValue: number;
+      currency: string;
+      month: number;
+      year: number;
+      quantity: number | null;
+      unitValue: number | null;
+      isin: string | null;
+      issuer: string | null;
+      dueDate: string | null;
+      fixedAnnualRate: number | null;
+      ratePeriodicity: string | null;
+    }[]
   >();
   for (const s of latest) {
     // ativo zerado (CDB vencido, lote resgatado) — a Pluggy continua devolvendo
@@ -42,6 +58,11 @@ positionsRouter.get("/positions", async (_req, res) => {
       year: s.year,
       quantity: s.quantity,
       unitValue: s.unitValue,
+      isin: s.security.isin,
+      issuer: s.security.issuer,
+      dueDate: s.security.dueDate ? s.security.dueDate.toISOString() : null,
+      fixedAnnualRate: s.security.fixedAnnualRate,
+      ratePeriodicity: s.security.ratePeriodicity,
     });
     byType.set(s.security.type, list);
   }
