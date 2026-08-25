@@ -7,6 +7,20 @@ export const positionsRouter = Router();
 
 const SECURITY_TYPES = ["FII", "Ação", "Renda Fixa", "Cripto", "Moeda", "Fundo", "Outro"];
 
+// GET /api/fx-rate — cotação USD/BRL atual, pra exibição (converter um total
+// já em BRL de volta pra USD na tela, ex: total de Cripto). Diferente do
+// fxRateToBRL gravado por posição (esse é a taxa histórica de quando aquela
+// posição específica foi registrada — mais precisa pra ela, não serve pra
+// posição que nunca teve uma taxa própria gravada, tipo Cripto).
+positionsRouter.get("/fx-rate", async (_req, res) => {
+  try {
+    const usdToBrl = await getUsdToBrlRate();
+    res.json({ usdToBrl });
+  } catch (err) {
+    res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+  }
+});
+
 // GET /api/positions — posições ainda ativas hoje, agrupadas por tipo
 // (Ações/FIIs/Renda Fixa/etc). Usa a mesma regra de "ativo" de wealth.ts —
 // ver services/activePositions.ts (corretora encerrada some da lista, e um

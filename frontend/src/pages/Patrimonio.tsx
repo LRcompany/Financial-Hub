@@ -14,8 +14,9 @@ import {
   Building2,
   Bitcoin,
   DollarSign,
+  FileUp,
 } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
+import { api, type WealthOverview, type PositionsByType, type Position, type Broker } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
@@ -23,6 +24,7 @@ import { RankedBarList } from '../components/RankedBarList'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
+import { StatementUploadModal } from '../components/StatementUploadModal'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -85,6 +87,22 @@ function displayName(p: Position, groupType: string) {
   return TICKER_TYPES.has(groupType) && p.ticker ? p.ticker : p.name
 }
 
+/** Total em USD de uma box, quando faz sentido mostrar. Nomad (100% em
+ * posição USD) usa a taxa gravada de cada posição — mais precisa que uma
+ * taxa única pro grupo. Cripto não grava taxa por posição (o preço já sai
+ * em BRL direto do CoinGecko), então usa a cotação atual só pra exibição —
+ * nunca reescreve o valor guardado, é só uma segunda leitura do mesmo total. */
+function groupUsdTotal(group: PositionsByType, liveUsdToBrl: number | null): number | null {
+  const usdPositions = group.positions.filter((p) => p.currency === 'USD' && p.fxRateToBRL)
+  if (usdPositions.length > 0 && usdPositions.length === group.positions.length) {
+    return usdPositions.reduce((sum, p) => sum + p.marketValue / p.fxRateToBRL!, 0)
+  }
+  if (group.type === 'Cripto' && liveUsdToBrl) {
+    return group.total / liveUsdToBrl
+  }
+  return null
+}
+
 // "Moeda" não é um tipo de investimento de verdade pro Luiz — é só como o
 // ativo é classificado (moeda estrangeira parada). Nesse caso específico o
 // nome da corretora conta mais que o tipo. Ação/FII/Fundo continuam pelo
@@ -120,6 +138,9 @@ export function Patrimonio() {
 
   const [positions, setPositions] = useState<PositionsByType[]>([])
   const [brokerHistories, setBrokerHistories] = useState<Record<string, { label: string; value: number }[]>>({})
+  const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
+  const [brokers, setBrokers] = useState<Broker[]>([])
+  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -165,6 +186,14 @@ export function Patrimonio() {
             .catch(() => {})
         })
       })
+      .catch(() => {})
+    api
+      .fxRate()
+      .then((r) => setUsdToBrl(r.usdToBrl))
+      .catch(() => {})
+    api
+      .brokers()
+      .then(setBrokers)
       .catch(() => {})
   }
 
@@ -334,13 +363,30 @@ export function Patrimonio() {
               const history = singleBroker ? brokerHistories[singleBroker] : undefined
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
+              const usdTotal = groupUsdTotal(group, usdToBrl)
+              // Corretora "standalone" cuja atualização é por extrato PDF
+              // (hoje só a Nomad) — mostra o botão de upload direto na box.
+              const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
+              const supportsStatementUpload = broker?.dataSource === 'manual_statement'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader icon={Icon} title={title} />
+                  <CardHeader
+                    icon={Icon}
+                    title={title}
+                    action={
+                      supportsStatementUpload && broker ? (
+                        <button className={styles.uploadBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
+                          <FileUp size={13} strokeWidth={2} />
+                          Atualizar por extrato
+                        </button>
+                      ) : undefined
+                    }
+                  />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
+                  {usdTotal != null && <div className={styles.usdSecondary}>US$ {currency(usdTotal)}</div>}
                   <div className={cards.chartMeta}>
                     <span>
                       {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
@@ -427,11 +473,17 @@ export function Patrimonio() {
                               {p.currency === 'USD' && p.fxRateToBRL && (
                                 <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
                               )}
+                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                              )}
                             </td>
                             <td>
                               R$ {currency(p.marketValue)}
                               {p.currency === 'USD' && p.fxRateToBRL && (
                                 <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                              )}
+                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
                               )}
                             </td>
                           </tr>
@@ -593,6 +645,18 @@ export function Patrimonio() {
       <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
+
+      {uploadTarget && (
+        <StatementUploadModal
+          brokerId={uploadTarget.id}
+          brokerName={uploadTarget.name}
+          onClose={() => setUploadTarget(null)}
+          onSaved={() => {
+            setUploadTarget(null)
+            load()
+          }}
+        />
+      )}
 
       {showAddForm && (
         <div className={styles.overlay} onClick={() => setShowAddForm(false)}>

@@ -7,10 +7,25 @@
 // GET /investments/{id}/transactions filtrando por tipo de rendimento.
 // Até isso ser implementado, PositionSnapshot.dividends fica null (não é 0 fake,
 // é "ainda não coletado").
+//
+// Descoberta real (25/08/2026): "CDB de liquidez diária" de conta digital
+// (99, e também uma conta específica do BTG) não aparece em GET /investments
+// — a Pluggy nem sempre modela isso como um Investment separado. O saldo de
+// verdade vem em GET /accounts, campo `bankData.automaticallyInvestedBalance`
+// da conta BANK. Sem isso, a posição ficava congelada num valor manual
+// antigo pra sempre (nunca tinha uma fonte automática pra "graduar" — ver
+// activePositions.ts). Por isso `syncBrokerInvestments` busca as duas coisas.
 
 import { prisma } from "../prisma.js";
-import { getInvestments } from "./pluggy.js";
+import { getInvestments, getAccounts } from "./pluggy.js";
 import { getUsdToBrlRate } from "./fx.js";
+
+interface PluggyAccount {
+  id: string;
+  type: string; // BANK | CREDIT
+  currencyCode?: string;
+  bankData?: { automaticallyInvestedBalance?: number | null } | null;
+}
 
 interface PluggyInvestment {
   id: string;
@@ -141,10 +156,44 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     });
   }
 
+  // "CDB de liquidez diária" embutido na conta corrente — não vem em
+  // /investments, vem em /accounts (ver nota no topo do arquivo). Cada conta
+  // BANK com esse campo > 0 vira sua própria posição "CDB - Liquidez Diária".
+  const { results: accounts } = (await getAccounts(itemId)) as { results: PluggyAccount[] };
+  let autoInvestCount = 0;
+  for (const acc of accounts) {
+    const autoInvested = acc.bankData?.automaticallyInvestedBalance;
+    if (autoInvested == null || autoInvested <= 0) continue;
+
+    const securityId = `pluggy:autoinvest:${acc.id}`;
+    const currency = acc.currencyCode ?? "BRL";
+    const security = await prisma.security.upsert({
+      where: { id: securityId },
+      update: { name: "CDB - Liquidez Diária", type: "Renda Fixa", currency },
+      create: { id: securityId, name: "CDB - Liquidez Diária", type: "Renda Fixa", currency },
+    });
+
+    // A Pluggy só manda o saldo atual, não separa "quanto entrou" de "quanto
+    // rendeu" — mesma regra do sync on-chain: herda o investido do snapshot
+    // anterior (mantém a base de custo), ou usa o valor de mercado a primeira vez.
+    const previous = await prisma.positionSnapshot.findFirst({
+      where: { brokerId: broker.id, securityId: security.id },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+    });
+    const investedAmount = previous?.investedAmount ?? autoInvested;
+
+    await prisma.positionSnapshot.upsert({
+      where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId: security.id, month, year } },
+      update: { investedAmount, marketValue: autoInvested },
+      create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount, marketValue: autoInvested },
+    });
+    autoInvestCount++;
+  }
+
   await prisma.broker.update({
     where: { id: broker.id },
     data: { lastSyncedAt: now },
   });
 
-  return { count: results.length, month, year };
+  return { count: results.length + autoInvestCount, investmentsCount: results.length, autoInvestCount, month, year };
 }

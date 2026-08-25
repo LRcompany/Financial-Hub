@@ -115,6 +115,22 @@
   padding: 2px 8px;
 }
 
+.uploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .usdSecondary {
   font-size: 11px;
   color: var(--ink-soft);
