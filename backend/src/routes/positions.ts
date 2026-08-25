@@ -102,26 +102,27 @@ positionsRouter.get("/positions", async (_req, res) => {
   res.json({ hasData: all.length > 0, byType: result });
 });
 
-// GET /api/positions/history?broker=Nomad — evolução mensal do valor total
-// numa corretora específica (últimos 24 meses com dado). Serve pro gráfico
-// de "como isso variou ao longo do tempo" quando a posição é de uma corretora
-// só (Nomad, Phantom, o fundo da BTG) — comparar por ativo/corretora não faz
-// sentido nesses casos, mas ver a evolução no tempo sim.
+// GET /api/positions/history?group=Ação — evolução mensal do valor total de
+// um GRUPO (últimos 24 meses com dado), no mesmo agrupamento do /positions
+// (broker.standalone vira o próprio nome, senão é security.type). Por
+// corretora sozinha (regra antiga) misturava tipos — a caixa "Ação" mostrava
+// o BTG inteiro (Renda Fixa+FII+Ação+Fundo somados), não só as ações; agora
+// filtra igual ao agrupamento que a tela realmente mostra.
 positionsRouter.get("/positions/history", async (req, res) => {
-  const brokerName = (req.query.broker as string | undefined)?.trim();
-  if (!brokerName) return res.status(400).json({ error: "query param 'broker' obrigatório" });
+  const group = (req.query.group as string | undefined)?.trim();
+  if (!group) return res.status(400).json({ error: "query param 'group' obrigatório" });
 
   const all = await fetchAllSnapshots();
-  const brokerSnaps = all.filter((s) => s.broker.name.toLowerCase() === brokerName.toLowerCase());
-  if (brokerSnaps.length === 0) return res.json({ history: [] });
+  const groupSnaps = all.filter((s) => (s.broker.standalone ? s.broker.name : s.security.type).toLowerCase() === group.toLowerCase());
+  if (groupSnaps.length === 0) return res.json({ history: [] });
 
-  const nowYm = yearMonth(brokerSnaps[0].year, brokerSnaps[0].month);
+  const nowYm = yearMonth(groupSnaps[0].year, groupSnaps[0].month);
   const history: { label: string; value: number }[] = [];
   for (let i = 23; i >= 0; i--) {
     const ym = nowYm - i;
     const year = Math.floor((ym - 1) / 12);
     const month = ym - year * 12;
-    const snaps = activeSnapshotsAsOf(brokerSnaps, ym);
+    const snaps = activeSnapshotsAsOf(groupSnaps, ym);
     if (snaps.length === 0) continue;
     history.push({
       label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),

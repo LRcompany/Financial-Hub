@@ -235,8 +235,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  positionsHistory: (broker: string) =>
-    request<{ history: { label: string; value: number }[] }>(`/positions/history?broker=${encodeURIComponent(broker)}`),
+  positionsHistory: (group: string) =>
+    request<{ history: { label: string; value: number }[] }>(`/positions/history?group=${encodeURIComponent(group)}`),
   addPosition: (input: {
     brokerName: string
     securityName: string

@@ -20,7 +20,6 @@ import { api, type WealthOverview, type PositionsByType, type Position, type Bro
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
-import { RankedBarList } from '../components/RankedBarList'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
@@ -43,10 +42,10 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
   Moeda: DollarSign,
 }
 
-// Tipos onde "por ativo" vira barra vertical full-width em vez da barra
-// horizontal ranqueada — Ação/FII costumam ter dezena de posição, a versão
-// vertical ocupando a largura toda cabe mais opção e lê melhor.
-const VERTICAL_BAR_TYPES = new Set(['Ação', 'FII'])
+// "Por corretora" (pizza) não faz sentido pra Cripto — PHANTOM_BTC, PHANTOM_
+// ETH, PHANTOM_BASE não são corretoras diferentes de verdade, é a mesma
+// carteira dividida por rede (implementação nossa, não escolha do Luiz).
+const HIDE_BROKER_BREAKDOWN_TYPES = new Set(['Cripto'])
 
 /** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior
  * primeiro. `breakdown` traz o detalhe por sub-chave (o inverso da
@@ -138,7 +137,7 @@ export function Patrimonio() {
   const [error, setError] = useState(false)
 
   const [positions, setPositions] = useState<PositionsByType[]>([])
-  const [brokerHistories, setBrokerHistories] = useState<Record<string, { label: string; value: number }[]>>({})
+  const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
@@ -176,14 +175,14 @@ export function Patrimonio() {
       .positions()
       .then((p) => {
         setPositions(p.byType)
-        // corretora única no grupo (Nomad/Moeda, Phantom/Cripto, o fundo da
-        // BTG...) — não tem o que comparar por corretora/ativo, mas dá pra
-        // ver a evolução no tempo, que é o que importa nesses casos.
-        const brokers = new Set(p.byType.flatMap((g) => g.positions.map((pos) => pos.broker)))
-        brokers.forEach((broker) => {
+        // Evolução por GRUPO (mesmo agrupamento da tela: tipo, ou corretora
+        // quando standalone) — nunca por corretora sozinha, isso misturava
+        // tipos (ex: BTG entra em Renda Fixa/FII/Ação/Fundo, a evolução de
+        // "Ação" mostrava o BTG inteiro, não só as ações).
+        p.byType.forEach((g) => {
           api
-            .positionsHistory(broker)
-            .then((h) => setBrokerHistories((prev) => ({ ...prev, [broker]: h.history })))
+            .positionsHistory(g.type)
+            .then((h) => setGroupHistories((prev) => ({ ...prev, [g.type]: h.history })))
             .catch(() => {})
         })
       })
@@ -357,11 +356,12 @@ export function Patrimonio() {
                 (p) => p.broker
               )
               const Icon = group.isBroker ? Landmark : (TYPE_ICONS[group.type] ?? PieChart)
-
-              // Corretora única no grupo — não tem o que comparar (é tudo o
-              // mesmo lugar), mas dá pra ver a evolução no tempo.
               const singleBroker = brokerBreakdown.length === 1 ? brokerBreakdown[0].label : null
-              const history = singleBroker ? brokerHistories[singleBroker] : undefined
+              // Evolução é por grupo inteiro (todas as corretoras daquele
+              // tipo somadas) — nunca precisou de corretora única pra fazer
+              // sentido, e limitar a isso escondia a evolução de Renda Fixa/
+              // Cripto (várias corretoras cada).
+              const history = groupHistories[group.type]
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
               const usdTotal = groupUsdTotal(group, usdToBrl)
@@ -400,7 +400,7 @@ export function Patrimonio() {
                       --space-5 (24px), nunca condicional a 0 — cada bloco
                       (valor total, evolução, composição, tabela) respira
                       igual, tenha ou não o bloco anterior renderizado. */}
-                  {singleBroker && history && history.length >= 2 && (
+                  {history && history.length >= 2 && (
                     <div style={{ marginTop: 'var(--space-5)' }}>
                       <h4 className={styles.chartLabel}>Evolução</h4>
                       <SmoothLineChart
@@ -412,32 +412,27 @@ export function Patrimonio() {
                     </div>
                   )}
 
-                  {/* Ação/FII: barra vertical 100% da largura, fora da grid de
-                      2 colunas — cabe mais ativo e lê melhor que a barra
-                      horizontal quando tem dezena de posição. max alto o
-                      bastante pra mostrar todo mundo (a barra estreita
-                      sozinha via flex), sem truncar em "Outros" à toa. */}
-                  {VERTICAL_BAR_TYPES.has(group.type) && assetBreakdown.length > 1 && (
+                  {/* Por corretora: pizza, só quando tem mais de uma de
+                      verdade E isso é informação real pro Luiz — Cripto fica
+                      de fora porque "PHANTOM_BTC"/"PHANTOM_BASE" não são
+                      corretoras distintas, é a mesma carteira dividida por
+                      rede (detalhe técnico nosso, não escolha dele). */}
+                  {brokerBreakdown.length > 1 && !HIDE_BROKER_BREAKDOWN_TYPES.has(group.type) && (
                     <div style={{ marginTop: 'var(--space-5)' }}>
-                      <h4 className={styles.chartLabel}>Por ativo</h4>
-                      <VerticalBarChart data={assetBreakdown} />
+                      <h4 className={styles.chartLabel}>Por corretora</h4>
+                      <ClientPieChart data={brokerBreakdown} />
                     </div>
                   )}
 
-                  {!VERTICAL_BAR_TYPES.has(group.type) && (brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
-                    <div className={styles.chartsRow} style={{ marginTop: 'var(--space-5)' }}>
-                      {brokerBreakdown.length > 1 && (
-                        <div>
-                          <h4 className={styles.chartLabel}>Por corretora</h4>
-                          <ClientPieChart data={brokerBreakdown} />
-                        </div>
-                      )}
-                      {assetBreakdown.length > 1 && (
-                        <div>
-                          <h4 className={styles.chartLabel}>Por ativo</h4>
-                          <RankedBarList data={assetBreakdown} />
-                        </div>
-                      )}
+                  {/* Por ativo: sempre barra vertical 100% da largura — lê
+                      melhor que pizza quando tem muito ativo, e cabe mais
+                      opção por ser full-width. max alto o bastante pra
+                      mostrar todo mundo (a barra estreita sozinha via flex),
+                      sem truncar em "Outros" à toa. */}
+                  {assetBreakdown.length > 1 && (
+                    <div style={{ marginTop: 'var(--space-5)' }}>
+                      <h4 className={styles.chartLabel}>Por ativo</h4>
+                      <VerticalBarChart data={assetBreakdown} />
                     </div>
                   )}
 

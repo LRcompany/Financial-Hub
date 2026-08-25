@@ -80,20 +80,6 @@
   cursor: pointer;
 }
 
-/* ---------- box por tipo de ativo: gráficos por corretora / por ativo ---------- */
-.chartsRow {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-5);
-  margin-top: var(--space-4);
-}
-
-@media (min-width: 640px) {
-  .chartsRow {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 .chartLabel {
   font-size: 12px;
   font-weight: 600;
