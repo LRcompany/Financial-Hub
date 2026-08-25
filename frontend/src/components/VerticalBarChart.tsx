@@ -10,12 +10,15 @@ interface Item {
   breakdown?: { label: string; value: number }[]
 }
 
-/** Barras verticais, 100% da largura — a maior fica destacada (gradiente +
- * rótulo em pill preto), o resto em tom neutro. Escala melhor que pizza
- * quando tem muito ativo (Ação/FII), e cabe mais opção que a versão
- * horizontal por ser full-width. `max` alto o bastante pra não truncar em
- * "Outros" nos casos reais — a barra estreita sozinha via flex quando tem
- * muita coluna, não precisa cortar informação por falta de espaço. */
+/** Barras verticais, 100% da largura — todas em tom neutro, sem "vencedor"
+ * fixo (os itens não têm relação de ranking entre si, destacar o maior
+ * sugeria uma hierarquia que não existe). O destaque é só de interação: a
+ * barra sob o mouse marca em --accent (ver VerticalBarChart.module.css,
+ * :hover). Escala melhor que pizza quando tem muito ativo (Ação/FII), e
+ * cabe mais opção que a versão horizontal por ser full-width. `max` alto o
+ * bastante pra não truncar em "Outros" nos casos reais — a barra estreita
+ * sozinha via flex quando tem muita coluna, não precisa cortar informação
+ * por falta de espaço. */
 export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: number }) {
   const sorted = [...data].sort((a, b) => b.value - a.value)
   const total = sorted.reduce((sum, d) => sum + d.value, 0)
@@ -24,8 +27,7 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
   const bars = restTotal > 0 ? [...visible, { label: 'Outros', value: restTotal, breakdown: sorted.slice(max) }] : visible
   const maxValue = Math.max(...bars.map((b) => b.value), 1)
   // Da esquerda pra direita: menor -> maior (inverte a ordenação decrescente
-  // usada só pra achar o destaque/truncar "Outros"). O destaque segue o
-  // VALOR, não a posição — continua marcando o maior onde quer que ele caia.
+  // usada só pra truncar "Outros").
   const ordered = [...bars].reverse()
 
   return (
@@ -34,7 +36,7 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
         <div key={b.label} className={styles.col}>
           <span className={styles.pct}>{((b.value / total) * 100).toFixed(1)}%</span>
           <div
-            className={`${styles.bar} ${b.value === maxValue ? styles.barHighlight : ''}`}
+            className={styles.bar}
             style={{ height: `${Math.max((b.value / maxValue) * 100, 6)}%` }}
             title={`R$ ${currency(b.value)}`}
           />
@@ -45,7 +47,7 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
                 : null
             }
           >
-            <span className={b.value === maxValue ? styles.labelHighlight : styles.label}>{b.label}</span>
+            <span className={styles.label}>{b.label}</span>
           </HoverCard>
         </div>
       ))}
