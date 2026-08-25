@@ -126,17 +126,27 @@
   cursor: pointer;
 }
 
-/* ---------- listagem de posições por tipo de ativo ---------- */
-.positionGroup + .positionGroup {
-  margin-top: var(--space-5);
+/* ---------- box por tipo de ativo: gráficos por corretora / por ativo ---------- */
+.chartsRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
 }
 
-.positionGroupHeader {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13.5px;
+@media (min-width: 640px) {
+  .chartsRow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.chartLabel {
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: var(--space-2);
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-3);
 }
 
 .usdTag {

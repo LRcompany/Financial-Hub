@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react'
-import { LineChart, PieChart, Activity, Flag, TrendingUp, TrendingDown, Trash2, Layers, Plus, X } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType } from '../lib/api'
+import {
+  LineChart,
+  PieChart,
+  Activity,
+  Flag,
+  TrendingUp,
+  TrendingDown,
+  Trash2,
+  Layers,
+  Plus,
+  X,
+  Landmark,
+  Building2,
+  Bitcoin,
+  DollarSign,
+} from 'lucide-react'
+import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
@@ -10,6 +25,37 @@ import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
 
 const SECURITY_TYPES = ['FII', 'Ação', 'Renda Fixa', 'Cripto', 'Moeda', 'Fundo', 'Outro']
+
+const TYPE_ICONS: Record<string, typeof PieChart> = {
+  'Renda Fixa': Landmark,
+  Ação: TrendingUp,
+  FII: Building2,
+  Fundo: Layers,
+  Cripto: Bitcoin,
+  Moeda: DollarSign,
+}
+
+/** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior primeiro. */
+function groupByKey(positions: Position[], keyFn: (p: Position) => string) {
+  const map = new Map<string, number>()
+  for (const p of positions) map.set(keyFn(p), (map.get(keyFn(p)) ?? 0) + p.marketValue)
+  return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+}
+
+/** "CDB - BANCO SOFISA S.A." -> "CDB" — a Pluggy detalha o emissor no nome,
+ * mas pra ver "quanto tenho em CDB vs Tesouro vs Debênture" isso é ruído. */
+function assetLabel(name: string) {
+  const idx = name.indexOf(' - ')
+  return idx === -1 ? name : name.slice(0, idx).trim()
+}
+
+// Ticker só é um nome de verdade pra ação/FII (PETR4, HGLG11). Pra renda fixa
+// e fundo, o "código" que a Pluggy manda é um ISIN/identificador interno
+// (ex: BRSTNCLF1RL5) — o nome ("CDB - BANCO C6 S.A.") é o que faz sentido ler.
+const TICKER_TYPES = new Set(['Ação', 'FII'])
+function displayName(p: Position, groupType: string) {
+  return TICKER_TYPES.has(groupType) && p.ticker ? p.ticker : p.name
+}
 
 export function Patrimonio() {
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
@@ -182,17 +228,47 @@ export function Patrimonio() {
               ))}
             </div>
 
-            {/* ---------- todas as posições, uma tabela por tipo de ativo ---------- */}
-            <div className={`${cards.card} ${cards.fullWidth}`}>
-              <CardHeader icon={Layers} title="Todas as posições" />
-              {positions.length === 0 && <div className={cards.emptyState}>Nenhuma posição pra listar ainda.</div>}
-              {positions.map((group) => (
-                <div key={group.type} className={styles.positionGroup}>
-                  <div className={styles.positionGroupHeader}>
-                    <span>{group.type}</span>
-                    <span>R$ {currency(group.total)}</span>
+            {/* ---------- uma box por tipo de ativo, com gráficos específicos ---------- */}
+            {positions.length === 0 && (
+              <div className={`${cards.card} ${cards.fullWidth}`}>
+                <div className={cards.emptyState}>Nenhuma posição pra listar ainda.</div>
+              </div>
+            )}
+            {positions.map((group) => {
+              const brokerBreakdown = groupByKey(group.positions, (p) => p.broker)
+              const assetBreakdown = groupByKey(group.positions, (p) => assetLabel(displayName(p, group.type)))
+              const Icon = TYPE_ICONS[group.type] ?? PieChart
+
+              return (
+                <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
+                  <CardHeader icon={Icon} title={group.type} />
+                  <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+                    R$ {currency(group.total)}
                   </div>
-                  <div className={styles.tableWrap}>
+                  <div className={cards.chartMeta}>
+                    <span>
+                      {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
+                    </span>
+                  </div>
+
+                  {(brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
+                    <div className={styles.chartsRow}>
+                      {brokerBreakdown.length > 1 && (
+                        <div>
+                          <h4 className={styles.chartLabel}>Por corretora</h4>
+                          <ClientPieChart data={brokerBreakdown} />
+                        </div>
+                      )}
+                      {assetBreakdown.length > 1 && (
+                        <div>
+                          <h4 className={styles.chartLabel}>Por ativo</h4>
+                          <ClientPieChart data={assetBreakdown} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
                     <table className={styles.table}>
                       <thead>
                         <tr>
@@ -206,7 +282,7 @@ export function Patrimonio() {
                         {group.positions.map((p, i) => (
                           <tr key={`${p.broker}-${p.name}-${i}`}>
                             <td>
-                              {p.ticker ?? p.name}
+                              {displayName(p, group.type)}
                               {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
                             </td>
                             <td>{p.broker}</td>
@@ -218,8 +294,8 @@ export function Patrimonio() {
                     </table>
                   </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </>
         )}
 
