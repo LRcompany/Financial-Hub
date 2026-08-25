@@ -22,7 +22,10 @@ positionsRouter.get("/positions", async (_req, res) => {
   const nowYm = yearMonth(all[0].year, all[0].month);
   const latest = activeSnapshotsAsOf(all, nowYm);
 
-  const byType = new Map<string, { broker: string; name: string; ticker: string | null; investedAmount: number; marketValue: number; currency: string; month: number; year: number }[]>();
+  const byType = new Map<
+    string,
+    { broker: string; name: string; ticker: string | null; investedAmount: number; marketValue: number; currency: string; month: number; year: number; quantity: number | null; unitValue: number | null }[]
+  >();
   for (const s of latest) {
     // ativo zerado (CDB vencido, lote resgatado) — a Pluggy continua devolvendo
     // a posição histórica com saldo 0, não é uma posição de verdade pra listar
@@ -37,6 +40,8 @@ positionsRouter.get("/positions", async (_req, res) => {
       currency: s.security.currency,
       month: s.month,
       year: s.year,
+      quantity: s.quantity,
+      unitValue: s.unitValue,
     });
     byType.set(s.security.type, list);
   }
@@ -50,6 +55,35 @@ positionsRouter.get("/positions", async (_req, res) => {
     .sort((a, b) => b.total - a.total);
 
   res.json({ hasData: all.length > 0, byType: result });
+});
+
+// GET /api/positions/history?broker=Nomad — evolução mensal do valor total
+// numa corretora específica (últimos 24 meses com dado). Serve pro gráfico
+// de "como isso variou ao longo do tempo" quando a posição é de uma corretora
+// só (Nomad, Phantom, o fundo da BTG) — comparar por ativo/corretora não faz
+// sentido nesses casos, mas ver a evolução no tempo sim.
+positionsRouter.get("/positions/history", async (req, res) => {
+  const brokerName = (req.query.broker as string | undefined)?.trim();
+  if (!brokerName) return res.status(400).json({ error: "query param 'broker' obrigatório" });
+
+  const all = await fetchAllSnapshots();
+  const brokerSnaps = all.filter((s) => s.broker.name.toLowerCase() === brokerName.toLowerCase());
+  if (brokerSnaps.length === 0) return res.json({ history: [] });
+
+  const nowYm = yearMonth(brokerSnaps[0].year, brokerSnaps[0].month);
+  const history: { label: string; value: number }[] = [];
+  for (let i = 23; i >= 0; i--) {
+    const ym = nowYm - i;
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const snaps = activeSnapshotsAsOf(brokerSnaps, ym);
+    if (snaps.length === 0) continue;
+    history.push({
+      label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+      value: snaps.reduce((sum, s) => sum + s.marketValue, 0),
+    });
+  }
+  res.json({ history });
 });
 
 // POST /api/positions — lançamento manual, só faz sentido pra corretora sem

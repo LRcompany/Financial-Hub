@@ -132,6 +132,8 @@ export interface Position {
   currency: string
   month: number
   year: number
+  quantity: number | null
+  unitValue: number | null
 }
 
 export interface PositionsByType {
@@ -191,6 +193,8 @@ export const api = {
     return request<ProjectsSummary>(`/projects-summary${query}`)
   },
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
+  positionsHistory: (broker: string) =>
+    request<{ history: { label: string; value: number }[] }>(`/positions/history?broker=${encodeURIComponent(broker)}`),
   addPosition: (input: {
     brokerName: string
     securityName: string

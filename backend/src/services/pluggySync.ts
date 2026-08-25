@@ -22,9 +22,25 @@ interface PluggyInvestment {
   amountOriginal?: number | null;
   amount?: number | null;
   currencyCode?: string; // "BRL" | "USD" | ...
+  lastMonthRate?: number | null;
+  lastTwelveMonthsRate?: number | null;
+  quantity?: number | null;
+  value?: number | null;
 }
 
+// Tickers de FII conhecidos da carteira — a Pluggy manda esses como
+// type: EQUITY (igual ação normal), sem subtype REAL_ESTATE_FUND, então o
+// campo type/subtype sozinho não dá pra confiar. B3 reserva sufixo 11/12
+// pra fundo (FII/FI-Infra/FI-Agro), mas isso não é garantia universal (units
+// de empresa comum também usam 11) — por segurança, checa só contra prefixos
+// de FII conhecidos em vez de aplicar a regra de sufixo pra qualquer ticker.
+const KNOWN_FII_PREFIXES = new Set([
+  "HGLG", "MXRF", "KNRI", "HGRE", "VISC", "ALZR", "XPLG", "KNCR", "HTMX", "KNSC", "PLRI", "HGPO",
+]);
+
 function mapSecurityType(inv: PluggyInvestment): string {
+  const tickerPrefix = inv.code?.replace(/[0-9]+$/, "");
+  if (tickerPrefix && KNOWN_FII_PREFIXES.has(tickerPrefix)) return "FII";
   if (inv.subtype === "REAL_ESTATE_FUND") return "FII";
   if (inv.subtype === "STOCK" || inv.type === "EQUITY") return "Ação";
   if (inv.type === "FIXED_INCOME") return "Renda Fixa";
@@ -59,7 +75,10 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     // sempre bate no mesmo Security em syncs futuros, sem duplicar.
     const security = await prisma.security.upsert({
       where: { id: `pluggy:${inv.id}` },
-      update: { name: inv.name, ticker: inv.code ?? null, currency },
+      // type entra no update também — se o mapeamento melhorar depois (como
+      // agora, corrigindo FII que a Pluggy manda como EQUITY comum), o
+      // próximo sync corrige sozinho, sem precisar de script manual de novo.
+      update: { name: inv.name, ticker: inv.code ?? null, currency, type: mapSecurityType(inv) },
       create: {
         id: `pluggy:${inv.id}`,
         name: inv.name,
@@ -71,6 +90,10 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
 
     const investedAmount = convert(inv.amountOriginal ?? inv.amount ?? inv.balance);
     const marketValue = convert(inv.balance);
+    const monthlyRatePct = inv.lastMonthRate ?? null;
+    const annualRatePct = inv.lastTwelveMonthsRate ?? null;
+    const quantity = inv.quantity ?? null;
+    const unitValue = inv.value ?? null;
 
     await prisma.positionSnapshot.upsert({
       where: {
@@ -81,8 +104,20 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
           year,
         },
       },
-      update: { investedAmount, marketValue, fxRateToBRL: fxRate },
-      create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount, marketValue, fxRateToBRL: fxRate },
+      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue },
+      create: {
+        brokerId: broker.id,
+        securityId: security.id,
+        month,
+        year,
+        investedAmount,
+        marketValue,
+        fxRateToBRL: fxRate,
+        monthlyRatePct,
+        annualRatePct,
+        quantity,
+        unitValue,
+      },
     });
   }
 

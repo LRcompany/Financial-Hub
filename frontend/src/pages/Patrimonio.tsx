@@ -19,6 +19,7 @@ import { api, type WealthOverview, type PositionsByType, type Position } from '.
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
+import { RankedBarList } from '../components/RankedBarList'
 import { CardHeader } from '../components/CardHeader'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
@@ -62,6 +63,7 @@ export function Patrimonio() {
   const [error, setError] = useState(false)
 
   const [positions, setPositions] = useState<PositionsByType[]>([])
+  const [brokerHistories, setBrokerHistories] = useState<Record<string, { label: string; value: number }[]>>({})
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -92,7 +94,22 @@ export function Patrimonio() {
         setTargetInput(w.wealthGoal ? String(w.wealthGoal.targetAmount) : '')
       })
       .catch(() => setError(true))
-    api.positions().then((p) => setPositions(p.byType)).catch(() => {})
+    api
+      .positions()
+      .then((p) => {
+        setPositions(p.byType)
+        // corretora única no grupo (Nomad/Moeda, Phantom/Cripto, o fundo da
+        // BTG...) — não tem o que comparar por corretora/ativo, mas dá pra
+        // ver a evolução no tempo, que é o que importa nesses casos.
+        const brokers = new Set(p.byType.flatMap((g) => g.positions.map((pos) => pos.broker)))
+        brokers.forEach((broker) => {
+          api
+            .positionsHistory(broker)
+            .then((h) => setBrokerHistories((prev) => ({ ...prev, [broker]: h.history })))
+            .catch(() => {})
+        })
+      })
+      .catch(() => {})
   }
 
   useEffect(load, [])
@@ -239,6 +256,11 @@ export function Patrimonio() {
               const assetBreakdown = groupByKey(group.positions, (p) => assetLabel(displayName(p, group.type)))
               const Icon = TYPE_ICONS[group.type] ?? PieChart
 
+              // Corretora única no grupo — não tem o que comparar (é tudo o
+              // mesmo lugar), mas dá pra ver a evolução no tempo.
+              const singleBroker = brokerBreakdown.length === 1 ? brokerBreakdown[0].label : null
+              const history = singleBroker ? brokerHistories[singleBroker] : undefined
+
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
                   <CardHeader icon={Icon} title={group.type} />
@@ -262,9 +284,21 @@ export function Patrimonio() {
                       {assetBreakdown.length > 1 && (
                         <div>
                           <h4 className={styles.chartLabel}>Por ativo</h4>
-                          <ClientPieChart data={assetBreakdown} />
+                          <RankedBarList data={assetBreakdown} />
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {singleBroker && history && history.length >= 2 && (
+                    <div style={{ marginTop: 'var(--space-4)' }}>
+                      <h4 className={styles.chartLabel}>Evolução — {singleBroker}</h4>
+                      <SmoothLineChart
+                        values={history.map((h) => h.value)}
+                        labels={history.map((h) => h.label)}
+                        gradientId={`history-${group.type}`}
+                        className={cards.evolutionChart}
+                      />
                     </div>
                   )}
 
@@ -274,6 +308,7 @@ export function Patrimonio() {
                         <tr>
                           <th>Ativo</th>
                           <th>Corretora</th>
+                          <th>Cotas/qtd.</th>
                           <th>Investido</th>
                           <th>Valor atual</th>
                         </tr>
@@ -286,6 +321,11 @@ export function Patrimonio() {
                               {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
                             </td>
                             <td>{p.broker}</td>
+                            <td>
+                              {p.quantity != null && p.unitValue != null
+                                ? `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} × R$ ${currency(p.unitValue)}`
+                                : '—'}
+                            </td>
                             <td>R$ {currency(p.investedAmount)}</td>
                             <td>R$ {currency(p.marketValue)}</td>
                           </tr>

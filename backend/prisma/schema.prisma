@@ -172,6 +172,13 @@ model PositionSnapshot {
   marketValue    Float // idem
   fxRateToBRL    Float? // cotação USD/BRL usada na conversão daquele mês; null quando currency já é BRL
   dividends      Float?
+  // monthlyRatePct/annualRatePct: a Pluggy tem esses campos no payload, mas
+  // vêm sempre null nesse tier de conta pessoal — não é bug, não tem o que
+  // capturar. Ficam declarados pra quando/se a conta subir de tier.
+  monthlyRatePct Float?
+  annualRatePct  Float?
+  quantity       Float? // nº de cotas/ações — isso sim a Pluggy manda de verdade
+  unitValue      Float? // valor de mercado de 1 cota/ação nesse momento
 
   @@unique([brokerId, securityId, month, year])
 }
