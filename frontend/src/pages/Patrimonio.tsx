@@ -118,7 +118,12 @@ function assetHoverContent(p: Position) {
   const rows: { label: string; value: string }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
   if (p.fixedAnnualRate != null) {
+    // Taxa fixa numérica (CDB via Pluggy) — periodicidade é só um detalhe a mais.
     rows.push({ label: 'Taxa contratada', value: `${p.fixedAnnualRate}% a.a.${p.ratePeriodicity ? ` · ${p.ratePeriodicity}` : ''}` })
+  } else if (p.ratePeriodicity) {
+    // Taxa flutuante (CDI+6% a.a., IPCA+10,84% a.a. — empréstimo P2P tipo
+    // INCO) — sem número fixo pra separar, guarda a descrição inteira aqui.
+    rows.push({ label: 'Taxa contratada', value: p.ratePeriodicity })
   }
   if (p.dueDate) rows.push({ label: 'Vencimento', value: new Date(p.dueDate).toLocaleDateString('pt-BR') })
   if (p.isin) rows.push({ label: 'ISIN', value: p.isin })
