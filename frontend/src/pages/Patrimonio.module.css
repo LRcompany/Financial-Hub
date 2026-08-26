@@ -80,27 +80,15 @@
   cursor: pointer;
 }
 
-/* ---------- box por tipo de ativo: gráficos por corretora / por ativo ---------- */
-.chartsRow {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-5);
-  margin-top: var(--space-4);
-}
-
-@media (min-width: 640px) {
-  .chartsRow {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 .chartLabel {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  margin: 0 0 var(--space-3);
+  /* vão rótulo -> gráfico: --space-4 (16px), "dentro do bloco" — ver
+     docs/design-system.md "Espaçamento de gráfico" */
+  margin: 0 0 var(--space-4);
 }
 
 .usdTag {
@@ -111,6 +99,29 @@
   background: var(--fill-muted);
   border-radius: var(--r-full);
   padding: 2px 8px;
+}
+
+.uploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.usdSecondary {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+  font-weight: 400;
 }
 
 /* ---------- painel de adicionar posição manual ---------- */
@@ -159,57 +170,9 @@
   margin-top: var(--space-4);
 }
 
-/* ---------- popup de detalhe do ativo (hover na tabela) ---------- */
-.assetCell {
-  position: relative;
-  display: inline-block;
-  cursor: default;
-  border-bottom: 1px dashed var(--border);
-}
-
-.hoverPopup {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 5;
-  min-width: 220px;
-  max-width: 280px;
-  white-space: normal;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-sm);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(4px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  pointer-events: none;
-}
-
-.assetCell:hover .hoverPopup {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.hoverRow {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-  padding: 4px 0;
-}
-
-.hoverRow + .hoverRow {
-  border-top: 1px solid var(--border);
-}
-
-.hoverLabel {
-  color: var(--ink-soft);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+/* ---------- nome do ativo na tabela (o popup de hover é o componente
+   genérico HoverCard, components/HoverCard.module.css) ---------- */
+.assetName {
+  display: inline-flex;
+  align-items: center;
 }

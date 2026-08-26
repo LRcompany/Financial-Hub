@@ -14,14 +14,17 @@ import {
   Building2,
   Bitcoin,
   DollarSign,
+  FileUp,
 } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
+import { api, type WealthOverview, type PositionsByType, type Position, type Broker } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
-import { RankedBarList } from '../components/RankedBarList'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
+import { HoverCard, HoverRow } from '../components/HoverCard'
+import { StatementUploadModal } from '../components/StatementUploadModal'
+import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -39,16 +42,34 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
   Moeda: DollarSign,
 }
 
-// Tipos onde "por ativo" vira barra vertical full-width em vez da barra
-// horizontal ranqueada — Ação/FII costumam ter dezena de posição, a versão
-// vertical ocupando a largura toda cabe mais opção e lê melhor.
-const VERTICAL_BAR_TYPES = new Set(['Ação', 'FII'])
+// "Por corretora" (pizza) não faz sentido pra Cripto — PHANTOM_BTC, PHANTOM_
+// ETH, PHANTOM_BASE não são corretoras diferentes de verdade, é a mesma
+// carteira dividida por rede (implementação nossa, não escolha do Luiz).
+const HIDE_BROKER_BREAKDOWN_TYPES = new Set(['Cripto'])
 
-/** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior primeiro. */
-function groupByKey(positions: Position[], keyFn: (p: Position) => string) {
-  const map = new Map<string, number>()
-  for (const p of positions) map.set(keyFn(p), (map.get(keyFn(p)) ?? 0) + p.marketValue)
-  return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+/** Agrupa e soma marketValue por uma chave (corretora, ativo...), maior
+ * primeiro. `breakdown` traz o detalhe por sub-chave (o inverso da
+ * agrupada — ex: agrupando por ativo, o breakdown é por corretora) pra
+ * alimentar o hover quando o bucket junta mais de uma posição. */
+function groupByKey(positions: Position[], keyFn: (p: Position) => string, subKeyFn: (p: Position) => string) {
+  const map = new Map<string, Position[]>()
+  for (const p of positions) {
+    const key = keyFn(p)
+    const list = map.get(key) ?? []
+    list.push(p)
+    map.set(key, list)
+  }
+  return [...map.entries()]
+    .map(([label, items]) => {
+      const subMap = new Map<string, number>()
+      for (const p of items) subMap.set(subKeyFn(p), (subMap.get(subKeyFn(p)) ?? 0) + p.marketValue)
+      return {
+        label,
+        value: items.reduce((sum, p) => sum + p.marketValue, 0),
+        breakdown: [...subMap.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+      }
+    })
+    .sort((a, b) => b.value - a.value)
 }
 
 /** "CDB - BANCO SOFISA S.A." -> "CDB" — a Pluggy detalha o emissor no nome,
@@ -66,6 +87,22 @@ function displayName(p: Position, groupType: string) {
   return TICKER_TYPES.has(groupType) && p.ticker ? p.ticker : p.name
 }
 
+/** Total em USD de uma box, quando faz sentido mostrar. Nomad (100% em
+ * posição USD) usa a taxa gravada de cada posição — mais precisa que uma
+ * taxa única pro grupo. Cripto não grava taxa por posição (o preço já sai
+ * em BRL direto do CoinGecko), então usa a cotação atual só pra exibição —
+ * nunca reescreve o valor guardado, é só uma segunda leitura do mesmo total. */
+function groupUsdTotal(group: PositionsByType, liveUsdToBrl: number | null): number | null {
+  const usdPositions = group.positions.filter((p) => p.currency === 'USD' && p.fxRateToBRL)
+  if (usdPositions.length > 0 && usdPositions.length === group.positions.length) {
+    return usdPositions.reduce((sum, p) => sum + p.marketValue / p.fxRateToBRL!, 0)
+  }
+  if (group.type === 'Cripto' && liveUsdToBrl) {
+    return group.total / liveUsdToBrl
+  }
+  return null
+}
+
 // "Moeda" não é um tipo de investimento de verdade pro Luiz — é só como o
 // ativo é classificado (moeda estrangeira parada). Nesse caso específico o
 // nome da corretora conta mais que o tipo. Ação/FII/Fundo continuam pelo
@@ -73,31 +110,31 @@ function displayName(p: Position, groupType: string) {
 // ambíguo, o tipo é a informação que importa ali.
 const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
 
-/** Popup de detalhe ao passar o mouse — cada campo só aparece se a Pluggy
- * realmente mandou aquele dado (nunca mostra "—" pra tudo que falta). */
-function AssetHoverDetails({ p }: { p: Position }) {
+/** Conteúdo do hover de detalhe do ativo — cada campo só aparece se a Pluggy
+ * (ou o registro manual) realmente tem aquele dado (nunca mostra "—" pra
+ * tudo que falta). Usa o `HoverCard` genérico do projeto — mesmo padrão em
+ * qualquer lista com detalhe extra pra mostrar no hover do nome do item. */
+function assetHoverContent(p: Position) {
   const rows: { label: string; value: string }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
   if (p.fixedAnnualRate != null) {
+    // Taxa fixa numérica (CDB via Pluggy) — periodicidade é só um detalhe a mais.
     rows.push({ label: 'Taxa contratada', value: `${p.fixedAnnualRate}% a.a.${p.ratePeriodicity ? ` · ${p.ratePeriodicity}` : ''}` })
+  } else if (p.ratePeriodicity) {
+    // Taxa flutuante (CDI+6% a.a., IPCA+10,84% a.a. — empréstimo P2P tipo
+    // INCO) — sem número fixo pra separar, guarda a descrição inteira aqui.
+    rows.push({ label: 'Taxa contratada', value: p.ratePeriodicity })
   }
   if (p.dueDate) rows.push({ label: 'Vencimento', value: new Date(p.dueDate).toLocaleDateString('pt-BR') })
   if (p.isin) rows.push({ label: 'ISIN', value: p.isin })
   if (p.quantity != null && p.unitValue != null) {
     rows.push({ label: 'Posição', value: `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a R$ ${currency(p.unitValue)}` })
   }
+  if (p.currency === 'USD' && p.fxRateToBRL) {
+    rows.push({ label: 'Valor em USD', value: `US$ ${currency(p.marketValue / p.fxRateToBRL)} (câmbio R$ ${p.fxRateToBRL.toFixed(2)})` })
+  }
   if (rows.length === 0) return null
-
-  return (
-    <div className={styles.hoverPopup}>
-      {rows.map((r) => (
-        <div key={r.label} className={styles.hoverRow}>
-          <span className={styles.hoverLabel}>{r.label}</span>
-          <span>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  )
+  return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)
 }
 
 export function Patrimonio() {
@@ -105,7 +142,10 @@ export function Patrimonio() {
   const [error, setError] = useState(false)
 
   const [positions, setPositions] = useState<PositionsByType[]>([])
-  const [brokerHistories, setBrokerHistories] = useState<Record<string, { label: string; value: number }[]>>({})
+  const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
+  const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
+  const [brokers, setBrokers] = useState<Broker[]>([])
+  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -140,17 +180,25 @@ export function Patrimonio() {
       .positions()
       .then((p) => {
         setPositions(p.byType)
-        // corretora única no grupo (Nomad/Moeda, Phantom/Cripto, o fundo da
-        // BTG...) — não tem o que comparar por corretora/ativo, mas dá pra
-        // ver a evolução no tempo, que é o que importa nesses casos.
-        const brokers = new Set(p.byType.flatMap((g) => g.positions.map((pos) => pos.broker)))
-        brokers.forEach((broker) => {
+        // Evolução por GRUPO (mesmo agrupamento da tela: tipo, ou corretora
+        // quando standalone) — nunca por corretora sozinha, isso misturava
+        // tipos (ex: BTG entra em Renda Fixa/FII/Ação/Fundo, a evolução de
+        // "Ação" mostrava o BTG inteiro, não só as ações).
+        p.byType.forEach((g) => {
           api
-            .positionsHistory(broker)
-            .then((h) => setBrokerHistories((prev) => ({ ...prev, [broker]: h.history })))
+            .positionsHistory(g.type)
+            .then((h) => setGroupHistories((prev) => ({ ...prev, [g.type]: h.history })))
             .catch(() => {})
         })
       })
+      .catch(() => {})
+    api
+      .fxRate()
+      .then((r) => setUsdToBrl(r.usdToBrl))
+      .catch(() => {})
+    api
+      .brokers()
+      .then(setBrokers)
       .catch(() => {})
   }
 
@@ -302,23 +350,51 @@ export function Patrimonio() {
               </div>
             )}
             {positions.map((group) => {
-              const brokerBreakdown = groupByKey(group.positions, (p) => p.broker)
-              const assetBreakdown = groupByKey(group.positions, (p) => assetLabel(displayName(p, group.type)))
+              const brokerBreakdown = groupByKey(
+                group.positions,
+                (p) => p.broker,
+                (p) => assetLabel(displayName(p, group.type))
+              )
+              const assetBreakdown = groupByKey(
+                group.positions,
+                (p) => assetLabel(displayName(p, group.type)),
+                (p) => p.broker
+              )
               const Icon = group.isBroker ? Landmark : (TYPE_ICONS[group.type] ?? PieChart)
-
-              // Corretora única no grupo — não tem o que comparar (é tudo o
-              // mesmo lugar), mas dá pra ver a evolução no tempo.
               const singleBroker = brokerBreakdown.length === 1 ? brokerBreakdown[0].label : null
-              const history = singleBroker ? brokerHistories[singleBroker] : undefined
+              // Evolução é por grupo inteiro (todas as corretoras daquele
+              // tipo somadas) — nunca precisou de corretora única pra fazer
+              // sentido, e limitar a isso escondia a evolução de Renda Fixa/
+              // Cripto (várias corretoras cada).
+              const history = groupHistories[group.type]
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
+              const usdTotal = groupUsdTotal(group, usdToBrl)
+              // Upload de extrato é específico do formato Nomad/Apex Clearing
+              // (parseNomadStatement) — não é genérico pra qualquer corretora
+              // manual_statement (INCO também é standalone+manual, mas não
+              // tem PDF nesse formato; usaria o parser errado).
+              const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
+              const supportsStatementUpload = broker?.name === 'NOMAD'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader icon={Icon} title={title} />
+                  <CardHeader
+                    icon={Icon}
+                    title={title}
+                    action={
+                      supportsStatementUpload && broker ? (
+                        <button className={styles.uploadBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
+                          <FileUp size={13} strokeWidth={2} />
+                          Atualizar por extrato
+                        </button>
+                      ) : undefined
+                    }
+                  />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
+                  {usdTotal != null && <div className={styles.usdSecondary}>US$ {currency(usdTotal)}</div>}
                   <div className={cards.chartMeta}>
                     <span>
                       {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
@@ -327,75 +403,94 @@ export function Patrimonio() {
 
                   {/* Evolução primeiro — é a visão geral (como isso mudou no
                       tempo); a composição atual (por corretora/ativo) vem
-                      depois, como detalhe. */}
-                  {singleBroker && history && history.length >= 2 && (
-                    <div style={{ marginTop: 'var(--space-4)' }}>
+                      depois, como detalhe. Espaçamento entre blocos sempre
+                      --space-5 (24px), nunca condicional a 0 — cada bloco
+                      (valor total, evolução, composição, tabela) respira
+                      igual, tenha ou não o bloco anterior renderizado. */}
+                  {history && history.length >= 2 && (
+                    <div style={{ marginTop: 'var(--space-5)' }}>
                       <h4 className={styles.chartLabel}>Evolução</h4>
                       <SmoothLineChart
                         values={history.map((h) => h.value)}
                         labels={history.map((h) => h.label)}
-                        gradientId={`history-${group.type}`}
+                        gradientId={`history-${group.type.replace(/\s+/g, '-')}`}
                         className={cards.evolutionChart}
                       />
                     </div>
                   )}
 
-                  {/* Ação/FII: barra vertical 100% da largura, fora da grid de
-                      2 colunas — cabe mais ativo e lê melhor que a barra
-                      horizontal quando tem dezena de posição. */}
-                  {VERTICAL_BAR_TYPES.has(group.type) && assetBreakdown.length > 1 && (
-                    <div style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
+                  {/* Por corretora: pizza, só quando tem mais de uma de
+                      verdade E isso é informação real pro Luiz — Cripto fica
+                      de fora porque "PHANTOM_BTC"/"PHANTOM_BASE" não são
+                      corretoras distintas, é a mesma carteira dividida por
+                      rede (detalhe técnico nosso, não escolha dele). */}
+                  {brokerBreakdown.length > 1 && !HIDE_BROKER_BREAKDOWN_TYPES.has(group.type) && (
+                    <div style={{ marginTop: 'var(--space-5)' }}>
+                      <h4 className={styles.chartLabel}>Por corretora</h4>
+                      <ClientPieChart data={brokerBreakdown} />
+                    </div>
+                  )}
+
+                  {/* Por ativo: sempre barra vertical 100% da largura — lê
+                      melhor que pizza quando tem muito ativo, e cabe mais
+                      opção por ser full-width. max alto o bastante pra
+                      mostrar todo mundo (a barra estreita sozinha via flex),
+                      sem truncar em "Outros" à toa. */}
+                  {assetBreakdown.length > 1 && (
+                    <div style={{ marginTop: 'var(--space-5)' }}>
                       <h4 className={styles.chartLabel}>Por ativo</h4>
-                      <VerticalBarChart data={assetBreakdown} max={12} />
+                      <VerticalBarChart data={assetBreakdown} />
                     </div>
                   )}
 
-                  {!VERTICAL_BAR_TYPES.has(group.type) && (brokerBreakdown.length > 1 || assetBreakdown.length > 1) && (
-                    <div className={styles.chartsRow} style={{ marginTop: singleBroker ? 'var(--space-5)' : 0 }}>
-                      {brokerBreakdown.length > 1 && (
-                        <div>
-                          <h4 className={styles.chartLabel}>Por corretora</h4>
-                          <ClientPieChart data={brokerBreakdown} />
-                        </div>
-                      )}
-                      {assetBreakdown.length > 1 && (
-                        <div>
-                          <h4 className={styles.chartLabel}>Por ativo</h4>
-                          <RankedBarList data={assetBreakdown} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
+                  <div className={styles.tableWrap} style={{ marginTop: 'var(--space-5)' }}>
                     <table className={styles.table}>
                       <thead>
                         <tr>
                           <th>Ativo</th>
                           <th>Corretora</th>
                           <th>Cotas/qtd.</th>
+                          <th>Preço unit.</th>
                           <th>Investido</th>
                           <th>Valor atual</th>
+                          <th>Rentab.</th>
                         </tr>
                       </thead>
                       <tbody>
                         {group.positions.map((p, i) => (
                           <tr key={`${p.broker}-${p.name}-${i}`}>
                             <td>
-                              <span className={styles.assetCell}>
-                                {displayName(p, group.type)}
-                                {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
-                                <AssetHoverDetails p={p} />
-                              </span>
+                              <HoverCard content={assetHoverContent(p)}>
+                                <span className={styles.assetName}>
+                                  {displayName(p, group.type)}
+                                  {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                                </span>
+                              </HoverCard>
                             </td>
                             <td>{p.broker}</td>
+                            <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
+                            <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
                             <td>
-                              {p.quantity != null && p.unitValue != null
-                                ? `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} × R$ ${currency(p.unitValue)}`
-                                : '—'}
+                              R$ {currency(p.investedAmount)}
+                              {p.currency === 'USD' && p.fxRateToBRL && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                              )}
+                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                              )}
                             </td>
-                            <td>R$ {currency(p.investedAmount)}</td>
-                            <td>R$ {currency(p.marketValue)}</td>
+                            <td>
+                              R$ {currency(p.marketValue)}
+                              {p.currency === 'USD' && p.fxRateToBRL && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                              )}
+                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                              )}
+                            </td>
+                            <td>
+                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -555,6 +650,18 @@ export function Patrimonio() {
       <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
+
+      {uploadTarget && (
+        <StatementUploadModal
+          brokerId={uploadTarget.id}
+          brokerName={uploadTarget.name}
+          onClose={() => setUploadTarget(null)}
+          onSaved={() => {
+            setUploadTarget(null)
+            load()
+          }}
+        />
+      )}
 
       {showAddForm && (
         <div className={styles.overlay} onClick={() => setShowAddForm(false)}>

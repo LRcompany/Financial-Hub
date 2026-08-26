@@ -1,9 +1,17 @@
 import { Router } from "express";
+import multer from "multer";
+import { PDFParse } from "pdf-parse";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
-import { syncOnchainWallet } from "../services/solana.js";
+import { syncOnchainWallet } from "../services/onchainSync.js";
+import { parseNomadStatement } from "../services/nomadStatement.js";
+import { getUsdToBrlRateOnDate } from "../services/fx.js";
 
 export const brokersRouter = Router();
+
+// Upload de extrato PDF fica só em memória (arquivo pequeno, alguns segundos
+// de vida) — nunca grava o PDF em disco, extrai o texto e descarta.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 brokersRouter.get("/brokers", async (_req, res) => {
   const brokers = await prisma.broker.findMany({ orderBy: { name: "asc" } });
@@ -36,4 +44,99 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   }
 
   res.status(400).json({ error: "Esse broker não está configurado para nenhum sync automático" });
+});
+
+// POST /api/brokers/:id/statement-preview — extrai texto do PDF (extrato
+// mensal, hoje só o formato Nomad/Apex Clearing) e devolve uma prévia
+// (posições, saldo FDIC, período) SEM gravar nada no banco. A confirmação é
+// um passo separado (statement-confirm) — layout de extrato mudar não
+// corrompe dado, na pior das hipóteses a extração falha e mostra aviso pra
+// conferência manual em vez de gravar às cegas.
+brokersRouter.post("/brokers/:id/statement-preview", upload.single("file"), async (req, res) => {
+  const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
+  if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+  if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado (campo 'file')" });
+
+  try {
+    const parser = new PDFParse({ data: req.file.buffer });
+    const { text } = await parser.getText();
+    await parser.destroy();
+
+    const parsed = parseNomadStatement(text);
+    if (!parsed.periodEnd) {
+      return res.status(422).json({ error: "Não consegui identificar o período do extrato — layout inesperado.", parsed });
+    }
+    const [year, month] = parsed.periodEnd.split("-").map(Number);
+    res.json({ parsed, month, year });
+  } catch (err) {
+    res.status(422).json({ error: `Falha ao ler o PDF: ${(err as Error).message}` });
+  }
+});
+
+// POST /api/brokers/:id/statement-confirm — grava as posições já revisadas
+// (vindas da tela de prévia, possivelmente editadas manualmente antes de
+// confirmar). Base de custo (investedAmount) herda do snapshot anterior do
+// mesmo ativo (mesma regra do sync on-chain) — um extrato de posição não
+// traz preço de compra, então não inventa um custo novo todo mês; só usa o
+// valor de mercado como base na primeira vez que aquele ativo aparece.
+brokersRouter.post("/brokers/:id/statement-confirm", async (req, res) => {
+  const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
+  if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+
+  const { month, year, periodEnd, positions, fdicBalance } = req.body ?? {};
+  if (!month || !year || !periodEnd || !Array.isArray(positions)) {
+    return res.status(400).json({ error: "Campos obrigatórios: month, year, periodEnd, positions[]" });
+  }
+
+  // Câmbio do dia de fechamento do extrato, não o de hoje — um extrato de
+  // julho enviado em agosto (ou revisado depois) não pode recotar julho com
+  // o dólar de agosto.
+  let usdRate: number;
+  try {
+    usdRate = await getUsdToBrlRateOnDate(periodEnd);
+  } catch (err) {
+    return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+  }
+
+  async function upsertUsdPosition(securityId: string, name: string, type: string, quantity: number | null, unitValueUsd: number | null, marketValueUsd: number, extra?: { issuer?: string }) {
+    await prisma.security.upsert({
+      where: { id: securityId },
+      update: { name, type, currency: "USD", ...(extra?.issuer ? { issuer: extra.issuer } : {}) },
+      create: { id: securityId, name, type, currency: "USD", ...(extra?.issuer ? { issuer: extra.issuer } : {}) },
+    });
+    const marketValue = marketValueUsd * usdRate;
+    const unitValue = unitValueUsd != null ? unitValueUsd * usdRate : null;
+    const previous = await prisma.positionSnapshot.findFirst({
+      where: { brokerId: broker!.id, securityId },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+    });
+    const investedAmount = previous?.investedAmount ?? marketValue;
+    await prisma.positionSnapshot.upsert({
+      where: { brokerId_securityId_month_year: { brokerId: broker!.id, securityId, month, year } },
+      update: { marketValue, investedAmount, fxRateToBRL: usdRate, quantity, unitValue },
+      create: { brokerId: broker!.id, securityId, month, year, marketValue, investedAmount, fxRateToBRL: usdRate, quantity, unitValue },
+    });
+  }
+
+  let count = 0;
+  for (const p of positions as { name: string; cusip: string; type: string; quantity: number; unitValue: number; marketValue: number }[]) {
+    if (!p.name || !p.cusip || !p.marketValue) continue;
+    await upsertUsdPosition(`MANUAL:${broker.name}:${p.cusip}`, p.name, p.type || "Renda Fixa", p.quantity ?? null, p.unitValue ?? null, p.marketValue);
+    count++;
+  }
+  if (typeof fdicBalance === "number" && fdicBalance > 0) {
+    await upsertUsdPosition(
+      `MANUAL:${broker.name}:FDIC_CASH`,
+      "FDIC Insured Deposit",
+      "Moeda",
+      null,
+      null,
+      fdicBalance,
+      { issuer: "Saldo em caixa não investido, protegido pelo seguro federal dos EUA (FDIC) até US$250 mil por banco" }
+    );
+    count++;
+  }
+
+  await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
+  res.json({ saved: true, count, month, year });
 });

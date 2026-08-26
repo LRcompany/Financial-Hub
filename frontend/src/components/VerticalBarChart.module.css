@@ -28,13 +28,21 @@
 
 .bar {
   width: 100%;
-  max-width: 64px;
+  /* Teto generoso — com poucas categorias (Renda Fixa: CDB/Tesouro/CRA/
+     Debêntures, só 4) a coluna fica bem larga; um teto baixo deixava a
+     barra fina boiando num vão grande, parecendo quebrado comparado com
+     caixas de muito ativo (Ação, 15 tickers, preenche a coluna inteira). */
+  max-width: 140px;
   border-radius: var(--r-lg);
   background: var(--accent-soft);
+  transition: background 0.12s ease;
 }
 
-.barHighlight {
-  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-hover) 100%);
+/* Sem "vencedor" fixo — os itens não têm ranking entre si (nenhum motivo
+   pra um ficar permanentemente em azul). Destaque só ao passar o mouse,
+   na coluna inteira (barra + rótulo), não travado num item específico. */
+.col:hover .bar {
+  background: var(--accent);
 }
 
 .label {
@@ -46,18 +54,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  transition: color 0.12s ease;
 }
 
-.labelHighlight {
-  margin-top: var(--space-2);
-  font-size: 11px;
+.col:hover .label {
+  color: var(--ink);
   font-weight: 600;
-  color: var(--accent-ink);
-  background: var(--ink);
-  border-radius: var(--r-full);
-  padding: 3px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }

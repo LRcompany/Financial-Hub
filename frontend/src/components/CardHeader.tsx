@@ -5,10 +5,14 @@ export function CardHeader({
   icon: Icon,
   title,
   href,
+  action,
 }: {
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>
   title: string
   href?: string
+  /** Conteúdo à direita quando não é um link "Ver tudo" (ex: botão de ação
+   * específico daquela box, como o upload de extrato da Nomad). */
+  action?: React.ReactNode
 }) {
   return (
     <div className={styles.cardHeader}>
@@ -21,6 +25,7 @@ export function CardHeader({
           Ver tudo
         </Link>
       )}
+      {!href && action}
     </div>
   )
 }

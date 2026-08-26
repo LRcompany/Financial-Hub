@@ -38,9 +38,15 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const previousTotal = previousSnaps.reduce((sum, s) => sum + s.marketValue, 0);
 
   // ---- alocação por tipo de ativo (posições ativas hoje) ----
+  // Mesma regra de agrupamento do /api/positions (broker "standalone" vira
+  // sua própria fatia, não espalha por tipo) — os dois endpoints têm que
+  // bater exatamente, senão Dashboard e Patrimônio mostram número diferente
+  // pro mesmo dado (era o caso da Nomad: aqui contava Renda Fixa/Fundo/Moeda
+  // separado, lá contava tudo junto como "NOMAD").
   const allocationMap = new Map<string, number>();
   for (const s of latestSnaps) {
-    allocationMap.set(s.security.type, (allocationMap.get(s.security.type) ?? 0) + s.marketValue);
+    const key = s.broker.standalone ? s.broker.name : s.security.type;
+    allocationMap.set(key, (allocationMap.get(key) ?? 0) + s.marketValue);
   }
   const allocation = [...allocationMap.entries()].map(([label, value]) => ({ label, value }));
 
@@ -81,23 +87,39 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const projectedDividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
 
   // ---- destaques do mês: maior variação % de valor de mercado por ativo ----
-  function marketValueBySecurity(snaps: { securityId: string; marketValue: number; security: { name: string; ticker: string | null } }[]) {
-    const map = new Map<string, { name: string; ticker: string | null; value: number }>();
+  // `s.month`/`s.year` aqui é a data REAL do snapshot no banco — quando um
+  // broker não foi ressincronizado esse mês, `activeSnapshotsAsOf` "carrega"
+  // pra frente o snapshot antigo (é assim que deve ser pro total geral), mas
+  // isso NÃO é uma posição que "não mudou este mês" — é uma posição sem dado
+  // novo nenhum. Contar como destaque de 0% seria mentir que sabemos que não
+  // mudou; o correto é exigir dado realmente datado do mês corrente.
+  function marketValueBySecurity(snaps: { securityId: string; marketValue: number; month: number; year: number; security: { name: string; ticker: string | null } }[]) {
+    const map = new Map<string, { name: string; ticker: string | null; value: number; month: number; year: number }>();
     for (const s of snaps) {
       const existing = map.get(s.securityId);
       map.set(s.securityId, {
         name: s.security.name,
         ticker: s.security.ticker,
         value: (existing?.value ?? 0) + s.marketValue,
+        month: s.month,
+        year: s.year,
       });
     }
     return map;
   }
+  const curYear = Math.floor((nowYm - 1) / 12);
+  const curMonth = nowYm - curYear * 12;
   const latestBySecurity = marketValueBySecurity(latestSnaps);
   const previousBySecurity = marketValueBySecurity(previousSnaps);
   const movers = [...latestBySecurity.entries()]
+    // só ativo com dado datado deste mês mesmo — carry-forward do mês
+    // passado não é "destaque do mês", é ausência de dado novo
+    .filter(([, cur]) => cur.year === curYear && cur.month === curMonth)
     .map(([securityId, cur]) => {
       const prior = previousBySecurity.get(securityId);
+      // sem posição equivalente no mês anterior (ex: broker que acabou de
+      // migrar de estimativa manual pra Pluggy — o id muda) — não dá pra
+      // saber "quanto mudou", não inventa 0%, só não aparece como destaque
       if (!prior || prior.value === 0) return null;
       const changePct = ((cur.value - prior.value) / prior.value) * 100;
       return { ticker: cur.ticker ?? cur.name, changePct };

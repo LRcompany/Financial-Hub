@@ -130,6 +130,7 @@ export interface Position {
   investedAmount: number
   marketValue: number
   currency: string
+  fxRateToBRL: number | null
   month: number
   year: number
   quantity: number | null
@@ -156,6 +157,24 @@ export interface Broker {
   pluggyConnectorId: string | null
   onchainAddress: string | null
   lastSyncedAt: string | null
+}
+
+export interface ParsedStatementPosition {
+  name: string
+  cusip: string
+  quantity: number
+  unitValue: number
+  marketValue: number
+  type: string
+}
+
+export interface ParsedStatement {
+  positions: ParsedStatementPosition[]
+  fdicBalance: number | null
+  totalNetWorth: number | null
+  securitiesValuation: number | null
+  periodEnd: string | null
+  warnings: string[]
 }
 
 export const api = {
@@ -199,8 +218,25 @@ export const api = {
     return request<ProjectsSummary>(`/projects-summary${query}`)
   },
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
-  positionsHistory: (broker: string) =>
-    request<{ history: { label: string; value: number }[] }>(`/positions/history?broker=${encodeURIComponent(broker)}`),
+  fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
+  previewStatement: async (brokerId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await fetch(`${API_URL}/brokers/${brokerId}/statement-preview`, { method: 'POST', body: form })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao ler o extrato (${response.status})`)
+    return data as { parsed: ParsedStatement; month: number; year: number }
+  },
+  confirmStatement: (
+    brokerId: string,
+    input: { month: number; year: number; periodEnd: string; positions: ParsedStatementPosition[]; fdicBalance: number | null }
+  ) =>
+    request<{ saved: true; count: number; month: number; year: number }>(`/brokers/${brokerId}/statement-confirm`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  positionsHistory: (group: string) =>
+    request<{ history: { label: string; value: number }[] }>(`/positions/history?group=${encodeURIComponent(group)}`),
   addPosition: (input: {
     brokerName: string
     securityName: string
