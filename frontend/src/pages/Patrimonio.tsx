@@ -370,10 +370,12 @@ export function Patrimonio() {
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
               const usdTotal = groupUsdTotal(group, usdToBrl)
-              // Corretora "standalone" cuja atualização é por extrato PDF
-              // (hoje só a Nomad) — mostra o botão de upload direto na box.
+              // Upload de extrato é específico do formato Nomad/Apex Clearing
+              // (parseNomadStatement) — não é genérico pra qualquer corretora
+              // manual_statement (INCO também é standalone+manual, mas não
+              // tem PDF nesse formato; usaria o parser errado).
               const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
-              const supportsStatementUpload = broker?.dataSource === 'manual_statement'
+              const supportsStatementUpload = broker?.name === 'NOMAD'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>

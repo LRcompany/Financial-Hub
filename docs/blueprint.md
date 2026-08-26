@@ -360,6 +360,12 @@ Luiz empresta dinheiro a empreendimentos (CCB/Debênture/CRI/participação) via
 - **`dividends` (juros do mês) ficou null nessa entrada inicial** — a plataforma só expõe "Lucro líquido"/"Total recebido" **acumulado desde o início** de cada posição, não quebrado por mês. Gravar isso como se fosse renda de um mês só infla "Proventos previstos" artificialmente. A partir do próximo mês, `dividends` passa a ser preenchido com o INCREMENTO real (lucro líquido deste mês menos o do mês anterior).
 - **Risco real observado, não travado no dado**: ICARUS (Lynch Capital 3) está com a parcela **em atraso** — sinalizado ao Luiz na conversa, sem campo novo no schema pra status de inadimplência (seria over-engineering pra um caso só; revisitar se acontecer de novo).
 
+### INCO vira box própria (25/08, mesmo dia)
+
+`Broker.standalone = true` pra INCO — mesmo mecanismo já existente pra Nomad, zero código novo. Resultado automático: as 7 posições (6 empréstimos + a participação Equity HGIB) saem de espalhadas entre Renda Fixa/Fundo e viram uma box só "INCO" (R$35.484,24), com Evolução e "Por ativo" em barra vertical (por empreendimento) aparecendo de graça — é a mesma lógica que já roda pra qualquer grupo.
+
+Único ajuste de código necessário: o botão "Atualizar por extrato" (upload de PDF) estava condicionado a `dataSource === 'manual_statement'`, que também é o caso da INCO — mas o parser (`parseNomadStatement`) é específico do formato Nomad/Apex Clearing. Restrito pra `broker.name === 'NOMAD'` explicitamente, não genérico por dataSource.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
