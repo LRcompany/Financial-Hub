@@ -33,13 +33,23 @@ export interface Transaction {
   category: Category | null
 }
 
+export type CategoryKind = 'essential' | 'non_essential' | 'investment'
+
 export interface BudgetCategory {
   categoryId: string
   name: string
-  essential: boolean
+  kind: CategoryKind
   planned: number
   spent: number
   previousSpent: number
+}
+
+export interface BudgetReviewCategory {
+  categoryId: string
+  name: string
+  kind: CategoryKind
+  previousSpent: number
+  currentTarget: number | null
 }
 
 export interface BudgetSummary {
@@ -237,6 +247,8 @@ export const api = {
     }),
   deleteWealthGoalYearly: (year: number) => request<void>(`/wealth-goal/yearly/${year}`, { method: 'DELETE' }),
   dailyGoalHistory: () => request<DailyGoalEntry[]>('/daily-goal/history'),
+  budgetReview: (month: number, year: number) =>
+    request<{ categories: BudgetReviewCategory[] }>(`/budget-target/review?month=${month}&year=${year}`),
   setBudgetTarget: (categoryId: string, month: number, year: number, plannedAmount: number) =>
     request<{ id: string }>('/budget-target', {
       method: 'PUT',

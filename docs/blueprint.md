@@ -386,11 +386,28 @@ Primeira versão real da página, sobre o dado importado acima. Endpoints novos:
 - **`POST /api/budget-target/copy-from-previous-month`** — copia meta do mês anterior pras categorias que ainda não têm meta no mês novo (nunca sobrescreve o que ele já ajustou manualmente nesse mês).
 - **`GET /api/credit-cards`** — fatura/limite de cada cartão de crédito conectado via Pluggy (usado, limite, disponível, vencimento, pagamento mínimo), direto de `GET /accounts` da Pluggy — sem snapshot histórico, é sempre a foto de agora. Achado real ao testar: **cartão BTG BLACK usado R$57.629 de R$58.400 (só R$770 livre)**.
 - **`GET /api/upcoming-installments`** — as 95 parcelas futuras importadas acima, agora num model próprio `UpcomingInstallment` (migração nova, não é `Transaction` — não aconteceu ainda). Total comprometido: R$50.761,02.
-- `budget-summary`: `categories[]` agora só traz categoria de despesa (antes misturava categoria de receita tipo "Salário", que não faz sentido numa lista de "gasto vs. meta") — e ganhou o campo `essential`, usado pra separar a lista em duas seções na tela.
+- `budget-summary`: `categories[]` agora só traz categoria de despesa (antes misturava categoria de receita tipo "Salário", que não faz sentido numa lista de "gasto vs. meta") — e ganhou o campo `kind` (ver abaixo), usado pra separar a lista em seções na tela.
 
-Layout da página: total do mês → gasto diário (com forma de setar meta diária nova, hoje só existia em Configurações) → cartões de crédito → parcelas futuras (por mês + tabela) → categorias essenciais / não-essenciais (cada uma editável inline).
+Layout da página: total do mês → gasto diário (com forma de setar meta diária nova, hoje só existia em Configurações) → cartões de crédito → parcelas futuras (por mês + tabela) → categorias por `kind` (cada uma editável inline).
 
 **Ainda não construído** (próximo passo natural): sync de transação da Pluggy pro C6 (cartão, 378 transações reais confirmadas) e 99 (conta, 145) — hoje o dado é só o histórico importado da planilha (até 29/08); sem esse sync, a partir de amanhã a página para de receber gasto novo sozinha.
+
+### Redesign do "Total do mês" + revisão de orçamento + `Category.kind` (29/08, mesmo dia)
+
+Luiz pediu 3 coisas depois de ver a primeira versão:
+
+1. **"Total do mês" vira gráfico de pizza** ("mostrando onde estou gastando"), não mais barra de progresso — e categoria sem gasto nenhum não vira fatia (fatia de R$0 não ajuda, só polui). `ClientPieChart` reaproveitado do Patrimônio, `data = categories.filter(c => c.spent > 0)`.
+2. **Modal de revisão passo a passo** (`components/BudgetReviewModal.tsx`) — em vez de editar tudo inline de uma vez, uma categoria por tela, mostrando **o gasto real do mês anterior** já pré-preenchido no campo (o pedido literal: "gastei 600 de terapia mês passado, posso ou não continuar com esse orçamento"). Endpoint novo `GET /budget-target/review?month&year` — diferente do `/budget-summary`, traz **toda** categoria de despesa mesmo sem meta ainda no mês (é exatamente o caso de mês novo, começando do zero). Banner automático sugerindo revisar quando é começo de mês (dia ≤ 5) e o mês corrente ainda não tem nenhuma meta setada.
+3. **`Category.essential` (booleano) virou `Category.kind` (string: `essential | non_essential | investment`)** — o boolean só dava pra separar 2 grupos, mas a estrutura real do Luiz tem 3 (as 5 categorias de investimento + "Empréstimo Concedido" formam uma seção própria, separada de "despesa" de verdade). Migração recria a tabela `Category` (SQLite não faz `ALTER COLUMN` de tipo).
+
+**Correções de categoria** feitas junto (pedido explícito "melhorar as categorias"):
+- 3 erros de digitação: "Cirugia Estética" → Cirurgia, "Fundo Imobialrio" → Imobiliário, "Açoes" → Ações.
+- **"Emprestimo" renomeada pra "Empréstimo Concedido"** — não é dívida do Luiz, é dinheiro que ele emprestou pra outra pessoa (confirmado por ele). As 2 transações reais dessa categoria (R$9.000 "deposito caucao" + R$50.000 "emprestimos tio joao") foram marcadas `isTransfer: true` — antes contavam como gasto normal e infriam a "Despesas Totais" do mês em R$59 mil de forma incorreta (empréstimo concedido não é gasto, é o dinheiro saindo do caixa mas continuando "seu", só em outro lugar — mesma lógica de transferência já usada pra fatura de cartão).
+- Terapia e "Compras - Internet" vs "Compras - Shopping" foram perguntados e confirmados como já estavam (Terapia continua não-essencial — "posso parar a terapia"; Internet = compra online, Shopping = loja física).
+
+**Erro cometido e corrigido no meio do caminho**: rodei `prisma db push --accept-data-loss` pra aplicar o schema antes de escrever a migração formal — isso já apagou a coluna `essential` (virou `kind` com o valor padrão pra tudo) antes da migração manual (que faria o mapeamento certo `essential=true → kind='essential'`) rodar de fato. Resultado: as 12 categorias essenciais ficaram classificadas como `non_essential` por um instante. Corrigido reaplicando a classificação certa direto (`UPDATE ... WHERE name IN (...)`) — a migração `.sql` gravada no repo está correta pra quem rodar `migrate deploy` num banco novo (que ainda tem `essential` populado de verdade), só não foi o que rodou nesse dev.db específico.
+
+**Acesso ao disco caiu de novo no meio do trabalho** — mesmo sintoma documentado antes (Full Disk Access do terminal), dessa vez precisou fechar o app do terminal por completo (não bastava só re-conceder a permissão) pra voltar a funcionar.
 
 ## Pendências (não travadas ainda)
 

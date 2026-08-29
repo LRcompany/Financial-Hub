@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy } from 'lucide-react'
-import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary } from '../lib/api'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy, ListChecks, AlertCircle } from 'lucide-react'
+import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
+import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
+import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
 
 const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+const KIND_SECTIONS: { kind: BudgetCategory['kind']; title: string }[] = [
+  { kind: 'essential', title: 'Despesas essenciais' },
+  { kind: 'non_essential', title: 'Despesas não essenciais' },
+  { kind: 'investment', title: 'Investimento' },
+]
 
 /** "2026-08-21" -> "21 ago", sem passar por UTC (senão pode virar o dia anterior). */
 function formatDayLabel(iso: string): string {
@@ -31,6 +39,7 @@ export function Orcamento() {
   const [error, setError] = useState(false)
   const [cardsList, setCardsList] = useState<CreditCard[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
+  const [showReview, setShowReview] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -113,8 +122,13 @@ export function Orcamento() {
   const today = budget.last14Days[budget.last14Days.length - 1]?.amount ?? 0
   const diff = budget.dailyGoal != null ? budget.dailyGoal - today : null
 
-  const essentialCategories = budget.categories.filter((c) => c.essential)
-  const nonEssentialCategories = budget.categories.filter((c) => !c.essential)
+  // Pizza mostra só onde o dinheiro REALMENTE foi esse mês — categoria sem
+  // gasto nenhum não vira fatia (fatia de R$0 não ajuda a ver "onde estou
+  // gastando", só polui o gráfico).
+  const pieData = budget.categories.filter((c) => c.spent > 0).map((c) => ({ label: c.name, value: c.spent }))
+
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear()
+  const showReviewBanner = isCurrentMonth && now.getDate() <= 5 && budget.categories.length === 0
 
   return (
     <div className={cards.page}>
@@ -135,32 +149,47 @@ export function Orcamento() {
         </div>
       </div>
 
+      {showReviewBanner && (
+        <div className={styles.reviewBanner}>
+          <AlertCircle size={16} strokeWidth={2} />
+          <span>Mês novo — hora de revisar o orçamento de {MONTH_NAMES[month - 1]}/{year}.</span>
+          <button className={styles.reviewBannerBtn} onClick={() => setShowReview(true)}>
+            Revisar agora
+          </button>
+        </div>
+      )}
+
       <div className={cards.grid}>
-        {/* ---------- total do mês ---------- */}
+        {/* ---------- total do mês: pizza de onde o dinheiro foi ---------- */}
         <div className={`${cards.card} ${cards.fullWidth}`}>
           <CardHeader
             icon={PieChart}
-            title="Total do mês"
+            title="Onde meu dinheiro foi este mês"
             action={
-              <button className={styles.copyBtn} onClick={copyPreviousMonth} disabled={copying}>
-                <Copy size={13} strokeWidth={2} />
-                Copiar mês anterior
-              </button>
+              <div className={styles.headerActions}>
+                <button className={styles.copyBtn} onClick={copyPreviousMonth} disabled={copying}>
+                  <Copy size={13} strokeWidth={2} />
+                  Copiar mês anterior
+                </button>
+                <button className={styles.reviewBtn} onClick={() => setShowReview(true)}>
+                  <ListChecks size={13} strokeWidth={2} />
+                  Revisar orçamento
+                </button>
+              </div>
             }
           />
           <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
-            R$ {currency(budget.totalSpent)} <span className={styles.ofPlanned}>/ R$ {currency(budget.totalPlanned)}</span>
+            R$ {currency(budget.totalSpent)} <span className={styles.ofPlanned}>/ R$ {currency(budget.totalPlanned)} planejado</span>
           </div>
           <div className={cards.chartMeta}>
             <span>{budget.categories.length} categorias com meta</span>
           </div>
-          {budget.totalPlanned > 0 && (
-            <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
-              <div
-                className={cards.progressFill}
-                style={{ width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`, background: 'var(--accent)' }}
-              />
+          {pieData.length > 0 ? (
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <ClientPieChart data={pieData} />
             </div>
+          ) : (
+            <div className={cards.emptyState}>Nenhum gasto categorizado ainda esse mês.</div>
           )}
         </div>
 
@@ -299,50 +328,49 @@ export function Orcamento() {
           </div>
         )}
 
-        {/* ---------- categorias essenciais ---------- */}
-        <div className={`${cards.card} ${cards.fullWidth}`}>
-          <h3 className={styles.groupTitle}>Despesas essenciais</h3>
-          {essentialCategories.length === 0 && <div className={cards.emptyState}>Nenhuma meta essencial pra {MONTH_NAMES[month - 1]}/{year}.</div>}
-          {essentialCategories.map((item) => (
-            <CategoryRow
-              key={item.categoryId}
-              item={item}
-              editing={editingId === item.categoryId}
-              editValue={editValue}
-              saving={saving}
-              onEdit={() => {
-                setEditingId(item.categoryId)
-                setEditValue(String(item.planned))
-              }}
-              onChange={setEditValue}
-              onSave={() => saveEdit(item.categoryId)}
-              onCancel={() => setEditingId(null)}
-            />
-          ))}
-        </div>
-
-        {/* ---------- categorias não essenciais ---------- */}
-        <div className={`${cards.card} ${cards.fullWidth}`}>
-          <h3 className={styles.groupTitle}>Despesas não essenciais</h3>
-          {nonEssentialCategories.length === 0 && <div className={cards.emptyState}>Nenhuma meta não-essencial pra {MONTH_NAMES[month - 1]}/{year}.</div>}
-          {nonEssentialCategories.map((item) => (
-            <CategoryRow
-              key={item.categoryId}
-              item={item}
-              editing={editingId === item.categoryId}
-              editValue={editValue}
-              saving={saving}
-              onEdit={() => {
-                setEditingId(item.categoryId)
-                setEditValue(String(item.planned))
-              }}
-              onChange={setEditValue}
-              onSave={() => saveEdit(item.categoryId)}
-              onCancel={() => setEditingId(null)}
-            />
-          ))}
-        </div>
+        {/* ---------- categorias, uma seção por kind ---------- */}
+        {KIND_SECTIONS.map(({ kind, title }) => {
+          const items = budget.categories.filter((c) => c.kind === kind)
+          return (
+            <div key={kind} className={`${cards.card} ${cards.fullWidth}`}>
+              <h3 className={styles.groupTitle}>{title}</h3>
+              {items.length === 0 && (
+                <div className={cards.emptyState}>
+                  Nenhuma meta de {title.toLowerCase()} pra {MONTH_NAMES[month - 1]}/{year}.
+                </div>
+              )}
+              {items.map((item) => (
+                <CategoryRow
+                  key={item.categoryId}
+                  item={item}
+                  editing={editingId === item.categoryId}
+                  editValue={editValue}
+                  saving={saving}
+                  onEdit={() => {
+                    setEditingId(item.categoryId)
+                    setEditValue(String(item.planned))
+                  }}
+                  onChange={setEditValue}
+                  onSave={() => saveEdit(item.categoryId)}
+                  onCancel={() => setEditingId(null)}
+                />
+              ))}
+            </div>
+          )
+        })}
       </div>
+
+      {showReview && (
+        <BudgetReviewModal
+          month={month}
+          year={year}
+          onClose={() => setShowReview(false)}
+          onSaved={() => {
+            setShowReview(false)
+            load()
+          }}
+        />
+      )}
     </div>
   )
 }

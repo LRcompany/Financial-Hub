@@ -83,7 +83,13 @@ model Category {
   id       String  @id @default(uuid())
   name     String
   type     String // income | expense
-  essential Boolean @default(false) // só relevante para expense
+  // Só relevante pra expense — 3 estados reais (não dava pra fazer isso com
+  // um booleano "essential" só): essential | non_essential | investment.
+  // "investment" é a seção separada da planilha do Luiz (Reserva de
+  // Emergência, Nomad, Ações...) — não é "gasto" no sentido normal, então
+  // nunca deveria ter ficado misturada com Streaming/Cinema em "não
+  // essencial" (era exatamente isso que a coluna essential=false fazia).
+  kind     String  @default("non_essential")
   usage    String? // pessoal | trabalho
 
   parentId String?

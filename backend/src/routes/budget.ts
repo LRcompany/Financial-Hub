@@ -61,7 +61,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       return {
         categoryId: target.categoryId,
         name: target.category.name,
-        essential: target.category.essential,
+        kind: target.category.kind, // essential | non_essential | investment
         planned: target.plannedAmount,
         spent: spentAgg._sum.amount ?? 0,
         previousSpent: previousSpentAgg._sum.amount ?? 0,
@@ -179,6 +179,47 @@ budgetRouter.get("/upcoming-installments", async (_req, res) => {
       category: i.category?.name ?? null,
     })),
   });
+});
+
+// GET /api/budget-target/review?month=8&year=2026 — todas as categorias de
+// despesa com o gasto REAL do mês anterior, pra alimentar o modal de "revisar
+// orçamento do mês" (passo a passo, uma categoria por vez, mostrando "você
+// gastou X em Terapia mês passado, quer manter esse valor de meta agora?").
+// Diferente do /budget-summary: aqui é TODA categoria, mesmo sem meta ainda
+// definida pro mês atual (é exatamente o caso de mês novo, sem nada setado).
+budgetRouter.get("/budget-target/review", async (req, res) => {
+  const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
+  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+
+  const prevDate = new Date(year, month - 2, 1);
+  const prevMonth = prevDate.getMonth() + 1;
+  const prevYear = prevDate.getFullYear();
+  const prevStart = new Date(prevYear, prevMonth - 1, 1);
+  const prevEnd = new Date(prevYear, prevMonth, 1);
+
+  const [categories, currentTargets] = await Promise.all([
+    prisma.category.findMany({ where: { type: "expense" }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
+    prisma.budgetTarget.findMany({ where: { month, year } }),
+  ]);
+  const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
+
+  const result = await Promise.all(
+    categories.map(async (c) => {
+      const agg = await prisma.transaction.aggregate({
+        where: { categoryId: c.id, type: "expense", isTransfer: false, date: { gte: prevStart, lt: prevEnd } },
+        _sum: { amount: true },
+      });
+      return {
+        categoryId: c.id,
+        name: c.name,
+        kind: c.kind,
+        previousSpent: agg._sum.amount ?? 0,
+        currentTarget: targetByCategory.get(c.id) ?? null,
+      };
+    })
+  );
+
+  res.json({ categories: result });
 });
 
 // PUT /api/budget-target — body { categoryId, month, year, plannedAmount }.

@@ -31,6 +31,11 @@
   text-align: center;
 }
 
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .copyBtn {
   display: inline-flex;
   align-items: center;
@@ -39,6 +44,49 @@
   padding: 0 var(--space-3);
   background: var(--fill-muted);
   color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reviewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reviewBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.reviewBannerBtn {
+  margin-left: auto;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
   border: none;
   border-radius: var(--r-full);
   font-size: 12px;
