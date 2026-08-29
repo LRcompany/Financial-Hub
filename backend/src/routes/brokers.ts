@@ -198,10 +198,21 @@ brokersRouter.get("/credit-cards", async (req, res) => {
       const accounts = (await getAccounts(broker.pluggyConnectorId!)) as { results: PluggyAccountRaw[] };
       for (const acc of accounts.results) {
         if (acc.type !== "CREDIT" || !acc.creditData) continue;
+        // Preferir limite - disponível em vez de `balance` direto: pro C6 a
+        // Pluggy reporta `balance` e `usedAmount` zerados mesmo com limite
+        // disponível reduzido (gap real do conector, não é falta de uso do
+        // cartão) — conferido direto na API em 29/08: creditLimit 101.400,
+        // availableCreditLimit 66.901,51, `balance`/`usedAmount` = 0, quando
+        // deveria refletir ~34.498,49 em uso. Pro BTG os dois batem igual
+        // (balance já é exatamente creditLimit - availableCreditLimit), então
+        // essa conta não muda nada onde já funcionava, só corrige o C6.
+        const creditLimit = acc.creditData.creditLimit;
+        const availableLimit = acc.creditData.availableCreditLimit;
+        const usedAmount = creditLimit != null && availableLimit != null ? creditLimit - availableLimit : acc.balance;
         cards.push({
           broker: broker.name,
           name: acc.name.trim(),
-          usedAmount: acc.balance,
+          usedAmount,
           availableLimit: acc.creditData.availableCreditLimit ?? 0,
           creditLimit: acc.creditData.creditLimit ?? 0,
           minimumPayment: acc.creditData.minimumPayment,

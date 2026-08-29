@@ -440,6 +440,12 @@ Confirmação item por item, cruzada contra os dados já importados da fatura da
 - **`tokstok` (R$387,79 × 3) segue sem cartão** — Luiz não confirmou de qual é, fica pendente.
 - Resultado: "sem cartão identificado" caiu de R$16.219,07 pra **R$4.769,73** (50 linhas restantes, incluindo o tokstok pendente e outras ~25 compras menores ainda não conferidas).
 
+### C6 mostrava R$0,00 gasto no cartão — gap real da Pluggy, não bug nosso (29/08, mesmo dia)
+
+Luiz notou que "Cartões de crédito" mostrava R$0,00 usado no C6, mesmo ele usando o cartão ativamente. Investigado direto na API da Pluggy (não é suposição): a resposta bruta de `GET /accounts` pro C6 traz `balance: 0` e `disaggregatedCreditLimits[].usedAmount: 0` — só que `creditLimit: 101.400` e `availableCreditLimit: 66.901,51` ao mesmo tempo, o que só faz sentido se ~R$34.498,49 estiver em uso. É um gap conhecido de Open Finance: nem toda instituição preenche o campo "saldo usado" do cartão em tempo real, mas limite e disponível continuam confiáveis.
+
+**Corrigido** calculando `usedAmount = creditLimit - availableCreditLimit` em vez de usar `balance` direto — os dois batem exatamente pro BTG (57.629,38 = 58.400 - 770,62, o valor não muda), e resolve o C6 (34.498,49, antes aparecia como 0). Não é valor inventado: os dois números usados na subtração (`creditLimit`, `availableCreditLimit`) vêm direto da Pluggy, só o `balance` que não é confiável nesse conector.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
