@@ -261,8 +261,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ month, year }),
     }),
-  creditCards: () => request<{ cards: CreditCard[] }>('/credit-cards'),
-  upcomingInstallments: () => request<UpcomingInstallmentsSummary>('/upcoming-installments'),
+  creditCards: (params?: { month?: number; year?: number }) => {
+    const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
+    return request<{ cards: CreditCard[] }>(`/credit-cards${query}`)
+  },
+  upcomingInstallments: (params?: { month?: number; year?: number }) => {
+    const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
+    return request<UpcomingInstallmentsSummary>(`/upcoming-installments${query}`)
+  },
   setDailyGoal: (amount: number) => request<DailyGoalEntry>('/daily-goal', { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteDailyGoal: (id: string) => request<void>(`/daily-goal/${id}`, { method: 'DELETE' }),
   projectsSummary: (params?: { year?: number }) => {

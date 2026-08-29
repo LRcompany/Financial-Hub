@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy, ListChecks, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
-import { Input } from '../components/Input'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
@@ -41,10 +40,6 @@ export function Orcamento() {
   const [cardsList, setCardsList] = useState<CreditCard[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
   const [showReview, setShowReview] = useState(false)
-
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
-  const [saving, setSaving] = useState(false)
   const [copying, setCopying] = useState(false)
 
   function load() {
@@ -55,10 +50,12 @@ export function Orcamento() {
   }
 
   useEffect(load, [month, year])
+  // Cartões e parcelas futuras acompanham o mês navegado — avançar mês faz o
+  // que já venceu sumir da conta (não é fixo, filtrado no backend por mês).
   useEffect(() => {
-    api.creditCards().then((r) => setCardsList(r.cards)).catch(() => {})
-    api.upcomingInstallments().then(setUpcoming).catch(() => {})
-  }, [])
+    api.creditCards({ month, year }).then((r) => setCardsList(r.cards)).catch(() => {})
+    api.upcomingInstallments({ month, year }).then(setUpcoming).catch(() => {})
+  }, [month, year])
 
   function changeMonth(delta: number) {
     let m = month + delta
@@ -74,17 +71,9 @@ export function Orcamento() {
     setYear(y)
   }
 
-  async function saveEdit(categoryId: string) {
-    const value = Number(editValue)
-    if (Number.isNaN(value) || value < 0) return
-    setSaving(true)
-    try {
-      await api.setBudgetTarget(categoryId, month, year, value)
-      setEditingId(null)
-      load()
-    } finally {
-      setSaving(false)
-    }
+  function goToToday() {
+    setMonth(now.getMonth() + 1)
+    setYear(now.getFullYear())
   }
 
   async function copyPreviousMonth() {
@@ -121,6 +110,11 @@ export function Orcamento() {
           Orçamento
         </h1>
         <div className={styles.monthNav}>
+          {!isCurrentMonth && (
+            <button className={styles.todayBtn} onClick={goToToday}>
+              Hoje
+            </button>
+          )}
           <button className={styles.navBtn} onClick={() => changeMonth(-1)} aria-label="Mês anterior">
             ‹
           </button>
@@ -334,36 +328,25 @@ export function Orcamento() {
           </div>
         )}
 
-        {/* ---------- categorias, uma seção por kind ---------- */}
-        {KIND_SECTIONS.map(({ kind, title }) => {
-          const items = budget.categories.filter((c) => c.kind === kind)
-          return (
-            <div key={kind} className={`${cards.card} ${cards.fullWidth}`}>
-              <h3 className={styles.groupTitle}>{title}</h3>
-              {items.length === 0 && (
-                <div className={cards.emptyState}>
-                  Nenhuma meta de {title.toLowerCase()} pra {MONTH_NAMES[month - 1]}/{year}.
-                </div>
-              )}
-              {items.map((item) => (
-                <CategoryRow
-                  key={item.categoryId}
-                  item={item}
-                  editing={editingId === item.categoryId}
-                  editValue={editValue}
-                  saving={saving}
-                  onEdit={() => {
-                    setEditingId(item.categoryId)
-                    setEditValue(String(item.planned))
-                  }}
-                  onChange={setEditValue}
-                  onSave={() => saveEdit(item.categoryId)}
-                  onCancel={() => setEditingId(null)}
-                />
-              ))}
-            </div>
-          )
-        })}
+        {/* ---------- categorias, uma coluna por kind, lado a lado ---------- */}
+        <div className={`${cards.fullWidth} ${styles.categoryColumns}`}>
+          {KIND_SECTIONS.map(({ kind, title }) => {
+            const items = budget.categories.filter((c) => c.kind === kind)
+            return (
+              <div key={kind} className={cards.card}>
+                <h3 className={styles.groupTitle}>{title}</h3>
+                {items.length === 0 && (
+                  <div className={cards.emptyState}>
+                    Nenhuma meta de {title.toLowerCase()} pra {MONTH_NAMES[month - 1]}/{year}.
+                  </div>
+                )}
+                {items.map((item) => (
+                  <CategoryRow key={item.categoryId} item={item} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {showReview && (
@@ -381,55 +364,17 @@ export function Orcamento() {
   )
 }
 
-function CategoryRow({
-  item,
-  editing,
-  editValue,
-  saving,
-  onEdit,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  item: { categoryId: string; name: string; planned: number; spent: number; previousSpent: number }
-  editing: boolean
-  editValue: string
-  saving: boolean
-  onEdit: () => void
-  onChange: (v: string) => void
-  onSave: () => void
-  onCancel: () => void
-}) {
+/** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é
+ * só leitura (nome, gasto/meta, progresso, comparação com mês anterior). */
+function CategoryRow({ item }: { item: { categoryId: string; name: string; planned: number; spent: number; previousSpent: number } }) {
   const pct = item.planned > 0 ? (item.spent / item.planned) * 100 : item.spent > 0 ? 100 : 0
   return (
     <div className={cards.progressRow}>
       <div className={cards.progressLabel}>
         <span>{item.name}</span>
-        {editing ? (
-          <span className={styles.editRow}>
-            <Input
-              type="number"
-              step="0.01"
-              value={editValue}
-              onChange={(e) => onChange(e.target.value)}
-              className={styles.editInput}
-              autoFocus
-            />
-            <button className={styles.iconBtn} onClick={onSave} disabled={saving} aria-label="Salvar">
-              <Check size={13} strokeWidth={2} />
-            </button>
-            <button className={styles.iconBtn} onClick={onCancel} aria-label="Cancelar">
-              <X size={13} strokeWidth={2} />
-            </button>
-          </span>
-        ) : (
-          <span className={styles.plannedValue}>
-            R$ {currency(item.spent)} / R$ {currency(item.planned)}
-            <button className={styles.iconBtn} onClick={onEdit} aria-label={`Editar meta de ${item.name}`}>
-              <Pencil size={12} strokeWidth={2} />
-            </button>
-          </span>
-        )}
+        <span className={styles.plannedValue}>
+          R$ {currency(item.spent)} / R$ {currency(item.planned)}
+        </span>
       </div>
       <div className={cards.progressTrack}>
         <div

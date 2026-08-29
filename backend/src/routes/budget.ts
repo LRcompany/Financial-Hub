@@ -152,11 +152,21 @@ budgetRouter.delete("/daily-goal/:id", async (req, res) => {
   res.status(204).end();
 });
 
-// GET /api/upcoming-installments — parcela de compra parcelada que ainda vai
-// vencer (não é gasto que já aconteceu, é compromisso futuro conhecido).
-// Responde "quanto ainda tenho comprometido no cartão/parcelado".
-budgetRouter.get("/upcoming-installments", async (_req, res) => {
+// GET /api/upcoming-installments?month&year — parcela de compra parcelada
+// que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
+// conhecido). Responde "quanto ainda tenho comprometido no cartão/parcelado"
+// a PARTIR do mês informado (o mesmo que o Luiz está navegando no Orçamento)
+// — sem esse filtro a lista nunca diminuiria: parcela de mês já passado
+// ficaria contando pra sempre. Avançar mês no Orçamento naturalmente esvazia
+// esse card conforme os parcelamentos vão terminando.
+budgetRouter.get("/upcoming-installments", async (req, res) => {
+  const now = new Date();
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const year = req.query.year ? Number(req.query.year) : now.getFullYear();
+  const monthStart = new Date(year, month - 1, 1);
+
   const installments = await prisma.upcomingInstallment.findMany({
+    where: { dueDate: { gte: monthStart } },
     orderBy: { dueDate: "asc" },
     include: { category: true },
   });

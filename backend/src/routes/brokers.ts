@@ -160,16 +160,26 @@ interface PluggyAccountRaw {
 // Cartão sem conector na Pluggy (ex: Caixa — Luiz não usa mais mas ainda tem
 // parcelamento correndo lá). "Manual" aqui não é: "" digitado por ele — é
 // deduzido do que já está gravado em UpcomingInstallment (a fatura real que
-// ele compartilhou), então nunca é um número inventado.
-const MANUAL_CARDS = ["Caixa 5709", "Caixa 2220"];
+// ele compartilhou), então nunca é um número inventado. Os cartões físicos
+// "5709" e "2220" são o MESMO cartão Caixa na prática (confirmado por ele),
+// por isso uma label só — não dois cartões na lista.
+const MANUAL_CARDS = ["Caixa"];
 
-// GET /api/credit-cards — fatura/limite de todo cartão conectado via Pluggy,
-// direto da conta (não fica salvo em snapshot — é sempre a foto de agora,
-// não faz sentido guardar histórico do "quanto ainda tenho no cartão" do
-// jeito que guardamos investimento) + cartão manual (Caixa), cujo "usado"
-// vem da soma das parcelas futuras já cadastradas pra ele (sem limite/
-// disponível/vencimento — não temos essa informação sem a Pluggy).
-brokersRouter.get("/credit-cards", async (_req, res) => {
+// GET /api/credit-cards?month&year — fatura/limite de todo cartão conectado
+// via Pluggy, direto da conta (não fica salvo em snapshot — é sempre a foto
+// de agora, não faz sentido guardar histórico do "quanto ainda tenho no
+// cartão" do jeito que guardamos investimento) + cartão manual (Caixa), cujo
+// "usado" vem da soma das parcelas futuras já cadastradas pra ele a partir do
+// mês informado (sem limite/disponível/vencimento — não temos essa
+// informação sem a Pluggy). month/year são os mesmos do mês que o Luiz está
+// navegando no Orçamento — avançar mês faz o "usado" do cartão manual cair
+// (parcela que já passou some da conta), até zerar quando não sobrar nenhuma.
+brokersRouter.get("/credit-cards", async (req, res) => {
+  const now = new Date();
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const year = req.query.year ? Number(req.query.year) : now.getFullYear();
+  const monthStart = new Date(year, month - 1, 1);
+
   const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
 
   const cards: {
@@ -205,7 +215,10 @@ brokersRouter.get("/credit-cards", async (_req, res) => {
   }
 
   for (const cardLabel of MANUAL_CARDS) {
-    const agg = await prisma.upcomingInstallment.aggregate({ where: { cardLabel }, _sum: { amount: true } });
+    const agg = await prisma.upcomingInstallment.aggregate({
+      where: { cardLabel, dueDate: { gte: monthStart } },
+      _sum: { amount: true },
+    });
     const total = agg._sum.amount ?? 0;
     if (total <= 0) continue;
     cards.push({
