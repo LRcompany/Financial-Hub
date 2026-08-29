@@ -69,8 +69,8 @@ export interface CreditCard {
   broker: string
   name: string
   usedAmount: number
-  availableLimit: number
-  creditLimit: number
+  availableLimit: number | null
+  creditLimit: number | null
   minimumPayment: number | null
   dueDate: string | null
   brand: string | null
@@ -82,11 +82,13 @@ export interface UpcomingInstallment {
   description: string
   amount: number
   category: string | null
+  cardLabel: string | null
 }
 
 export interface UpcomingInstallmentsSummary {
   total: number
   byMonth: { month: string; amount: number }[]
+  byCard: { card: string; amount: number }[]
   installments: UpcomingInstallment[]
 }
 

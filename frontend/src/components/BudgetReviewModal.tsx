@@ -11,102 +11,99 @@ const KIND_LABEL: Record<string, string> = {
   investment: 'Investimento',
 }
 
-/** Revisão de orçamento passo a passo, uma categoria por vez — o pedido do
- * Luiz é literal: "gastei 600 de terapia mês passado, posso ou não continuar
- * com esse orçamento". Cada tela mostra exatamente esse número (gasto real
- * do mês anterior) já pré-preenchido no campo, só confirma ou ajusta. */
+/** Revisão de orçamento em lista — todas as categorias de uma vez, valor do
+ * mês passado ao lado do campo novo, salva tudo junto. Luiz pediu
+ * explicitamente que NÃO fosse passo a passo (uma tela por categoria é lento
+ * pra conferir e ele prefere ver tudo e comparar rápido). */
 export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: number; year: number; onClose: () => void; onSaved: () => void }) {
   const [categories, setCategories] = useState<BudgetReviewCategory[] | null>(null)
-  const [index, setIndex] = useState(0)
-  const [value, setValue] = useState('')
+  const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     api.budgetReview(month, year).then((r) => {
       setCategories(r.categories)
-      const first = r.categories[0]
-      setValue(first ? String(first.currentTarget ?? first.previousSpent) : '')
+      const initial: Record<string, string> = {}
+      for (const c of r.categories) initial[c.categoryId] = String(c.currentTarget ?? c.previousSpent)
+      setValues(initial)
     })
   }, [month, year])
 
-  const current = categories?.[index]
-
-  function goTo(nextIndex: number) {
-    setIndex(nextIndex)
-    const next = categories?.[nextIndex]
-    setValue(next ? String(next.currentTarget ?? next.previousSpent) : '')
+  function updateValue(categoryId: string, v: string) {
+    setValues((prev) => ({ ...prev, [categoryId]: v }))
   }
 
-  async function confirmAndNext() {
-    if (!current) return
-    const amount = Number(value)
-    if (Number.isNaN(amount) || amount < 0) return
+  async function saveAll() {
+    if (!categories) return
     setSaving(true)
     try {
-      await api.setBudgetTarget(current.categoryId, month, year, amount)
-      advance()
+      // só grava quem realmente tem um número válido — categoria que ele
+      // deixou em branco de propósito não vira meta de R$0 fake.
+      const toSave = categories.filter((c) => {
+        const v = values[c.categoryId]
+        return v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0
+      })
+      await Promise.all(toSave.map((c) => api.setBudgetTarget(c.categoryId, month, year, Number(values[c.categoryId]))))
+      onSaved()
     } finally {
       setSaving(false)
     }
-  }
-
-  function skip() {
-    advance()
-  }
-
-  function advance() {
-    if (!categories) return
-    if (index + 1 >= categories.length) {
-      onSaved()
-      return
-    }
-    goTo(index + 1)
-  }
-
-  if (!categories) {
-    return (
-      <div className={styles.overlay} onClick={onClose}>
-        <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-          <p className={styles.loading}>Carregando categorias...</p>
-        </div>
-      </div>
-    )
   }
 
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <span className={styles.progress}>
-            {index + 1} de {categories.length}
-          </span>
+          <h3 className={styles.title}>
+            Revisar orçamento — {String(month).padStart(2, '0')}/{year}
+          </h3>
           <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
           </button>
         </div>
 
-        {current && (
+        {!categories && <p className={styles.loading}>Carregando categorias...</p>}
+
+        {categories && (
           <>
-            <span className={styles.kindTag}>{KIND_LABEL[current.kind]}</span>
-            <h3 className={styles.categoryName}>{current.name}</h3>
-            <p className={styles.previousSpent}>
-              Mês passado você gastou <strong>R$ {currency(current.previousSpent)}</strong>
-              {current.currentTarget != null && <> — meta atual: R$ {currency(current.currentTarget)}</>}
-            </p>
-            <Input
-              label="Meta para esse mês (R$)"
-              type="number"
-              step="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoFocus
-            />
+            <div className={styles.listWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>Tipo</th>
+                    <th>Mês passado</th>
+                    <th>Meta deste mês</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categories.map((c) => (
+                    <tr key={c.categoryId}>
+                      <td>{c.name}</td>
+                      <td>
+                        <span className={styles.kindTag}>{KIND_LABEL[c.kind]}</span>
+                      </td>
+                      <td className={styles.previousCell}>R$ {currency(c.previousSpent)}</td>
+                      <td>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={values[c.categoryId] ?? ''}
+                          onChange={(e) => updateValue(c.categoryId, e.target.value)}
+                          className={styles.rowInput}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className={styles.actions}>
-              <button className={styles.skipBtn} onClick={skip} disabled={saving}>
-                Pular
+              <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+                Cancelar
               </button>
-              <button className={styles.confirmBtn} onClick={confirmAndNext} disabled={saving}>
-                {index + 1 >= categories.length ? 'Confirmar e finalizar' : 'Confirmar e próxima'}
+              <button className={styles.confirmBtn} onClick={saveAll} disabled={saving}>
+                {saving ? 'Salvando...' : `Salvar ${categories.length} categorias`}
               </button>
             </div>
           </>

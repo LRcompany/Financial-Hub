@@ -50,6 +50,7 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .reviewBtn {
@@ -108,14 +109,6 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin: 0 0 var(--space-4);
-}
-
-.dailyGoalForm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
 }
 
 .groupTitle {

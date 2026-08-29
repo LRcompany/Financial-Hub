@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy, ListChecks, AlertCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy, ListChecks, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
@@ -45,9 +46,6 @@ export function Orcamento() {
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [copying, setCopying] = useState(false)
-
-  const [dailyGoalInput, setDailyGoalInput] = useState('')
-  const [savingGoal, setSavingGoal] = useState(false)
 
   function load() {
     api
@@ -97,20 +95,6 @@ export function Orcamento() {
       alert(`${result.copied} categoria(s) copiada(s) do mês anterior. ${result.skippedExisting} já tinham meta e não foram sobrescritas.`)
     } finally {
       setCopying(false)
-    }
-  }
-
-  async function saveDailyGoal(e: React.FormEvent) {
-    e.preventDefault()
-    const amount = Number(dailyGoalInput)
-    if (!amount || amount <= 0) return
-    setSavingGoal(true)
-    try {
-      await api.setDailyGoal(amount)
-      setDailyGoalInput('')
-      load()
-    } finally {
-      setSavingGoal(false)
     }
   }
 
@@ -195,7 +179,16 @@ export function Orcamento() {
 
         {/* ---------- gasto diário ---------- */}
         <div className={`${cards.card} ${cards.fullWidth}`}>
-          <CardHeader icon={Target} title="Gasto diário" />
+          <CardHeader
+            icon={Target}
+            title="Gasto diário"
+            action={
+              <Link to="/configuracoes" className={styles.copyBtn}>
+                <SettingsIcon size={13} strokeWidth={2} />
+                Editar meta em Configurações
+              </Link>
+            }
+          />
           <div className={cards.dailyGoalTop}>
             <div>
               <div className={cards.heroLabel}>Gasto de hoje</div>
@@ -234,18 +227,6 @@ export function Orcamento() {
               className={cards.evolutionChart}
             />
           </div>
-          <form className={styles.dailyGoalForm} onSubmit={saveDailyGoal}>
-            <Input
-              type="number"
-              step="1"
-              placeholder="Nova meta diária (R$)"
-              value={dailyGoalInput}
-              onChange={(e) => setDailyGoalInput(e.target.value)}
-            />
-            <button className={cards.saveBtn} type="submit" disabled={savingGoal}>
-              Salvar meta diária
-            </button>
-          </form>
         </div>
 
         {/* ---------- cartões de crédito ---------- */}
@@ -254,7 +235,8 @@ export function Orcamento() {
             <CardHeader icon={CreditCardIcon} title="Cartões de crédito" />
             <div className={styles.cardsGrid}>
               {cardsList.map((c) => {
-                const pct = c.creditLimit > 0 ? (c.usedAmount / c.creditLimit) * 100 : 0
+                const hasLimit = c.creditLimit != null && c.creditLimit > 0
+                const pct = hasLimit ? (c.usedAmount / c.creditLimit!) * 100 : 0
                 return (
                   <div key={c.broker + c.name} className={styles.creditCardTile}>
                     <div className={styles.creditCardHeader}>
@@ -265,15 +247,23 @@ export function Orcamento() {
                       R$ {currency(c.usedAmount)}
                     </div>
                     <div className={cards.chartMeta}>
-                      <span>de R$ {currency(c.creditLimit)}</span>
-                      <span>R$ {currency(c.availableLimit)} livre</span>
+                      {hasLimit ? (
+                        <>
+                          <span>de R$ {currency(c.creditLimit!)}</span>
+                          <span>R$ {currency(c.availableLimit!)} livre</span>
+                        </>
+                      ) : (
+                        <span>sem Pluggy — ainda a pagar, só parcelamento em andamento</span>
+                      )}
                     </div>
-                    <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
-                      <div
-                        className={cards.progressFill}
-                        style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
-                      />
-                    </div>
+                    {hasLimit && (
+                      <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
+                        <div
+                          className={cards.progressFill}
+                          style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
+                        />
+                      </div>
+                    )}
                     <div className={styles.creditCardFooter}>
                       {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
                       {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
@@ -295,6 +285,20 @@ export function Orcamento() {
             <div className={cards.chartMeta}>
               <span>{upcoming.installments.length} parcelas a vencer, de compras já feitas</span>
             </div>
+            <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
+              Por cartão
+            </h4>
+            <div className={styles.upcomingByMonth}>
+              {upcoming.byCard.map((c) => (
+                <div key={c.card} className={styles.upcomingMonthChip}>
+                  <span>{c.card}</span>
+                  <strong>R$ {currency(c.amount)}</strong>
+                </div>
+              ))}
+            </div>
+            <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
+              Por mês
+            </h4>
             <div className={styles.upcomingByMonth}>
               {upcoming.byMonth.map((m) => (
                 <div key={m.month} className={styles.upcomingMonthChip}>
@@ -309,6 +313,7 @@ export function Orcamento() {
                   <tr>
                     <th>Vencimento</th>
                     <th>Descrição</th>
+                    <th>Cartão</th>
                     <th>Categoria</th>
                     <th>Valor</th>
                   </tr>
@@ -318,6 +323,7 @@ export function Orcamento() {
                     <tr key={i.id}>
                       <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
                       <td>{i.description}</td>
+                      <td>{i.cardLabel ?? '—'}</td>
                       <td>{i.category ?? '—'}</td>
                       <td>R$ {currency(i.amount)}</td>
                     </tr>

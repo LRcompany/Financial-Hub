@@ -157,12 +157,18 @@ interface PluggyAccountRaw {
   } | null;
 }
 
+// Cartão sem conector na Pluggy (ex: Caixa — Luiz não usa mais mas ainda tem
+// parcelamento correndo lá). "Manual" aqui não é: "" digitado por ele — é
+// deduzido do que já está gravado em UpcomingInstallment (a fatura real que
+// ele compartilhou), então nunca é um número inventado.
+const MANUAL_CARDS = ["Caixa 5709", "Caixa 2220"];
+
 // GET /api/credit-cards — fatura/limite de todo cartão conectado via Pluggy,
 // direto da conta (não fica salvo em snapshot — é sempre a foto de agora,
 // não faz sentido guardar histórico do "quanto ainda tenho no cartão" do
-// jeito que guardamos investimento). "Quanto ainda falta pagar" real (limite
-// usado, vencimento, mínimo) vem tudo daqui; parcela futura pendente é outra
-// fonte (ver /budget-summary/upcoming-installments).
+// jeito que guardamos investimento) + cartão manual (Caixa), cujo "usado"
+// vem da soma das parcelas futuras já cadastradas pra ele (sem limite/
+// disponível/vencimento — não temos essa informação sem a Pluggy).
 brokersRouter.get("/credit-cards", async (_req, res) => {
   const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
 
@@ -170,8 +176,8 @@ brokersRouter.get("/credit-cards", async (_req, res) => {
     broker: string;
     name: string;
     usedAmount: number;
-    availableLimit: number;
-    creditLimit: number;
+    availableLimit: number | null;
+    creditLimit: number | null;
     minimumPayment: number | null;
     dueDate: string | null;
     brand: string | null;
@@ -196,6 +202,22 @@ brokersRouter.get("/credit-cards", async (_req, res) => {
     } catch {
       // corretora sem cartão, ou API fora do ar — não trava o resto
     }
+  }
+
+  for (const cardLabel of MANUAL_CARDS) {
+    const agg = await prisma.upcomingInstallment.aggregate({ where: { cardLabel }, _sum: { amount: true } });
+    const total = agg._sum.amount ?? 0;
+    if (total <= 0) continue;
+    cards.push({
+      broker: cardLabel,
+      name: `${cardLabel} (sem Pluggy — parcelamento em andamento)`,
+      usedAmount: total,
+      availableLimit: null,
+      creditLimit: null,
+      minimumPayment: null,
+      dueDate: null,
+      brand: null,
+    });
   }
 
   res.json({ cards });

@@ -60,6 +60,11 @@ model UpcomingInstallment {
   dueDate     DateTime
   description String
   amount      Float
+  // Qual cartão/fatura essa parcela pertence (ex: "Caixa 5709", "C6", "BTG")
+  // — null pra parcela que veio da planilha sem essa informação (não dava
+  // pra saber o cartão só pelo livro-razão). Permite sintetizar "quanto
+  // ainda falta em cada cartão", não só o total geral.
+  cardLabel   String?
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])

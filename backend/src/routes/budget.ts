@@ -163,20 +163,25 @@ budgetRouter.get("/upcoming-installments", async (_req, res) => {
   const total = installments.reduce((sum, i) => sum + i.amount, 0);
 
   const byMonth = new Map<string, number>();
+  const byCard = new Map<string, number>();
   for (const i of installments) {
     const key = `${i.dueDate.getFullYear()}-${String(i.dueDate.getMonth() + 1).padStart(2, "0")}`;
     byMonth.set(key, (byMonth.get(key) ?? 0) + i.amount);
+    const cardKey = i.cardLabel ?? "Outros (sem cartão identificado)";
+    byCard.set(cardKey, (byCard.get(cardKey) ?? 0) + i.amount);
   }
 
   res.json({
     total,
     byMonth: [...byMonth.entries()].map(([month, amount]) => ({ month, amount })),
+    byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     installments: installments.map((i) => ({
       id: i.id,
       dueDate: i.dueDate,
       description: i.description,
       amount: i.amount,
       category: i.category?.name ?? null,
+      cardLabel: i.cardLabel,
     })),
   });
 });
