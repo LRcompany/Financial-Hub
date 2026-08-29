@@ -431,6 +431,15 @@ Luiz revisou a versão anterior e pediu mais 5 ajustes, direto:
 4. **Categorias (essencial/não-essencial/investimento) lado a lado, sem editar inline** — os 3 boxes eram empilhados um embaixo do outro; agora ficam em 3 colunas (grid, empilha em 1 coluna no mobile). O lápis de edição por categoria foi removido — a edição de meta é só pelo modal "Revisar orçamento" agora (existiam dois jeitos de editar a mesma coisa, sem necessidade).
 5. **Pedido em aberto**: Luiz vai indicar quais das 82 parcelas futuras "sem cartão identificado" (R$16.219,07, vindas só da planilha, sem saber se é Caixa ou C6) pertencem a qual cartão real, pra corrigir e manter automático dali pra frente. Levantamento feito e entregue a ele — destaque: **"monitor Dell" (planilha, R$506,58, 4 parcelas) é quase certamente a mesma compra "DELL" já importada da fatura da Caixa (R$506,62, parcela 7 de 12)** — diferença de 4 centavos (arredondamento), não pegou no filtro de duplicata por valor exato da rodada anterior. Photo/lista completa das ~30 compras "sem cartão" fica no histórico da conversa, não replicada aqui pra não duplicar manutenção.
 
+### Ponto 5 resolvido (29/08, mesmo dia): Luiz bateu as compras "sem cartão" com os cartões reais
+
+Confirmação item por item, cruzada contra os dados já importados da fatura da Caixa (comparação por comerciante + valor):
+
+- **7 duplicatas confirmadas e removidas** (a mesma compra já existia, vinda da fatura real da Caixa, sob outro nome/valor com centavos de diferença por arredondamento) — `monitor Dell` (R$506,58 × 4) = `DELL`; `tv 65` (R$591,30 × 3) = `MERCADOLIVRE MERCADOLI`; `toca disco` (R$144,83 × 4) = `AMAZONMKTPLC UPTECHDOB`; `vans` (R$145,00 × 3) = `VANS LAPI`; `soundbar` (R$165,58 × 2) = `KABUM`; `ferreira costa` (R$89,03 × 3) = `FERREIRA COSTA`; `item pra casa` (R$86,99 × 4) = `AMAZONMKTPLC VRNEMPRES`. Total removido: R$5.760,75 em 23 linhas.
+- **4 compras rotuladas como C6** (não estavam na fatura da Caixa, são parcelamento genuíno do C6 — ainda sem sync automático da Pluggy, então ficam manuais por enquanto): `bike` → People Bike Shop (R$1.159,00 × 4), `tramontina` → 77TRAMO*LOJA (R$237,53 × 3), `nutricao` → LA ODONTOLOGIA INTEGRA (R$230,00 × 1), `estilhaços` → MP*Estilhacoesdicos (R$110,00 × 1). Total: R$5.688,59 em 9 linhas.
+- **`tokstok` (R$387,79 × 3) segue sem cartão** — Luiz não confirmou de qual é, fica pendente.
+- Resultado: "sem cartão identificado" caiu de R$16.219,07 pra **R$4.769,73** (50 linhas restantes, incluindo o tokstok pendente e outras ~25 compras menores ainda não conferidas).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
