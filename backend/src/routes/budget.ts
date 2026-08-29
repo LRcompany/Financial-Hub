@@ -29,7 +29,10 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
 
   const [targets, dailyGoals] = await Promise.all([
-    prisma.budgetTarget.findMany({ where: { month, year }, include: { category: true } }),
+    // Só categoria de despesa — meta de receita (Salário, projetos) é
+    // "quanto espero receber", não "quanto posso gastar", não faz sentido
+    // misturar na mesma lista de progresso de gasto por categoria.
+    prisma.budgetTarget.findMany({ where: { month, year, category: { type: "expense" } }, include: { category: true } }),
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
   ]);
 
@@ -58,6 +61,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       return {
         categoryId: target.categoryId,
         name: target.category.name,
+        essential: target.category.essential,
         planned: target.plannedAmount,
         spent: spentAgg._sum.amount ?? 0,
         previousSpent: previousSpentAgg._sum.amount ?? 0,
@@ -146,4 +150,77 @@ budgetRouter.post("/daily-goal", async (req, res) => {
 budgetRouter.delete("/daily-goal/:id", async (req, res) => {
   await prisma.dailySpendGoal.deleteMany({ where: { id: req.params.id } });
   res.status(204).end();
+});
+
+// GET /api/upcoming-installments — parcela de compra parcelada que ainda vai
+// vencer (não é gasto que já aconteceu, é compromisso futuro conhecido).
+// Responde "quanto ainda tenho comprometido no cartão/parcelado".
+budgetRouter.get("/upcoming-installments", async (_req, res) => {
+  const installments = await prisma.upcomingInstallment.findMany({
+    orderBy: { dueDate: "asc" },
+    include: { category: true },
+  });
+  const total = installments.reduce((sum, i) => sum + i.amount, 0);
+
+  const byMonth = new Map<string, number>();
+  for (const i of installments) {
+    const key = `${i.dueDate.getFullYear()}-${String(i.dueDate.getMonth() + 1).padStart(2, "0")}`;
+    byMonth.set(key, (byMonth.get(key) ?? 0) + i.amount);
+  }
+
+  res.json({
+    total,
+    byMonth: [...byMonth.entries()].map(([month, amount]) => ({ month, amount })),
+    installments: installments.map((i) => ({
+      id: i.id,
+      dueDate: i.dueDate,
+      description: i.description,
+      amount: i.amount,
+      category: i.category?.name ?? null,
+    })),
+  });
+});
+
+// PUT /api/budget-target — body { categoryId, month, year, plannedAmount }.
+// É o Luiz estipulando "posso gastar X em Mercado esse mês" — upsert porque
+// mudar de ideia no meio do mês é o caso normal, não uma correção.
+budgetRouter.put("/budget-target", async (req, res) => {
+  const { categoryId, month, year, plannedAmount } = req.body ?? {};
+  if (!categoryId || !month || !year || typeof plannedAmount !== "number" || plannedAmount < 0) {
+    return res.status(400).json({ error: "Campos obrigatórios: categoryId, month, year, plannedAmount (>= 0)" });
+  }
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!category) return res.status(404).json({ error: "Categoria não encontrada" });
+
+  const target = await prisma.budgetTarget.upsert({
+    where: { categoryId_month_year: { categoryId, month, year } },
+    update: { plannedAmount },
+    create: { categoryId, month, year, plannedAmount },
+  });
+  res.json(target);
+});
+
+// POST /api/budget-target/copy-from-previous-month — body { month, year }.
+// Duplica as metas do mês anterior pro mês informado, só pras categorias que
+// ainda não têm meta lá (nunca sobrescreve o que ele já ajustou manualmente
+// nesse mês) — atalho pro "todo mês é basicamente o mesmo orçamento de novo".
+budgetRouter.post("/budget-target/copy-from-previous-month", async (req, res) => {
+  const { month, year } = req.body ?? {};
+  if (!month || !year) return res.status(400).json({ error: "Campos obrigatórios: month, year" });
+
+  const prevDate = new Date(year, month - 2, 1);
+  const prevMonth = prevDate.getMonth() + 1;
+  const prevYear = prevDate.getFullYear();
+
+  const [prevTargets, existingTargets] = await Promise.all([
+    prisma.budgetTarget.findMany({ where: { month: prevMonth, year: prevYear } }),
+    prisma.budgetTarget.findMany({ where: { month, year }, select: { categoryId: true } }),
+  ]);
+  const already = new Set(existingTargets.map((t) => t.categoryId));
+
+  const toCreate = prevTargets.filter((t) => !already.has(t.categoryId));
+  await prisma.budgetTarget.createMany({
+    data: toCreate.map((t) => ({ categoryId: t.categoryId, month, year, plannedAmount: t.plannedAmount })),
+  });
+  res.status(201).json({ copied: toCreate.length, skippedExisting: prevTargets.length - toCreate.length });
 });

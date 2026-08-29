@@ -6,6 +6,7 @@ import { syncBrokerInvestments } from "../services/pluggySync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
 import { parseNomadStatement } from "../services/nomadStatement.js";
 import { getUsdToBrlRateOnDate } from "../services/fx.js";
+import { getAccounts } from "../services/pluggy.js";
 
 export const brokersRouter = Router();
 
@@ -139,4 +140,63 @@ brokersRouter.post("/brokers/:id/statement-confirm", async (req, res) => {
 
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
   res.json({ saved: true, count, month, year });
+});
+
+interface PluggyAccountRaw {
+  id: string;
+  type: string;
+  name: string;
+  balance: number;
+  currencyCode: string;
+  creditData?: {
+    brand: string | null;
+    balanceDueDate: string | null;
+    availableCreditLimit: number | null;
+    minimumPayment: number | null;
+    creditLimit: number | null;
+  } | null;
+}
+
+// GET /api/credit-cards — fatura/limite de todo cartão conectado via Pluggy,
+// direto da conta (não fica salvo em snapshot — é sempre a foto de agora,
+// não faz sentido guardar histórico do "quanto ainda tenho no cartão" do
+// jeito que guardamos investimento). "Quanto ainda falta pagar" real (limite
+// usado, vencimento, mínimo) vem tudo daqui; parcela futura pendente é outra
+// fonte (ver /budget-summary/upcoming-installments).
+brokersRouter.get("/credit-cards", async (_req, res) => {
+  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
+
+  const cards: {
+    broker: string;
+    name: string;
+    usedAmount: number;
+    availableLimit: number;
+    creditLimit: number;
+    minimumPayment: number | null;
+    dueDate: string | null;
+    brand: string | null;
+  }[] = [];
+
+  for (const broker of brokers) {
+    try {
+      const accounts = (await getAccounts(broker.pluggyConnectorId!)) as { results: PluggyAccountRaw[] };
+      for (const acc of accounts.results) {
+        if (acc.type !== "CREDIT" || !acc.creditData) continue;
+        cards.push({
+          broker: broker.name,
+          name: acc.name.trim(),
+          usedAmount: acc.balance,
+          availableLimit: acc.creditData.availableCreditLimit ?? 0,
+          creditLimit: acc.creditData.creditLimit ?? 0,
+          minimumPayment: acc.creditData.minimumPayment,
+          dueDate: acc.creditData.balanceDueDate,
+          brand: acc.creditData.brand,
+        });
+      }
+    } catch {
+      // corretora sem cartão, ou API fora do ar — não trava o resto
+    }
+  }
+
+  res.json({ cards });
 });

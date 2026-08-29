@@ -366,6 +366,32 @@ Luiz empresta dinheiro a empreendimentos (CCB/Debênture/CRI/participação) via
 
 Único ajuste de código necessário: o botão "Atualizar por extrato" (upload de PDF) estava condicionado a `dataSource === 'manual_statement'`, que também é o caso da INCO — mas o parser (`parseNomadStatement`) é específico do formato Nomad/Apex Clearing. Restrito pra `broker.name === 'NOMAD'` explicitamente, não genérico por dataSource.
 
+### Orçamento com dado real (29/08) — categorias, metas e 1109 transações
+
+Luiz mandou a planilha real "ORÇAMENTO - PESSOAL - 2026" (Google Sheets, acessada via Chrome autenticado — a exportação anônima por URL dá 401, é privada). 3 abas relevantes: `Orçamento` (meta mensal Projetado/Realizado por categoria), `Gastos Diários` (total gasto por dia, calendário), `Entradas e Saídas` (livro-razão real, 1904 linhas).
+
+- **Categorias recriadas do zero**: as 40 categorias antigas eram um rascunho (tudo `essential: false`, nomes que não batiam com o uso real). Substituídas por 47 categorias reais, extraídas direto do livro-razão (`Entradas e Saídas`, coluna "Categoria") — 7 receita, 35 despesa (12 essenciais/23 não-essenciais, conferido contra a seção "Despesas essenciais" da aba Orçamento, que usa os **mesmos nomes exatos**) + 5 categorias de investimento (Reserva de Emergência, Fundo Imobiliário, Nomad, Ações, Liberdade Financeira — seção própria na planilha, separada de "Despesas", sem transação real ainda).
+- **1109 transações reais importadas** (`source: "spreadsheet_import"`) — todas as linhas do livro-razão com data até hoje (29/08/2026). Conferido contra o "Realizado" que a própria aba Orçamento já calculava (ex: Supermercado de agosto bateu R$803,48 nos dois lugares, de forma independente).
+- **95 linhas com data futura não foram importadas como Transaction** — são parcela de compra parcelada ainda a vencer (ex: "monitor Dell" 12x, uma parcela por mês até dezembro), não fato consumado. Salvas em `tmp-import/future-installments.json` pra alimentar depois a visão de "quanto ainda tenho comprometido no cartão".
+- **Parcelamento**: a própria planilha já codifica isso na descrição (`"tenis nike x2"` … `"x7"` = parcela 2 de uma sequência) — 389 das 1204 linhas têm esse padrão, 63 compras parceladas distintas. Reaproveitado na importação: `"tenis nike x2"` vira `"tenis nike (parcela 2)"` na descrição da Transaction.
+- **`BudgetTarget` real**: 368 linhas (46 categorias × jan-ago/2026, usando a coluna "Projetado" da aba Orçamento) — meses futuros (set-dez) não foram importados, pra não fixar meta em cima de projeção de fórmula ainda não decidida por ele.
+- **Bug corrigido no import**: valor negativo formatado `"-R$ 51,648.35"` (categoria "Liberdade Financeira") quebrava o parser ingênuo (`.replace("R$","")` deixava espaço entre o `-` e o número, virava `NaN`) — corrigido pra extrair só dígitos/ponto/vírgula/sinal via regex antes de converter.
+- **Acesso à planilha**: export anônimo por URL (`/export?format=xlsx`) retorna 401 pra planilha privada — funcionou navegando pelo Chrome autenticado do Luiz (`claude-in-chrome`) e baixando de lá. Download caiu em `~/Downloads`, que o Bash não consegue ler (Full Disk Access do terminal não cobre isso — só `request_directory`/`change_directory`, que dão acesso a Read/Write/Edit mas não a Bash); resolvido pedindo pro Luiz copiar o arquivo pra `tmp-import/` manualmente.
+
+### Página `/orcamento` sai do placeholder (29/08, mesmo dia)
+
+Primeira versão real da página, sobre o dado importado acima. Endpoints novos:
+
+- **`PUT /api/budget-target`** — upsert de meta por categoria/mês (não existia; só dava pra ler). É o "no primeiro dia do mês eu estipulo o que posso gastar" do Luiz — editável inline na própria lista de categoria (lápis → campo → confirmar), sem tela separada.
+- **`POST /api/budget-target/copy-from-previous-month`** — copia meta do mês anterior pras categorias que ainda não têm meta no mês novo (nunca sobrescreve o que ele já ajustou manualmente nesse mês).
+- **`GET /api/credit-cards`** — fatura/limite de cada cartão de crédito conectado via Pluggy (usado, limite, disponível, vencimento, pagamento mínimo), direto de `GET /accounts` da Pluggy — sem snapshot histórico, é sempre a foto de agora. Achado real ao testar: **cartão BTG BLACK usado R$57.629 de R$58.400 (só R$770 livre)**.
+- **`GET /api/upcoming-installments`** — as 95 parcelas futuras importadas acima, agora num model próprio `UpcomingInstallment` (migração nova, não é `Transaction` — não aconteceu ainda). Total comprometido: R$50.761,02.
+- `budget-summary`: `categories[]` agora só traz categoria de despesa (antes misturava categoria de receita tipo "Salário", que não faz sentido numa lista de "gasto vs. meta") — e ganhou o campo `essential`, usado pra separar a lista em duas seções na tela.
+
+Layout da página: total do mês → gasto diário (com forma de setar meta diária nova, hoje só existia em Configurações) → cartões de crédito → parcelas futuras (por mês + tabela) → categorias essenciais / não-essenciais (cada uma editável inline).
+
+**Ainda não construído** (próximo passo natural): sync de transação da Pluggy pro C6 (cartão, 378 transações reais confirmadas) e 99 (conta, 145) — hoje o dado é só o histórico importado da planilha (até 29/08); sem esse sync, a partir de amanhã a página para de receber gasto novo sozinha.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

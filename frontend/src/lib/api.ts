@@ -36,6 +36,7 @@ export interface Transaction {
 export interface BudgetCategory {
   categoryId: string
   name: string
+  essential: boolean
   planned: number
   spent: number
   previousSpent: number
@@ -52,6 +53,31 @@ export interface BudgetSummary {
   totalPlanned: number
   totalSpent: number
   categories: BudgetCategory[]
+}
+
+export interface CreditCard {
+  broker: string
+  name: string
+  usedAmount: number
+  availableLimit: number
+  creditLimit: number
+  minimumPayment: number | null
+  dueDate: string | null
+  brand: string | null
+}
+
+export interface UpcomingInstallment {
+  id: string
+  dueDate: string
+  description: string
+  amount: number
+  category: string | null
+}
+
+export interface UpcomingInstallmentsSummary {
+  total: number
+  byMonth: { month: string; amount: number }[]
+  installments: UpcomingInstallment[]
 }
 
 export interface WealthGoal {
@@ -211,6 +237,18 @@ export const api = {
     }),
   deleteWealthGoalYearly: (year: number) => request<void>(`/wealth-goal/yearly/${year}`, { method: 'DELETE' }),
   dailyGoalHistory: () => request<DailyGoalEntry[]>('/daily-goal/history'),
+  setBudgetTarget: (categoryId: string, month: number, year: number, plannedAmount: number) =>
+    request<{ id: string }>('/budget-target', {
+      method: 'PUT',
+      body: JSON.stringify({ categoryId, month, year, plannedAmount }),
+    }),
+  copyBudgetFromPreviousMonth: (month: number, year: number) =>
+    request<{ copied: number; skippedExisting: number }>('/budget-target/copy-from-previous-month', {
+      method: 'POST',
+      body: JSON.stringify({ month, year }),
+    }),
+  creditCards: () => request<{ cards: CreditCard[] }>('/credit-cards'),
+  upcomingInstallments: () => request<UpcomingInstallmentsSummary>('/upcoming-installments'),
   setDailyGoal: (amount: number) => request<DailyGoalEntry>('/daily-goal', { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteDailyGoal: (id: string) => request<void>(`/daily-goal/${id}`, { method: 'DELETE' }),
   projectsSummary: (params?: { year?: number }) => {

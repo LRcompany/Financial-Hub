@@ -51,6 +51,24 @@ model Transaction {
   @@index([categoryId])
 }
 
+// Parcela de compra parcelada que ainda vai vencer — não é Transaction (não
+// aconteceu de fato ainda, "nada de valor fake"), mas é informação real
+// (vem do próprio livro-razão dele, que já projeta parcela futura). Serve
+// pra responder "quanto ainda tenho comprometido no cartão".
+model UpcomingInstallment {
+  id          String   @id @default(uuid())
+  dueDate     DateTime
+  description String
+  amount      Float
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([dueDate])
+}
+
 model Recurrence {
   id           String    @id @default(uuid())
   frequency    String    @default("monthly") // monthly (único usado hoje)
@@ -75,6 +93,7 @@ model Category {
   transactions   Transaction[]
   budgetTargets  BudgetTarget[]
   categorizationRules CategorizationRule[]
+  upcomingInstallments UpcomingInstallment[]
 
   @@unique([name, parentId])
 }

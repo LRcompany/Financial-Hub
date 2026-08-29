@@ -1,0 +1,411 @@
+import { useEffect, useState } from 'react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Pencil, Check, X, Copy } from 'lucide-react'
+import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary } from '../lib/api'
+import { SmoothLineChart } from '../components/SmoothLineChart'
+import { MonthDelta } from '../components/MonthDelta'
+import { CardHeader } from '../components/CardHeader'
+import { Input } from '../components/Input'
+import { currency } from '../lib/format'
+import cards from '../styles/cards.module.css'
+import styles from './Orcamento.module.css'
+
+const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+/** "2026-08-21" -> "21 ago", sem passar por UTC (senão pode virar o dia anterior). */
+function formatDayLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+function formatMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+}
+
+export function Orcamento() {
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [year, setYear] = useState(now.getFullYear())
+
+  const [budget, setBudget] = useState<BudgetSummary | null>(null)
+  const [error, setError] = useState(false)
+  const [cardsList, setCardsList] = useState<CreditCard[]>([])
+  const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [copying, setCopying] = useState(false)
+
+  const [dailyGoalInput, setDailyGoalInput] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
+
+  function load() {
+    api
+      .budgetSummary({ month, year })
+      .then(setBudget)
+      .catch(() => setError(true))
+  }
+
+  useEffect(load, [month, year])
+  useEffect(() => {
+    api.creditCards().then((r) => setCardsList(r.cards)).catch(() => {})
+    api.upcomingInstallments().then(setUpcoming).catch(() => {})
+  }, [])
+
+  function changeMonth(delta: number) {
+    let m = month + delta
+    let y = year
+    if (m < 1) {
+      m = 12
+      y -= 1
+    } else if (m > 12) {
+      m = 1
+      y += 1
+    }
+    setMonth(m)
+    setYear(y)
+  }
+
+  async function saveEdit(categoryId: string) {
+    const value = Number(editValue)
+    if (Number.isNaN(value) || value < 0) return
+    setSaving(true)
+    try {
+      await api.setBudgetTarget(categoryId, month, year, value)
+      setEditingId(null)
+      load()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function copyPreviousMonth() {
+    setCopying(true)
+    try {
+      const result = await api.copyBudgetFromPreviousMonth(month, year)
+      load()
+      alert(`${result.copied} categoria(s) copiada(s) do mês anterior. ${result.skippedExisting} já tinham meta e não foram sobrescritas.`)
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  async function saveDailyGoal(e: React.FormEvent) {
+    e.preventDefault()
+    const amount = Number(dailyGoalInput)
+    if (!amount || amount <= 0) return
+    setSavingGoal(true)
+    try {
+      await api.setDailyGoal(amount)
+      setDailyGoalInput('')
+      load()
+    } finally {
+      setSavingGoal(false)
+    }
+  }
+
+  if (error) {
+    return <div className={cards.emptyState}>Não consegui falar com o backend ainda.</div>
+  }
+  if (!budget) return null
+
+  const today = budget.last14Days[budget.last14Days.length - 1]?.amount ?? 0
+  const diff = budget.dailyGoal != null ? budget.dailyGoal - today : null
+
+  const essentialCategories = budget.categories.filter((c) => c.essential)
+  const nonEssentialCategories = budget.categories.filter((c) => !c.essential)
+
+  return (
+    <div className={cards.page}>
+      <div className={styles.header}>
+        <h1 className={cards.sectionTitle} style={{ margin: 0 }}>
+          Orçamento
+        </h1>
+        <div className={styles.monthNav}>
+          <button className={styles.navBtn} onClick={() => changeMonth(-1)} aria-label="Mês anterior">
+            ‹
+          </button>
+          <span className={styles.monthLabel}>
+            {MONTH_NAMES[month - 1]}/{year}
+          </span>
+          <button className={styles.navBtn} onClick={() => changeMonth(1)} aria-label="Próximo mês">
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className={cards.grid}>
+        {/* ---------- total do mês ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <CardHeader
+            icon={PieChart}
+            title="Total do mês"
+            action={
+              <button className={styles.copyBtn} onClick={copyPreviousMonth} disabled={copying}>
+                <Copy size={13} strokeWidth={2} />
+                Copiar mês anterior
+              </button>
+            }
+          />
+          <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
+            R$ {currency(budget.totalSpent)} <span className={styles.ofPlanned}>/ R$ {currency(budget.totalPlanned)}</span>
+          </div>
+          <div className={cards.chartMeta}>
+            <span>{budget.categories.length} categorias com meta</span>
+          </div>
+          {budget.totalPlanned > 0 && (
+            <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
+              <div
+                className={cards.progressFill}
+                style={{ width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`, background: 'var(--accent)' }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ---------- gasto diário ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <CardHeader icon={Target} title="Gasto diário" />
+          <div className={cards.dailyGoalTop}>
+            <div>
+              <div className={cards.heroLabel}>Gasto de hoje</div>
+              <div className={cards.heroValue}>R$ {currency(today)}</div>
+            </div>
+            <div className={cards.dailyGoalMeta}>
+              <span className={cards.heroLabel}>Meta diária</span>
+              <span style={{ fontWeight: 600 }}>{budget.dailyGoal != null ? `R$ ${currency(budget.dailyGoal)}` : 'não definida'}</span>
+            </div>
+          </div>
+          {budget.dailyGoal != null && (
+            <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
+              <div
+                className={cards.progressFill}
+                style={{ width: `${Math.min((today / budget.dailyGoal) * 100, 100)}%`, background: 'var(--accent)' }}
+              />
+            </div>
+          )}
+          <div className={cards.chartMeta}>
+            <span>
+              {diff === null
+                ? 'defina uma meta diária pra acompanhar'
+                : diff >= 0
+                  ? `R$ ${currency(diff)} abaixo da meta hoje`
+                  : `R$ ${currency(-diff)} acima da meta hoje`}
+            </span>
+            <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
+          </div>
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <h4 className={styles.chartLabel}>Últimos 14 dias</h4>
+            <SmoothLineChart
+              values={budget.last14Days.map((d) => d.amount)}
+              labels={budget.last14Days.map((d) => formatDayLabel(d.date))}
+              threshold={budget.dailyGoal ?? undefined}
+              gradientId="orcamentoDailyGradient"
+              className={cards.evolutionChart}
+            />
+          </div>
+          <form className={styles.dailyGoalForm} onSubmit={saveDailyGoal}>
+            <Input
+              type="number"
+              step="1"
+              placeholder="Nova meta diária (R$)"
+              value={dailyGoalInput}
+              onChange={(e) => setDailyGoalInput(e.target.value)}
+            />
+            <button className={cards.saveBtn} type="submit" disabled={savingGoal}>
+              Salvar meta diária
+            </button>
+          </form>
+        </div>
+
+        {/* ---------- cartões de crédito ---------- */}
+        {cardsList.length > 0 && (
+          <div className={`${cards.card} ${cards.fullWidth}`}>
+            <CardHeader icon={CreditCardIcon} title="Cartões de crédito" />
+            <div className={styles.cardsGrid}>
+              {cardsList.map((c) => {
+                const pct = c.creditLimit > 0 ? (c.usedAmount / c.creditLimit) * 100 : 0
+                return (
+                  <div key={c.broker + c.name} className={styles.creditCardTile}>
+                    <div className={styles.creditCardHeader}>
+                      <span className={styles.creditCardName}>{c.broker}</span>
+                      {c.brand && <span className={styles.creditCardBrand}>{c.brand}</span>}
+                    </div>
+                    <div className={cards.heroValue} style={{ fontSize: '1.2rem' }}>
+                      R$ {currency(c.usedAmount)}
+                    </div>
+                    <div className={cards.chartMeta}>
+                      <span>de R$ {currency(c.creditLimit)}</span>
+                      <span>R$ {currency(c.availableLimit)} livre</span>
+                    </div>
+                    <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
+                      <div
+                        className={cards.progressFill}
+                        style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
+                      />
+                    </div>
+                    <div className={styles.creditCardFooter}>
+                      {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
+                      {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ---------- parcelas futuras (compromissos) ---------- */}
+        {upcoming && upcoming.installments.length > 0 && (
+          <div className={`${cards.card} ${cards.fullWidth}`}>
+            <CardHeader icon={CalendarClock} title="Comprometido em parcelas futuras" />
+            <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+              R$ {currency(upcoming.total)}
+            </div>
+            <div className={cards.chartMeta}>
+              <span>{upcoming.installments.length} parcelas a vencer, de compras já feitas</span>
+            </div>
+            <div className={styles.upcomingByMonth}>
+              {upcoming.byMonth.map((m) => (
+                <div key={m.month} className={styles.upcomingMonthChip}>
+                  <span>{formatMonthLabel(m.month)}</span>
+                  <strong>R$ {currency(m.amount)}</strong>
+                </div>
+              ))}
+            </div>
+            <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Vencimento</th>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcoming.installments.slice(0, 20).map((i) => (
+                    <tr key={i.id}>
+                      <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
+                      <td>{i.description}</td>
+                      <td>{i.category ?? '—'}</td>
+                      <td>R$ {currency(i.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- categorias essenciais ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <h3 className={styles.groupTitle}>Despesas essenciais</h3>
+          {essentialCategories.length === 0 && <div className={cards.emptyState}>Nenhuma meta essencial pra {MONTH_NAMES[month - 1]}/{year}.</div>}
+          {essentialCategories.map((item) => (
+            <CategoryRow
+              key={item.categoryId}
+              item={item}
+              editing={editingId === item.categoryId}
+              editValue={editValue}
+              saving={saving}
+              onEdit={() => {
+                setEditingId(item.categoryId)
+                setEditValue(String(item.planned))
+              }}
+              onChange={setEditValue}
+              onSave={() => saveEdit(item.categoryId)}
+              onCancel={() => setEditingId(null)}
+            />
+          ))}
+        </div>
+
+        {/* ---------- categorias não essenciais ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <h3 className={styles.groupTitle}>Despesas não essenciais</h3>
+          {nonEssentialCategories.length === 0 && <div className={cards.emptyState}>Nenhuma meta não-essencial pra {MONTH_NAMES[month - 1]}/{year}.</div>}
+          {nonEssentialCategories.map((item) => (
+            <CategoryRow
+              key={item.categoryId}
+              item={item}
+              editing={editingId === item.categoryId}
+              editValue={editValue}
+              saving={saving}
+              onEdit={() => {
+                setEditingId(item.categoryId)
+                setEditValue(String(item.planned))
+              }}
+              onChange={setEditValue}
+              onSave={() => saveEdit(item.categoryId)}
+              onCancel={() => setEditingId(null)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CategoryRow({
+  item,
+  editing,
+  editValue,
+  saving,
+  onEdit,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  item: { categoryId: string; name: string; planned: number; spent: number; previousSpent: number }
+  editing: boolean
+  editValue: string
+  saving: boolean
+  onEdit: () => void
+  onChange: (v: string) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  const pct = item.planned > 0 ? (item.spent / item.planned) * 100 : item.spent > 0 ? 100 : 0
+  return (
+    <div className={cards.progressRow}>
+      <div className={cards.progressLabel}>
+        <span>{item.name}</span>
+        {editing ? (
+          <span className={styles.editRow}>
+            <Input
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => onChange(e.target.value)}
+              className={styles.editInput}
+              autoFocus
+            />
+            <button className={styles.iconBtn} onClick={onSave} disabled={saving} aria-label="Salvar">
+              <Check size={13} strokeWidth={2} />
+            </button>
+            <button className={styles.iconBtn} onClick={onCancel} aria-label="Cancelar">
+              <X size={13} strokeWidth={2} />
+            </button>
+          </span>
+        ) : (
+          <span className={styles.plannedValue}>
+            R$ {currency(item.spent)} / R$ {currency(item.planned)}
+            <button className={styles.iconBtn} onClick={onEdit} aria-label={`Editar meta de ${item.name}`}>
+              <Pencil size={12} strokeWidth={2} />
+            </button>
+          </span>
+        )}
+      </div>
+      <div className={cards.progressTrack}>
+        <div
+          className={cards.progressFill}
+          style={{ width: `${Math.min(pct, 100)}%`, background: pct > 100 ? 'var(--danger)' : 'var(--accent)' }}
+        />
+      </div>
+      <div className={cards.deltaRow}>
+        <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
+      </div>
+    </div>
+  )
+}
