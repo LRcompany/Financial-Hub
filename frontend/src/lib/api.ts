@@ -74,6 +74,7 @@ export interface CreditCard {
   minimumPayment: number | null
   dueDate: string | null
   brand: string | null
+  trackedInstallments: number | null
 }
 
 export interface UpcomingInstallment {
@@ -90,6 +91,16 @@ export interface UpcomingInstallmentsSummary {
   byMonth: { month: string; amount: number }[]
   byCard: { card: string; amount: number }[]
   installments: UpcomingInstallment[]
+}
+
+export interface InstallmentGroup {
+  description: string
+  amount: number
+  cardLabel: string | null
+  count: number
+  firstDueDate: string
+  lastDueDate: string
+  ids: string[]
 }
 
 export interface WealthGoal {
@@ -269,6 +280,11 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<UpcomingInstallmentsSummary>(`/upcoming-installments${query}`)
   },
+  installmentGroups: () => request<{ groups: InstallmentGroup[]; knownCards: string[] }>('/upcoming-installments/groups'),
+  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number }) =>
+    request<{ updated: number }>('/upcoming-installments/group', { method: 'PUT', body: JSON.stringify({ ids, ...changes }) }),
+  deleteInstallmentGroup: (ids: string[]) =>
+    request<{ deleted: number }>('/upcoming-installments/group', { method: 'DELETE', body: JSON.stringify({ ids }) }),
   setDailyGoal: (amount: number) => request<DailyGoalEntry>('/daily-goal', { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteDailyGoal: (id: string) => request<void>(`/daily-goal/${id}`, { method: 'DELETE' }),
   projectsSummary: (params?: { year?: number }) => {

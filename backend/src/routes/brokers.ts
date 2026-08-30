@@ -191,6 +191,7 @@ brokersRouter.get("/credit-cards", async (req, res) => {
     minimumPayment: number | null;
     dueDate: string | null;
     brand: string | null;
+    trackedInstallments: number | null;
   }[] = [];
 
   for (const broker of brokers) {
@@ -209,6 +210,19 @@ brokersRouter.get("/credit-cards", async (req, res) => {
         const creditLimit = acc.creditData.creditLimit;
         const availableLimit = acc.creditData.availableCreditLimit;
         const usedAmount = creditLimit != null && availableLimit != null ? creditLimit - availableLimit : acc.balance;
+
+        // Complemento month-aware: soma das UpcomingInstallment já
+        // identificadas pra esse cartão (cardLabel = nome do broker), a
+        // partir do mês navegado — é PARCIAL (só o que já foi conferido
+        // manualmente ou veio de transação real, ex: Usina Solar no BTG),
+        // não é "tudo que tem no cartão". Por isso é um número separado do
+        // `usedAmount` (saldo real da Pluggy), não substitui ele.
+        const trackedAgg = await prisma.upcomingInstallment.aggregate({
+          where: { cardLabel: broker.name, dueDate: { gte: monthStart } },
+          _sum: { amount: true },
+        });
+        const trackedInstallments = trackedAgg._sum.amount ?? 0;
+
         cards.push({
           broker: broker.name,
           name: acc.name.trim(),
@@ -218,6 +232,7 @@ brokersRouter.get("/credit-cards", async (req, res) => {
           minimumPayment: acc.creditData.minimumPayment,
           dueDate: acc.creditData.balanceDueDate,
           brand: acc.creditData.brand,
+          trackedInstallments: trackedInstallments > 0 ? trackedInstallments : null,
         });
       }
     } catch {
@@ -241,6 +256,9 @@ brokersRouter.get("/credit-cards", async (req, res) => {
       minimumPayment: null,
       dueDate: null,
       brand: null,
+      // Nulo aqui porque pro cartão manual `usedAmount` JÁ É essa mesma soma
+      // — mostrar de novo seria repetir o mesmo número duas vezes.
+      trackedInstallments: null,
     });
   }
 

@@ -7,6 +7,7 @@ import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
+import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -41,6 +42,7 @@ export function Orcamento() {
   const [cardsList, setCardsList] = useState<CreditCard[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
   const [showReview, setShowReview] = useState(false)
+  const [showInstallmentReview, setShowInstallmentReview] = useState(false)
   const [copying, setCopying] = useState(false)
 
   function load() {
@@ -50,13 +52,15 @@ export function Orcamento() {
       .catch(() => setError(true))
   }
 
+  function loadCardsAndUpcoming() {
+    api.creditCards({ month, year }).then((r) => setCardsList(r.cards)).catch(() => {})
+    api.upcomingInstallments({ month, year }).then(setUpcoming).catch(() => {})
+  }
+
   useEffect(load, [month, year])
   // Cartões e parcelas futuras acompanham o mês navegado — avançar mês faz o
   // que já venceu sumir da conta (não é fixo, filtrado no backend por mês).
-  useEffect(() => {
-    api.creditCards({ month, year }).then((r) => setCardsList(r.cards)).catch(() => {})
-    api.upcomingInstallments({ month, year }).then(setUpcoming).catch(() => {})
-  }, [month, year])
+  useEffect(loadCardsAndUpcoming, [month, year])
 
   function changeMonth(delta: number) {
     let m = month + delta
@@ -266,6 +270,12 @@ export function Orcamento() {
                     {hasLimit && (
                       <div className={styles.creditCardNote}>saldo atual da Pluggy — não muda ao navegar mês</div>
                     )}
+                    {c.trackedInstallments != null && (
+                      <div className={styles.creditCardTracked}>
+                        R$ {currency(c.trackedInstallments)} em parcelas já identificadas a partir de {MONTH_NAMES[month - 1]}/{year}
+                        <span className={styles.creditCardTrackedNote}> (parcial — nem toda compra do cartão foi conferida ainda)</span>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -276,7 +286,16 @@ export function Orcamento() {
         {/* ---------- parcelas futuras (compromissos) ---------- */}
         {upcoming && upcoming.installments.length > 0 && (
           <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader icon={CalendarClock} title="Comprometido em parcelas futuras" />
+            <CardHeader
+              icon={CalendarClock}
+              title="Comprometido em parcelas futuras"
+              action={
+                <button className={styles.reviewBtn} onClick={() => setShowInstallmentReview(true)}>
+                  <ListChecks size={13} strokeWidth={2} />
+                  Revisar parcelas
+                </button>
+              }
+            />
             <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
               R$ {currency(upcoming.total)}
             </div>
@@ -361,6 +380,15 @@ export function Orcamento() {
           onSaved={() => {
             setShowReview(false)
             load()
+          }}
+        />
+      )}
+
+      {showInstallmentReview && (
+        <InstallmentReviewModal
+          onClose={() => {
+            setShowInstallmentReview(false)
+            loadCardsAndUpcoming()
           }}
         />
       )}

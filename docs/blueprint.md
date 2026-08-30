@@ -462,6 +462,16 @@ Luiz perguntou por que BTG e C6 não atualizam quando ele navega o mês em Orça
 
 **Sobre forçar atualização**: testei `PATCH /items/{id}` (o endpoint da Pluggy pra pedir resync agora) contra o C6 e ele rejeita: `"MeuPluggy item cant be updated"` — esse tipo de conector não aceita gatilho de sync via API (não é limite de plano, é do tipo de conector). Ou seja, não dá pra forçar a Pluggy a checar o banco de novo por aqui — isso só acontece pelo lado do Meu Pluggy (agenda própria dele, ou abrindo o app/site e deixando ele resincronizar). O que O Financial Hub já faz: toda chamada (`GET /accounts`, `/investments` etc.) já é ao vivo, sem cache — carregar a página sempre mostra o que a Pluggy tem sincronizado até agora. Adicionado um botão "Atualizar" no header (`AppLayout.tsx`, ícone ao lado de busca/notificações) que recarrega a página inteira — não força a Pluggy a resincronizar (confirmado que essa API não permite), mas garante que tudo que está na tela busca de novo, num clique só, sem precisar navegar entre páginas.
 
+### Ferramenta de revisão de parcelas + cartões Pluggy ganham quebra month-aware (30/08)
+
+Luiz pediu uma interface pra conferir e corrigir as parcelas futuras de uma vez (dropdown de cartão + campo de valor por compra), em vez de eu ficar corrigindo uma por uma via chat. Construído:
+
+- **`GET /api/upcoming-installments/groups`** — agrupa TODAS as parcelas (sem filtro de mês, é ferramenta de auditoria) por compra: mesma descrição-base (tira o sufixo " xN" que a planilha usa) + mesmo valor = mesma compra, uma linha por mês restante. Devolve `ids[]` de cada grupo (pra editar todas as parcelas da mesma compra de uma vez, não uma por uma) e `knownCards` (BTG/C6/Caixa, dinâmico — não hardcoded). Ordena sem-cartão primeiro.
+- **`PUT /api/upcoming-installments/group`** (atualiza cardLabel e/ou amount de todo o grupo) e **`DELETE /api/upcoming-installments/group`** (remove o grupo inteiro — pra duplicata confirmada).
+- **`InstallmentReviewModal.tsx`** — tabela com todas as compras, dropdown de cartão (BTG/C6/Caixa/"Outro..." com campo livre) + campo de valor editável + Salvar/Excluir por linha. Aberta via botão "Revisar parcelas" no card "Comprometido em parcelas futuras". Hoje: 19 compras sem cartão, 35 já configuradas.
+
+Luiz também notou que, já que temos as parcelas de BTG/C6 rotuladas (`cardLabel`), dá pra saber "quanto vai cair em setembro" nesses cartões também, não só na Caixa. Isso já existia parcialmente na seção "por cartão" de parcelas futuras (que já filtra por mês) — o que faltava era mostrar no PRÓPRIO card do cartão. Adicionado `trackedInstallments` em `GET /credit-cards`: soma das `UpcomingInstallment` daquele cartão a partir do mês navegado — aparece como uma linha extra nos cards Pluggy (BTG/C6): "R$X em parcelas já identificadas a partir de [mês]", **claramente marcado como parcial** (nem toda compra desses cartões foi conferida ainda — só R$5.688,59 de R$34.498,49 usados no C6, por exemplo). Não substitui o `usedAmount` (saldo real da Pluggy, que não varia por mês) — é um número complementar, e SÓ ele varia com a navegação de mês.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

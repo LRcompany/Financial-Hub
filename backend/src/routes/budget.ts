@@ -203,6 +203,90 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   });
 });
 
+// A planilha codifica parcela na própria descrição ("bike x3", "bike x4" —
+// mesma compra, um sufixo " xN" por linha). A fatura da Caixa não faz isso
+// (cada linha da mesma compra futura já vem com a MESMA descrição). Tirar o
+// sufixo deixa as duas fontes agrupáveis pela mesma chave.
+function purchaseBase(description: string): string {
+  return description.replace(/\s+x\d+$/i, "").trim();
+}
+
+// GET /api/upcoming-installments/groups — TODAS as parcelas futuras (sem
+// filtro de mês — é ferramenta de conferência, não quer esconder nada),
+// agrupadas por compra (mesma descrição-base + valor = mesma compra
+// parcelada, uma linha por mês restante). Existe pra responder "quais
+// compras estão sem cartão configurado, e quais já foram batidas" de forma
+// que dê pra corrigir em lote (todas as parcelas da mesma compra de uma vez,
+// não uma por uma).
+budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
+  const installments = await prisma.upcomingInstallment.findMany({ orderBy: { dueDate: "asc" } });
+
+  const groups = new Map<
+    string,
+    { description: string; amount: number; cardLabel: string | null; ids: string[]; dueDates: Date[] }
+  >();
+  for (const i of installments) {
+    const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.ids.push(i.id);
+      existing.dueDates.push(i.dueDate);
+    } else {
+      groups.set(key, { description: purchaseBase(i.description), amount: i.amount, cardLabel: i.cardLabel, ids: [i.id], dueDates: [i.dueDate] });
+    }
+  }
+
+  const result = [...groups.values()]
+    .map((g) => ({
+      description: g.description,
+      amount: g.amount,
+      cardLabel: g.cardLabel,
+      count: g.ids.length,
+      firstDueDate: g.dueDates.reduce((a, b) => (a < b ? a : b)),
+      lastDueDate: g.dueDates.reduce((a, b) => (a > b ? a : b)),
+      ids: g.ids,
+    }))
+    // Sem cartão primeiro (é o que precisa de atenção), depois por descrição.
+    .sort((a, b) => {
+      if ((a.cardLabel === null) !== (b.cardLabel === null)) return a.cardLabel === null ? -1 : 1;
+      return a.description.localeCompare(b.description, "pt-BR");
+    });
+
+  const knownCards = [...new Set(installments.map((i) => i.cardLabel).filter((c): c is string => c !== null))].sort();
+
+  res.json({ groups: result, knownCards });
+});
+
+// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount? }.
+// Aplica em TODAS as linhas da compra de uma vez (as parcelas restantes dela)
+// — é a correção "essa compra inteira é do C6", não uma parcela isolada.
+budgetRouter.put("/upcoming-installments/group", async (req, res) => {
+  const { ids, cardLabel, amount } = req.body ?? {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "ids precisa ser uma lista não vazia" });
+  }
+  const data: { cardLabel?: string | null; amount?: number } = {};
+  if (cardLabel !== undefined) data.cardLabel = cardLabel === "" ? null : cardLabel;
+  if (typeof amount === "number" && amount >= 0) data.amount = amount;
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel e/ou amount" });
+  }
+  const result = await prisma.upcomingInstallment.updateMany({ where: { id: { in: ids } }, data });
+  res.json({ updated: result.count });
+});
+
+// DELETE /api/upcoming-installments/group — body { ids }. Pra duplicata
+// confirmada (mesma compra já importada de outra fonte) — remove a compra
+// inteira (todas as parcelas restantes), não uma linha isolada.
+budgetRouter.delete("/upcoming-installments/group", async (req, res) => {
+  const { ids } = req.body ?? {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "ids precisa ser uma lista não vazia" });
+  }
+  const result = await prisma.upcomingInstallment.deleteMany({ where: { id: { in: ids } } });
+  res.json({ deleted: result.count });
+});
+
 // GET /api/budget-target/review?month=8&year=2026 — todas as categorias de
 // despesa com o gasto REAL do mês anterior, pra alimentar o modal de "revisar
 // orçamento do mês" (passo a passo, uma categoria por vez, mostrando "você
