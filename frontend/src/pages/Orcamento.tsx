@@ -13,10 +13,11 @@ import styles from './Orcamento.module.css'
 
 const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
+// Sem seção de "Investimento" — aporte não é gasto, tem home própria em
+// Patrimônio (o backend já nem manda categoria desse kind pra cá).
 const KIND_SECTIONS: { kind: BudgetCategory['kind']; title: string }[] = [
   { kind: 'essential', title: 'Despesas essenciais' },
   { kind: 'non_essential', title: 'Despesas não essenciais' },
-  { kind: 'investment', title: 'Investimento' },
 ]
 
 /** "2026-08-21" -> "21 ago", sem passar por UTC (senão pode virar o dia anterior). */

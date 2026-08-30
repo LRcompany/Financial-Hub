@@ -446,6 +446,14 @@ Luiz notou que "Cartões de crédito" mostrava R$0,00 usado no C6, mesmo ele usa
 
 **Corrigido** calculando `usedAmount = creditLimit - availableCreditLimit` em vez de usar `balance` direto — os dois batem exatamente pro BTG (57.629,38 = 58.400 - 770,62, o valor não muda), e resolve o C6 (34.498,49, antes aparecia como 0). Não é valor inventado: os dois números usados na subtração (`creditLimit`, `availableCreditLimit`) vêm direto da Pluggy, só o `balance` que não é confiável nesse conector.
 
+### Box "Investimento" fora do Orçamento (30/08)
+
+Luiz pediu pra tirar a seção "Investimento" da página. Não foi só esconder no front — o `/budget-summary` e o `/budget-target/review` passaram a excluir `kind: "investment"` na consulta (`category: { type: "expense", kind: { not: "investment" } }`), porque a meta de investimento (ex: R$1.323,05 de "Liberdade Financeira") estava inflando o "planejado" do topo da página junto com despesa de verdade — não fazia sentido somar aporte com gasto no mesmo total. `totalPlanned` de agosto caiu de R$19.500 pra R$18.176,95 (só despesa essencial + não essencial). As 5 categorias de investimento continuam existindo no banco — só não aparecem mais em Orçamento, o lugar delas é Patrimônio.
+
+### Confirmado: a Pluggy já entrega parcelamento do C6 em tempo real (30/08)
+
+Luiz perguntou se dá pra saber quando uma compra parcelada acontece no cartão do C6. Resposta: **sim, já está lá** — puxei ao vivo `GET /v2/transactions` da conta de crédito do C6 e achei uma compra real e recente ("BRUNO DALTRO PAPEL MAC RECIFE", R$125,00, 27/08/2026) com `creditCardMetadata: { totalInstallments: 2, installmentNumber: 1 }`. Ou seja, a Pluggy já manda `installmentNumber`/`totalInstallments` por transação quando é parcelado — dá pra automatizar 100% (gerar as parcelas futuras restantes a partir de `billForecastDate` + `totalInstallments - installmentNumber`), sem precisar de import manual de fatura como fizemos pra Caixa. Ainda não implementado — é o sync real de transação da Pluggy pro C6/BTG que já estava anotado como próximo passo; agora com confirmação concreta de que o dado existe e o formato exato dele.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

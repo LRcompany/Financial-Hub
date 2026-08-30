@@ -31,8 +31,15 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const [targets, dailyGoals] = await Promise.all([
     // Só categoria de despesa — meta de receita (Salário, projetos) é
     // "quanto espero receber", não "quanto posso gastar", não faz sentido
-    // misturar na mesma lista de progresso de gasto por categoria.
-    prisma.budgetTarget.findMany({ where: { month, year, category: { type: "expense" } }, include: { category: true } }),
+    // misturar na mesma lista de progresso de gasto por categoria. Também
+    // exclui kind "investment" — aporte não é gasto, tem home própria em
+    // Patrimônio; deixar aqui inflava o "planejado" do mês com meta de
+    // investimento (ex: R$1.323,05 de "Liberdade Financeira" somado ao total
+    // de despesa, sem fazer sentido no "quanto gastei este mês").
+    prisma.budgetTarget.findMany({
+      where: { month, year, category: { type: "expense", kind: { not: "investment" } } },
+      include: { category: true },
+    }),
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
   ]);
 
@@ -213,7 +220,9 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
   const prevEnd = new Date(prevYear, prevMonth, 1);
 
   const [categories, currentTargets] = await Promise.all([
-    prisma.category.findMany({ where: { type: "expense" }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
+    // Mesmo corte do /budget-summary — investimento não é meta de gasto do
+    // Orçamento, não faz sentido revisar aportar aqui.
+    prisma.category.findMany({ where: { type: "expense", kind: { not: "investment" } }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
     prisma.budgetTarget.findMany({ where: { month, year } }),
   ]);
   const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
