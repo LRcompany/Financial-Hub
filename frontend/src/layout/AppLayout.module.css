@@ -52,6 +52,21 @@
   cursor: pointer;
 }
 
+.iconBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .content {
   flex: 1;
   padding: var(--space-4) var(--space-4) 100px;

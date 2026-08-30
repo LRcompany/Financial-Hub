@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, Receipt, Wallet, Briefcase, SlidersHorizontal, Search, Bell } from 'lucide-react'
+import { Home, Receipt, Wallet, Briefcase, SlidersHorizontal, Search, Bell, RefreshCw } from 'lucide-react'
 import styles from './AppLayout.module.css'
 
 const NAV_ITEMS = [
@@ -18,6 +19,20 @@ function greeting(): string {
 }
 
 export function AppLayout() {
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Não existe cache no front — toda página já busca direto da API a cada
+  // load. "Atualizar" aqui é recarregar a página inteira, que força esse
+  // busca de novo em tudo que está na tela. O que ESSE botão não faz: forçar
+  // a Pluggy a resincronizar com o banco — o Meu Pluggy dele é quem faz isso,
+  // e a API rejeita pedido de sync forçado nesse tipo de conector
+  // (confirmado testando: "MeuPluggy item cant be updated"). Então isso
+  // mostra o que a Pluggy já tem sincronizado, não força sincronizar agora.
+  function refreshAll() {
+    setRefreshing(true)
+    window.location.reload()
+  }
+
   return (
     <div className={styles.shell}>
       {/* Desktop: sidebar. Some items also power the mobile bottom nav below. */}
@@ -45,6 +60,9 @@ export function AppLayout() {
             <span className={styles.hello}>{greeting()}</span>
           </div>
           <div className={styles.headerActions}>
+            <button className={styles.iconBtn} onClick={refreshAll} disabled={refreshing} aria-label="Atualizar dados">
+              <RefreshCw size={14} strokeWidth={2} className={refreshing ? styles.spinning : ''} />
+            </button>
             <button className={styles.iconBtn} aria-label="Buscar transação">
               <Search size={14} strokeWidth={2} />
             </button>

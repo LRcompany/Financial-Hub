@@ -263,6 +263,9 @@ export function Orcamento() {
                       {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
                       {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
                     </div>
+                    {hasLimit && (
+                      <div className={styles.creditCardNote}>saldo atual da Pluggy — não muda ao navegar mês</div>
+                    )}
                   </div>
                 )
               })}

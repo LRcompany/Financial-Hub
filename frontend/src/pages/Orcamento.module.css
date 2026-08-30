@@ -195,6 +195,12 @@
   margin-top: var(--space-2);
 }
 
+.creditCardNote {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  margin-top: var(--space-2);
+}
+
 /* ---------- parcelas futuras ---------- */
 .upcomingByMonth {
   display: flex;
