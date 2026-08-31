@@ -148,11 +148,58 @@
   }
 }
 
-.plannedValue {
+/* ---------- linha de categoria (sem barra — só destaca quando estoura) ---------- */
+.categoryRow {
+  padding: var(--space-2) 0;
+}
+
+.categoryRow + .categoryRow {
+  margin-top: var(--space-2);
+}
+
+.categoryRowOver {
+  background: var(--danger-soft);
+  border-radius: var(--r-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-left: calc(var(--space-3) * -1);
+  margin-right: calc(var(--space-3) * -1);
+}
+
+.categoryRowTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.categoryRowName {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.overIcon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.categoryRowValues {
   font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.spentValue {
+  color: var(--ink-soft);
+}
+
+.plannedBold {
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.spentOver {
+  color: var(--danger);
 }
 
 /* ---------- cartões de crédito ---------- */

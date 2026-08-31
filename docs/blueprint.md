@@ -484,6 +484,12 @@ Isso só foi possível pro Caixa porque **Luiz informou o limite real: R$58.000*
 
 Luiz notou que o BTG usa "só pra Usina Solar", mas o "usado" do limite (R$57.629,38, ao vivo da Pluggy) é MENOR que o total das 18 parcelas restantes que calculamos (R$69.250,14) — R$11.620,76 de diferença, quase exatamente 3 parcelas. Verificado com ele: **já foram pagas 6 parcelas** (bate com nosso calendário — parcela 6 cai em ago/2026, restam 18) e **o "usado" do limite está certo**. Conclusão do próprio Luiz, que faz sentido: **o BTG não trava o parcelamento inteiro de uma vez no limite** — são métricas diferentes por natureza, não um erro de dado. Não mudei nada no calendário de parcelas (confirmado correto); só adicionei uma nota na tela ("Comprometido em parcelas futuras" → texto explicando que esse total é independente do "usado" de Cartões de crédito) pra essa dúvida não voltar.
 
+### Categorias sem barra — silenciosa até estourar (30/08)
+
+Luiz não gostou das barras coloridas (accent/danger) indicando gasto vs. meta por categoria — pediu pra pensar outras formas. Mostrei 5 alternativas lado a lado (barra neutra com excesso destacado, número+seta, silencioso-só-alerta, texto de diferença, pontinho de status); escolheu a "silenciosa" com um ajuste: meta em negrito, gasto em peso normal.
+
+`CategoryRow` reescrito: sem `progressTrack`/`progressFill` (removida só dali — cartões de crédito continuam com barra, não foi tocado). Categoria dentro da meta fica só texto puro, sem cor nem ícone. Categoria que estourou (`spent > planned`) ganha `AlertTriangle` + fundo `--danger-soft` na linha inteira + valores em `--danger`. Meta usa peso 600 (`--fw-semibold`, o teto do design system — nunca `<strong>` puro, que renderiza ~700/800 e violaria "nunca Bold/Black").
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

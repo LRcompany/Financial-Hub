@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
@@ -389,23 +389,23 @@ export function Orcamento() {
   )
 }
 
-/** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é
- * só leitura (nome, gasto/meta, progresso, comparação com mês anterior). */
+/** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é só
+ * leitura (nome, gasto/meta, comparação com mês anterior). Sem barra — dentro
+ * da meta fica silenciosa, só ganha destaque (ícone + fundo) quando estoura. */
 function CategoryRow({ item }: { item: { categoryId: string; name: string; planned: number; spent: number; previousSpent: number } }) {
-  const pct = item.planned > 0 ? (item.spent / item.planned) * 100 : item.spent > 0 ? 100 : 0
+  const isOver = item.planned > 0 && item.spent > item.planned
   return (
-    <div className={cards.progressRow}>
-      <div className={cards.progressLabel}>
-        <span>{item.name}</span>
-        <span className={styles.plannedValue}>
-          R$ {currency(item.spent)} / R$ {currency(item.planned)}
+    <div className={`${styles.categoryRow} ${isOver ? styles.categoryRowOver : ''}`}>
+      <div className={styles.categoryRowTop}>
+        <span className={styles.categoryRowName}>
+          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
+          {item.name}
         </span>
-      </div>
-      <div className={cards.progressTrack}>
-        <div
-          className={cards.progressFill}
-          style={{ width: `${Math.min(pct, 100)}%`, background: pct > 100 ? 'var(--danger)' : 'var(--accent)' }}
-        />
+        <span className={styles.categoryRowValues}>
+          <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(item.spent)}</span>
+          {' / '}
+          <span className={`${styles.plannedBold} ${isOver ? styles.spentOver : ''}`}>R$ {currency(item.planned)}</span>
+        </span>
       </div>
       <div className={cards.deltaRow}>
         <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
