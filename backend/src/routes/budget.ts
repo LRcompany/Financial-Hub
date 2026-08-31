@@ -305,8 +305,13 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
 
   const [categories, currentTargets] = await Promise.all([
     // Mesmo corte do /budget-summary — investimento não é meta de gasto do
-    // Orçamento, não faz sentido revisar aportar aqui.
-    prisma.category.findMany({ where: { type: "expense", kind: { not: "investment" } }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
+    // Orçamento, não faz sentido revisar aportar aqui. `children: { none: {} }`
+    // exclui categoria-mãe (Moradia, Transporte...) — mãe é só rollup pra
+    // gráfico geral, meta real sempre é lançada na filha (folha).
+    prisma.category.findMany({
+      where: { type: "expense", kind: { not: "investment" }, children: { none: {} } },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+    }),
     prisma.budgetTarget.findMany({ where: { month, year } }),
   ]);
   const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
@@ -338,8 +343,12 @@ budgetRouter.put("/budget-target", async (req, res) => {
   if (!categoryId || !month || !year || typeof plannedAmount !== "number" || plannedAmount < 0) {
     return res.status(400).json({ error: "Campos obrigatórios: categoryId, month, year, plannedAmount (>= 0)" });
   }
-  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  const category = await prisma.category.findUnique({ where: { id: categoryId }, include: { children: true } });
   if (!category) return res.status(404).json({ error: "Categoria não encontrada" });
+  // Mãe é só rollup pra gráfico geral — meta real sempre na filha (folha).
+  if (category.children.length > 0) {
+    return res.status(400).json({ error: "Essa categoria é uma categoria-mãe — defina a meta na subcategoria, não nela" });
+  }
 
   const target = await prisma.budgetTarget.upsert({
     where: { categoryId_month_year: { categoryId, month, year } },

@@ -490,6 +490,33 @@ Luiz não gostou das barras coloridas (accent/danger) indicando gasto vs. meta p
 
 `CategoryRow` reescrito: sem `progressTrack`/`progressFill` (removida só dali — cartões de crédito continuam com barra, não foi tocado). Categoria dentro da meta fica só texto puro, sem cor nem ícone. Categoria que estourou (`spent > planned`) ganha `AlertTriangle` + fundo `--danger-soft` na linha inteira + valores em `--danger`. Meta usa peso 600 (`--fw-semibold`, o teto do design system — nunca `<strong>` puro, que renderiza ~700/800 e violaria "nunca Bold/Black").
 
+### Categorias recomeçadas do zero, com hierarquia pai/filho (30/08)
+
+Luiz decidiu recomeçar as categorias de despesa do zero em vez de tentar encaixar a estrutura antiga (misturada, sem hierarquia) — as 1.109 transações + 368 metas antigas foram genuinamente valiosas pra validar o produto, mas ele preferiu limpar tudo e recadastrar certo a partir de setembro, em vez de carregar a bagunça pra frente.
+
+**Apagado** (irreversível, confirmado explicitamente antes): as 47 categorias que existiam (35 despesa + 5 investimento — essas nunca tiveram nenhuma transação real, resíduo do import original — + 7 receita), as 1.109 transações ligadas a elas (R$175.817 de receita real incluído) e as 368 metas (BudgetTarget). **Preservado**: os 177 parcelamentos (`UpcomingInstallment`) — perderam a categoria (`categoryId = null`), a serem recategorizados manualmente agora que a árvore nova existe.
+
+**Árvore nova criada** (56 categorias: 13 pais, 40 filhas, 3 soltas) — o schema já suportava `parentId`/`children` desde o início, só nunca tinha sido usado. Pai é só rollup pra gráfico geral (ainda não construído); meta e transação real sempre na folha.
+
+- Moradia → Aluguel, Luz+Gas+Água, Telefonia+Internet
+- Transporte → Uber/99, Transporte (Ônibus/Trem/Taxi), Locação de Carro, Gasto Carro
+- Viagens → Hospedagem/Pacotes, Passagens
+- Esportes → Academia, Natação, Assessoria de Corrida
+- Cuidado Pessoal → Barbeiro, Tattoo
+- Vida Social → Restaurante, Bares, Baladas (renomeado de "Saídas" — Luiz corrigiu: "saída" já significa gasto no modelo dele, todo gasto É uma saída; nomear um grupo específico assim confundia)
+- Compras → Equipamentos, Roupas & Calçados, Móveis, Itens de Casa, Esportivos, Livros & Papelaria, Outros (sem distinção Online/Shopping — Luiz decidiu que canal de compra não importa, só tipo)
+- Saúde → Farmácia, Plano de Saúde, Terapia, Nutrição, Cirurgia Estética
+- Alimentação → Supermercado, Delivery
+- Casa (serviços) → Lavanderia, Gastos Serviço Casa
+- Lazer → Cinema, Streaming
+- Serviços Digitais → Services (Adobe...), Services (Server...)
+- Administrativo/Financeiro → Imposto-Contador, Gastos Jurídicos, Empréstimo Concedido
+- Soltas (sem pai) → Usina Solar (é uma compra parcelada, não "casa"), Educação, Presentes
+
+**Bug pego e corrigido no processo**: `/budget-target/review` e `PUT /budget-target` não filtravam categoria-mãe — deixariam setar meta direto em "Moradia" em vez de em "Aluguel", quebrando a separação pai=rollup/filha=meta real. Corrigido com `children: { none: {} }` (só categoria-folha) no review, e uma validação equivalente no PUT (rejeita com 400 se a categoria tiver filhos).
+
+**Pendência explícita**: recategorizar os 177 parcelamentos (hoje sem categoria) usando a árvore nova — Luiz vai indicar caso a caso, mesmo padrão da rodada anterior de "bater parcela com cartão".
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
