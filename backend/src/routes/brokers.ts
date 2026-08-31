@@ -165,15 +165,22 @@ interface PluggyAccountRaw {
 // por isso uma label só — não dois cartões na lista.
 const MANUAL_CARDS = ["Caixa"];
 
+// Limite real informado pelo Luiz diretamente (30/08) — esse cartão não está
+// na Pluggy, então não tem como ler o limite de nenhuma API; sem isso não
+// dava pra mostrar "resta do limite" pra ele, só o "usado".
+const MANUAL_CARD_LIMITS: Record<string, number> = { Caixa: 58000 };
+
 // GET /api/credit-cards?month&year — fatura/limite de todo cartão conectado
 // via Pluggy, direto da conta (não fica salvo em snapshot — é sempre a foto
 // de agora, não faz sentido guardar histórico do "quanto ainda tenho no
 // cartão" do jeito que guardamos investimento) + cartão manual (Caixa), cujo
 // "usado" vem da soma das parcelas futuras já cadastradas pra ele a partir do
-// mês informado (sem limite/disponível/vencimento — não temos essa
-// informação sem a Pluggy). month/year são os mesmos do mês que o Luiz está
-// navegando no Orçamento — avançar mês faz o "usado" do cartão manual cair
-// (parcela que já passou some da conta), até zerar quando não sobrar nenhuma.
+// mês informado — sem vencimento/mínimo (não temos isso sem a Pluggy), mas
+// COM limite (MANUAL_CARD_LIMITS, informado pelo Luiz direto) pra poder
+// mostrar "usado/resta/limite" igual aos cartões da Pluggy. month/year são os
+// mesmos do mês que o Luiz está navegando no Orçamento — avançar mês faz o
+// "usado" do cartão manual cair (parcela que já passou some da conta), até
+// sumir da lista quando não sobrar nenhuma.
 brokersRouter.get("/credit-cards", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
@@ -191,7 +198,6 @@ brokersRouter.get("/credit-cards", async (req, res) => {
     minimumPayment: number | null;
     dueDate: string | null;
     brand: string | null;
-    trackedInstallments: number | null;
   }[] = [];
 
   for (const broker of brokers) {
@@ -211,18 +217,6 @@ brokersRouter.get("/credit-cards", async (req, res) => {
         const availableLimit = acc.creditData.availableCreditLimit;
         const usedAmount = creditLimit != null && availableLimit != null ? creditLimit - availableLimit : acc.balance;
 
-        // Complemento month-aware: soma das UpcomingInstallment já
-        // identificadas pra esse cartão (cardLabel = nome do broker), a
-        // partir do mês navegado — é PARCIAL (só o que já foi conferido
-        // manualmente ou veio de transação real, ex: Usina Solar no BTG),
-        // não é "tudo que tem no cartão". Por isso é um número separado do
-        // `usedAmount` (saldo real da Pluggy), não substitui ele.
-        const trackedAgg = await prisma.upcomingInstallment.aggregate({
-          where: { cardLabel: broker.name, dueDate: { gte: monthStart } },
-          _sum: { amount: true },
-        });
-        const trackedInstallments = trackedAgg._sum.amount ?? 0;
-
         cards.push({
           broker: broker.name,
           name: acc.name.trim(),
@@ -232,7 +226,6 @@ brokersRouter.get("/credit-cards", async (req, res) => {
           minimumPayment: acc.creditData.minimumPayment,
           dueDate: acc.creditData.balanceDueDate,
           brand: acc.creditData.brand,
-          trackedInstallments: trackedInstallments > 0 ? trackedInstallments : null,
         });
       }
     } catch {
@@ -245,20 +238,18 @@ brokersRouter.get("/credit-cards", async (req, res) => {
       where: { cardLabel, dueDate: { gte: monthStart } },
       _sum: { amount: true },
     });
-    const total = agg._sum.amount ?? 0;
-    if (total <= 0) continue;
+    const usedAmount = agg._sum.amount ?? 0;
+    if (usedAmount <= 0) continue;
+    const creditLimit = MANUAL_CARD_LIMITS[cardLabel] ?? null;
     cards.push({
       broker: cardLabel,
-      name: `${cardLabel} (sem Pluggy — parcelamento em andamento)`,
-      usedAmount: total,
-      availableLimit: null,
-      creditLimit: null,
+      name: cardLabel,
+      usedAmount,
+      availableLimit: creditLimit != null ? creditLimit - usedAmount : null,
+      creditLimit,
       minimumPayment: null,
       dueDate: null,
       brand: null,
-      // Nulo aqui porque pro cartão manual `usedAmount` JÁ É essa mesma soma
-      // — mostrar de novo seria repetir o mesmo número duas vezes.
-      trackedInstallments: null,
     });
   }
 

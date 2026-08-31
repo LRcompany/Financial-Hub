@@ -245,35 +245,24 @@ export function Orcamento() {
                     <div className={cards.heroValue} style={{ fontSize: '1.2rem' }}>
                       R$ {currency(c.usedAmount)}
                     </div>
-                    <div className={cards.chartMeta}>
-                      {hasLimit ? (
-                        <>
+                    {hasLimit && (
+                      <>
+                        <div className={cards.chartMeta}>
                           <span>de R$ {currency(c.creditLimit!)}</span>
                           <span>R$ {currency(c.availableLimit!)} livre</span>
-                        </>
-                      ) : (
-                        <span>sem Pluggy — ainda a pagar, só parcelamento em andamento</span>
-                      )}
-                    </div>
-                    {hasLimit && (
-                      <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
-                        <div
-                          className={cards.progressFill}
-                          style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
-                        />
-                      </div>
+                        </div>
+                        <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
+                          <div
+                            className={cards.progressFill}
+                            style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
+                          />
+                        </div>
+                      </>
                     )}
-                    <div className={styles.creditCardFooter}>
-                      {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
-                      {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
-                    </div>
-                    {hasLimit && (
-                      <div className={styles.creditCardNote}>saldo atual da Pluggy — não muda ao navegar mês</div>
-                    )}
-                    {c.trackedInstallments != null && (
-                      <div className={styles.creditCardTracked}>
-                        R$ {currency(c.trackedInstallments)} em parcelas já identificadas a partir de {MONTH_NAMES[month - 1]}/{year}
-                        <span className={styles.creditCardTrackedNote}> (parcial — nem toda compra do cartão foi conferida ainda)</span>
+                    {(c.dueDate || c.minimumPayment != null) && (
+                      <div className={styles.creditCardFooter}>
+                        {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
+                        {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
                       </div>
                     )}
                   </div>

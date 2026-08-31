@@ -195,24 +195,6 @@
   margin-top: var(--space-2);
 }
 
-.creditCardNote {
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  margin-top: var(--space-2);
-}
-
-.creditCardTracked {
-  font-size: 11px;
-  color: var(--ink-soft);
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px dashed var(--border);
-}
-
-.creditCardTrackedNote {
-  color: var(--ink-faint);
-}
-
 /* ---------- parcelas futuras ---------- */
 .upcomingByMonth {
   display: flex;

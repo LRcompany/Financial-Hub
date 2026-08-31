@@ -472,6 +472,14 @@ Luiz pediu uma interface pra conferir e corrigir as parcelas futuras de uma vez 
 
 Luiz também notou que, já que temos as parcelas de BTG/C6 rotuladas (`cardLabel`), dá pra saber "quanto vai cair em setembro" nesses cartões também, não só na Caixa. Isso já existia parcialmente na seção "por cartão" de parcelas futuras (que já filtra por mês) — o que faltava era mostrar no PRÓPRIO card do cartão. Adicionado `trackedInstallments` em `GET /credit-cards`: soma das `UpcomingInstallment` daquele cartão a partir do mês navegado — aparece como uma linha extra nos cards Pluggy (BTG/C6): "R$X em parcelas já identificadas a partir de [mês]", **claramente marcado como parcial** (nem toda compra desses cartões foi conferida ainda — só R$5.688,59 de R$34.498,49 usados no C6, por exemplo). Não substitui o `usedAmount` (saldo real da Pluggy, que não varia por mês) — é um número complementar, e SÓ ele varia com a navegação de mês.
 
+### Cartões de crédito padronizados + Usina Solar completa (30/08)
+
+Luiz achou o card "Cartões de crédito" confuso (BTG/C6 com formato diferente de Caixa, textos "sem Pluggy", "saldo atual da Pluggy" e a linha "parcelas já identificadas" que ninguém pediu de fato). Simplificado pra um formato único nos 3 cartões: **usado / de [limite] / [disponível] livre** + barra de progresso — sem texto extra. Removido `trackedInstallments` inteiro (era mais confuso que útil).
+
+Isso só foi possível pro Caixa porque **Luiz informou o limite real: R$58.000** (esse cartão não está na Pluggy, então não tinha como saber isso sozinho) — gravado em `MANUAL_CARD_LIMITS` (`brokers.ts`), citado explicitamente como vindo dele, não inferido. `availableLimit` do Caixa agora é `58.000 - usado`, igual ao cálculo dos cartões Pluggy.
+
+**Usina Solar completada**: Luiz confirmou que o parcelamento real é de **24x**, mas só tínhamos cadastrado até a parcela 10 (a planilha dele também só ia até lá). Adicionadas as parcelas 11 a 24 (jan/2027 a fev/2028, mesmo valor R$3.847,23), rodando `tmp-import/extend-usina-solar.cjs` (script pontual, gitignored). Total do parcelamento BTG salta de R$15.388,92 (4 parcelas) pra **R$69.250,14** (18 parcelas) — número bem maior, mas agora reflete o compromisso real completo, não só o pedaço que a planilha tinha.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

@@ -74,7 +74,6 @@ export interface CreditCard {
   minimumPayment: number | null
   dueDate: string | null
   brand: string | null
-  trackedInstallments: number | null
 }
 
 export interface UpcomingInstallment {
