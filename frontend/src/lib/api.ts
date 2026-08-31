@@ -18,8 +18,7 @@ export interface Category {
   id: string
   name: string
   type: 'income' | 'expense'
-  essential: boolean
-  usage: 'personal' | 'business' | null
+  kind: CategoryKind
   children?: Category[]
 }
 

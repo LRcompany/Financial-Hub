@@ -547,7 +547,17 @@ Total: 16 pais, ~52 filhas, ~20 netas.
 - "Serviços Digitais" e "Casa (serviços)" foram removidas por ficarem vazias depois da redistribuição.
 - Viagens fica **fora** de Lazer (decisão do Luiz, contra minha sugestão inicial de juntar) — tem peso de gasto próprio.
 
-**Pendente**: ainda não foi criada no banco — Luiz pediu pra documentar primeiro e poder revisitar/ajustar aqui antes de qualquer execução. Quando ele confirmar, criar via script (mesmo padrão de `tmp-import/rebuild-categories.cjs`) e depois recategorizar os 177 parcelamentos (hoje sem categoria) usando essa árvore.
+**Criada no banco em 31/08** — 95 categorias reais (16 pais, 7 sub-pais de 2º nível, 72 folhas). `tmp-import/rebuild-categories-v2.cjs` é o script que criou (recria do zero se precisar rodar de novo — mas cuidado, roda `INSERT`, não é idempotente). Bug pego e corrigido no processo: o script classificava `kind` batendo pelo NOME da categoria (lista `ESSENTIAL_LEAVES`), e "Aluguel" existe em dois lugares (Moradia = aluguel do apê, essencial; Transporte > Carro = aluguel de carro, não-essencial) — o script marcou os dois como essencial por engano. Corrigido manualmente depois de conferir.
+
+**Pendente**: recategorizar os 177 parcelamentos (`UpcomingInstallment`, hoje sem categoria) usando essa árvore nova — Luiz vai indicar caso a caso.
+
+### Limpeza de sujeira pedida por Luiz (31/08, mesmo dia)
+
+Depois de criar a árvore, Luiz pediu uma varredura geral: "não quero um sistema com sujeiras e coisas que não estamos usando". Achados e o que foi feito:
+
+- **Removido** (sem risco, era só scratch local nunca versionado): `tmp-import/import-real-orcamento.{js,cjs}`, `future-installments.json`, `orcamento.json`, `parsed.json`, `skipped.json`, `parse{,-orcamento}.js`, `seed{,-orcamento}.js`, `rebuild-categories.cjs` (v1, superado pelo v2) — todos artefatos de fases anteriores do projeto, já sem função (dado já está no banco ou foi substituído). Mantidos: as 2 planilhas reais (`.xlsx`, são documento-fonte, não gerado) e os scripts recentes que ainda documentam como o dado atual foi construído (`extend-usina-solar.cjs`, `import-caixa-installments.cjs`, `rebuild-categories-v2.cjs`).
+- **Corrigido**: o tipo `Category` no frontend (`api.ts`) ainda tinha `essential: boolean` e `usage: 'personal'|'business'|null` — resíduo do modelo antigo (antes de `kind` existir), nunca batia com o que a API de fato manda há dias. Removidos os dois campos, `Category` agora usa `kind: CategoryKind` (o tipo real). `tsc` confirmou zero lugar lendo esses campos — eram mortos de verdade, não só desatualizados.
+- **Achado, não removido — perguntei antes**: `Category.usage` no **schema do banco** (não só o tipo TS) não é lido nem escrito em lugar nenhum do código — candidato real a sair do schema, mas isso é migração (mexe na estrutura do banco), então não fiz sozinho. `CategorizationRule` (model + `backend/src/services/categorization.ts`, 34 linhas) também está com zero uso hoje — mas tem um TODO explícito em `pluggy.ts` linkando ele ao sync de transação futuro ("rodar sugestão de categoria antes de salvar"), então não é sujeira abandonada, é peça de um recurso ainda não construído — recomendo manter.
 
 ## Pendências (não travadas ainda)
 
