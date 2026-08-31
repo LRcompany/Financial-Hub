@@ -517,6 +517,38 @@ Luiz decidiu recomeçar as categorias de despesa do zero em vez de tentar encaix
 
 **Pendência explícita**: recategorizar os 177 parcelamentos (hoje sem categoria) usando a árvore nova — Luiz vai indicar caso a caso, mesmo padrão da rodada anterior de "bater parcela com cartão".
 
+## Árvore de categorias de Orçamento (desenhada em 30-31/08, ainda NÃO criada no banco)
+
+Documento vivo — Luiz revisita e atualiza essa árvore aqui antes de qualquer criação/alteração no banco. É o desenho final depois de várias rodadas de ajuste; reflete a árvore de `Category` (`parentId`/`children`, até 3 níveis: pai → filha → neta). Pai é só rollup pra gráfico geral (dashboard); meta e transação real sempre na folha (filha ou neta, nunca no pai — ver bug corrigido em 30/08 que impedia meta em categoria-mãe).
+
+- **LR** (custos da empresa) — *Software* → Adobe, Figma, Apple, Gmail, Claude Code · *Infraestrutura* → Digital Ocean, Domain · *Fiscal* → Imposto - Contador · Equipamentos
+- **Moradia** — Aluguel, Luz, Gás, Água, Telefonia, Internet, Faxina, Reparos, Móveis, Itens de Casa, Lavanderia
+- **Transporte** — Uber/99, Taxi, **Transporte Coletivo** → Carona, Trem, Ônibus · **Carro** → Aluguel, Compra, Gasolina, Pedágio, Estacionamento, Multa · **Bicicleta** → Acessórios, Manutenção, Compra
+- **Viagens** — Hospedagem, Passagens, Pacotes, Passeios
+- **Lazer** — Cinema, Streaming, Games
+- **Esportes** — Academia, Natação, Assessoria de Corrida
+- **Cuidado Pessoal** — Barbeiro, Tattoo, Cosméticos, Cirurgia Estética
+- **Vida Social** — Bares, Baladas, Museu, Show, Exposições
+- **Alimentação** — Supermercado, Delivery, Restaurante
+- **Saúde** — Farmácia, Plano de Saúde, Terapia, Nutrição
+- **Educação** — Livros, Cursos
+- **Administrativo** — Empréstimo Concedido, **Jurídico** → Detran, Documentos, Processos
+- **Presentes** — Geral *(placeholder — trocar quando houver subcategoria real)*
+- **Outros** — Usina Solar *(é uma compra parcelada, não é "casa")*
+- **Papelaria** — Geral *(placeholder)*
+- **Roupas & Calçados** — Roupas, Calçados, Acessórios
+
+Total: 16 pais, ~52 filhas, ~20 netas.
+
+**Decisões já tomadas nessa reconstrução** (não repetir a pergunta):
+- Categorias antigas (35 despesa + 5 investimento nunca usadas + 7 receita, com 1.109 transações e 368 metas) foram **apagadas de propósito** em 30/08 — Luiz decidiu recomeçar limpo em vez de encaixar estrutura antiga bagunçada. Os 177 parcelamentos (`UpcomingInstallment`) foram preservados, sem categoria.
+- "Saídas" foi descartado como nome de categoria — pro Luiz, "saída" = qualquer gasto no modelo dele (Entradas e Saídas), não uma categoria específica. O que seria "Saídas (Restaurante, Bares...)" virou "Restaurante" dentro de Alimentação + "Bares/Baladas/Museu/Show/Exposições" dentro de Vida Social.
+- "Compras" foi removida por ser genérica demais — suas subcategorias foram redistribuídas (Equipamentos → LR, Móveis/Itens de Casa → Moradia, Papelaria/Roupas & Calçados → viraram pai próprio).
+- "Serviços Digitais" e "Casa (serviços)" foram removidas por ficarem vazias depois da redistribuição.
+- Viagens fica **fora** de Lazer (decisão do Luiz, contra minha sugestão inicial de juntar) — tem peso de gasto próprio.
+
+**Pendente**: ainda não foi criada no banco — Luiz pediu pra documentar primeiro e poder revisitar/ajustar aqui antes de qualquer execução. Quando ele confirmar, criar via script (mesmo padrão de `tmp-import/rebuild-categories.cjs`) e depois recategorizar os 177 parcelamentos (hoje sem categoria) usando essa árvore.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
