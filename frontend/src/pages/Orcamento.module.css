@@ -123,6 +123,13 @@
   margin: 0 0 var(--space-4);
 }
 
+.upcomingDisclaimer {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: var(--space-2) 0 0;
+  line-height: 1.4;
+}
+
 .groupTitle {
   font-size: 13.5px;
   font-weight: 600;

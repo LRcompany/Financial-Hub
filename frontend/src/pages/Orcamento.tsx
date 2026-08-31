@@ -291,6 +291,10 @@ export function Orcamento() {
             <div className={cards.chartMeta}>
               <span>{upcoming.installments.length} parcelas a vencer, de compras já feitas</span>
             </div>
+            <p className={styles.upcomingDisclaimer}>
+              Este total é independente do "usado" mostrado em Cartões de crédito — cada cartão trava limite de um
+              jeito diferente pra parcelamento, não necessariamente o valor restante inteiro de uma vez.
+            </p>
             <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
               Por cartão
             </h4>
