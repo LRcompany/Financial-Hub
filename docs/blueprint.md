@@ -740,6 +740,17 @@ Luiz viu a lista real e apontou mais itens que não fazem sentido no popup:
 - **Wise**: só existe UM ativo de verdade aqui, o saldo da conta corrente — "CDB MAXIMA" e "FUNDO" não são tocados desde 03/2023 (carteira antiga, não existem mais). Excluídos, e o ativo que sobra ("CDB - Liquidez Diária") foi **renomeado pra "Conta Corrente"** direto no banco (mesmo `securityId`, mesmo histórico — não é um ativo novo, só o nome mudou pra refletir o que ele realmente é).
 - Testado ao vivo: Nomad mostra só os 3 títulos reais, Wise mostra só "Conta Corrente" com o valor de julho intacto (R$5.515,35).
 
+### Achado: Nomad duplicando total em setembro/2026 (01/09)
+
+Luiz perguntou por que a Nomad estava em R$78 mil no Patrimônio — bem mais que a soma visível dos 3 ativos reais. Investigado: a Nomad tinha uma história em 2 fases. Até abril/2026, o saldo era rastreado como **um bucket só** ("USD", ~R$28-40mil/mês, desde jan/2025). A partir de julho/2026, quando o parser do extrato Apex Clearing entrou, o rastreio virou **por ativo** (BRAZIL, ISHARES, NVIDIA + "FDIC Insured Deposit" como caixa da corretora) — e o bucket antigo "USD" parou de ser salvo (maio-agosto/2026 não têm linha dele, corretamente).
+
+Em setembro/2026 os dois formatos foram salvos **juntos, pela primeira vez** — quase certamente o popup novo (ManualPositionsModal) foi aberto e salvo carregando os 5 itens de então (incluindo USD e FDIC, que ainda não tinham sido excluídos da tela) com os valores antigos, sem editar nada. Resultado: R$38.634 (USD) + R$218 (FDIC) somados por cima dos 3 ativos reais, quase dobrando o total.
+
+Corrigido, sem tocar em histórico legítimo:
+- Apagada a linha de setembro/2026 de "USD" e "FDIC Insured Deposit" (o mês duplicado) — as linhas reais de jan/2025 a abril/2026 do "USD" continuam intactas pra evolução histórica.
+- Como Luiz pediu pra remover FDIC de vez ("isso é a conta corrente"), apagada também a única linha real dele (07/2026, R$215) e a `Security` órfã resultante — diferente do "USD", que ainda tem história real anterior a preservar.
+- Nomad volta a bater com os 3 ativos reais: **R$39.550,88** (antes R$78.388,83). Confirmado ao vivo no Patrimônio.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
