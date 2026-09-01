@@ -553,6 +553,8 @@ Total: 16 pais, ~52 filhas, ~20 netas.
 
 **Ajuste em 31/08**: "Usina Solar" (dentro de Outros) virou categoria-mãe — ganhou 4 filhas: Luz, Custo, Mão de Obra, Administrativo (essa colide de nome com o "Administrativo" top-level, mas o contexto — dentro de Usina — deixa claro que são coisas diferentes; schema permite, `@@unique([name, parentId])` é por par). 75 folhas reais agora (era 72).
 
+**Ajuste em 31/08**: "Esportes > Assessoria de Corrida" virou "Esportes > Corrida" (categoria-mãe) com 3 filhas: Assessoria, Equipamentos, Inscrições. As 3 parcelas que já estavam categorizadas ali (RENATO VELOSO ASSESSO → Assessoria; gel corrida ×2 → Equipamentos) foram realocadas pras folhas certas. 77 folhas reais agora.
+
 **Parcelas categorizadas (31/08)**: dos 177 parcelamentos, 141 foram categorizados automaticamente pelo nome do comerciante (`tmp-import/categorize-installments.cjs`) — ex: "airbnb"/"AIRBNB PLATAFORMA DIGITAL" → Viagens > Hospedagem, "DELL" → LR > Equipamentos, "tokstok"/"TOKSTOK..." → Moradia > Móveis, "Usina Solar" (as 18 parcelas reais do BTG) → Outros > Usina Solar > Custo. **36 parcelas em 13 compras ficaram sem categoria de propósito** — nomes genéricos demais pra adivinhar com segurança (AMAZON MARKETPLACE/AMAZONMKTPLC com só o código do vendedor, "A G GRAFICA LTDA", "Bruno ArtMache", "estilhaços", "TicketSports") — melhor sem categoria do que categoria chutada errada. `InstallmentReviewModal` ganhou uma coluna de categoria (dropdown com os 75 caminhos "Pai > Filha"), `PUT /upcoming-installments/group` aceita `categoryId` agora (só folha, mesma regra do `PUT /budget-target`) — Luiz resolve os 13 restantes por lá quando quiser.
 
 ### Limpeza de sujeira pedida por Luiz (31/08, mesmo dia)
