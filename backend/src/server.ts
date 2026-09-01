@@ -11,6 +11,7 @@ import { positionsRouter } from "./routes/positions.js";
 import { projectsRouter } from "./routes/projects.js";
 import { brokersRouter } from "./routes/brokers.js";
 import { pluggyConnectRouter } from "./routes/pluggyConnect.js";
+import { startCreditCardSyncScheduler } from "./services/scheduler.js";
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3333;
@@ -33,4 +34,5 @@ app.use("/api", pluggyConnectRouter);
 
 app.listen(port, () => {
   console.log(`Financial Hub backend rodando em http://localhost:${port}`);
+  startCreditCardSyncScheduler();
 });

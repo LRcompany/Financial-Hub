@@ -3,7 +3,7 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
-import { syncBrokerCreditCardTransactions } from "../services/pluggyTransactionSync.js";
+import { syncAllBrokersCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
 import { parseNomadStatement } from "../services/nomadStatement.js";
 import { getUsdToBrlRateOnDate } from "../services/fx.js";
@@ -266,35 +266,6 @@ brokersRouter.get("/credit-cards", async (req, res) => {
 // conservador de categoria da Pluggy + CategorizationRule já aprendida);
 // o que não bate com confiança fica sem categoria, pra revisar manualmente.
 brokersRouter.post("/credit-cards/sync-transactions", async (_req, res) => {
-  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
-
-  const perBroker: { broker: string; transactionsSynced: number; transactionsSkipped: number; installmentsCreated: number; categorizedCount: number; error?: string }[] = [];
-
-  for (const broker of brokers) {
-    try {
-      const result = await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!);
-      perBroker.push({ broker: broker.name, ...result });
-    } catch (err) {
-      perBroker.push({
-        broker: broker.name,
-        transactionsSynced: 0,
-        transactionsSkipped: 0,
-        installmentsCreated: 0,
-        categorizedCount: 0,
-        error: (err as Error).message,
-      });
-    }
-  }
-
-  const totals = perBroker.reduce(
-    (acc, r) => ({
-      transactionsSynced: acc.transactionsSynced + r.transactionsSynced,
-      transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
-      installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
-      categorizedCount: acc.categorizedCount + r.categorizedCount,
-    }),
-    { transactionsSynced: 0, transactionsSkipped: 0, installmentsCreated: 0, categorizedCount: 0 }
-  );
-
-  res.json({ ...totals, perBroker });
+  const result = await syncAllBrokersCreditCardTransactions();
+  res.json(result);
 });

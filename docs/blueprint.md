@@ -604,6 +604,12 @@ Corrigido: `/budget-target/review` agora devolve `path` (ex: "Transporte > Carro
 
 Luiz achou estranho ver "Imposto - Contador" junto numa linha só do "Revisar orçamento" (print sem o caminho do pai, provavelmente de antes do fix documentado acima) e pediu confirmação de onde vinha cada categoria antes de mexer — conferido direto no banco: só existia UMA categoria "Imposto - Contador" (não tinha duplicata), em LR > Fiscal. Separada em duas folhas distintas: **LR > Fiscal > Imposto** e **LR > Fiscal > Contador**, ambas essenciais. 82 folhas reais agora.
 
+### Sync automático diário de transação de cartão (01/09)
+
+Luiz pediu pra automatizar o "Atualizar transações" em vez de precisar clicar toda vez. `backend/src/services/scheduler.ts` — `setInterval` simples (sem dependência nova tipo node-cron), roda 1x por dia, chamando a mesma `syncAllBrokersCreditCardTransactions` que o botão manual usa (refatorada pra fora da rota, reaproveitada pelos dois). Primeira rodada 1 minuto depois do servidor subir (não espera 24h depois de um restart), erro num broker não derruba o processo nem trava os outros.
+
+**Por que 1x/dia, não "quando passar 4-5 dias desde a última transação"**: a própria Pluggy só resincroniza com o banco 1x por dia por conta própria, e o lookback window dela (4-5 dias) já cobre atraso sozinho — rodar mais que 1x/dia não traria dado mais novo, só bateria a API à toa. Testado real: primeira rodada automática (01/09) achou 2 transações novas desde o sync manual de minutos antes.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

@@ -166,3 +166,49 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   return { transactionsSynced, transactionsSkipped, installmentsCreated, categorizedCount };
 }
+
+/**
+ * Roda o sync em TODO broker Pluggy conectado, um de cada vez — reaproveitada
+ * pelo botão manual ("Atualizar transações") e pelo agendador automático
+ * (scheduler.ts). Erro num broker não trava os outros.
+ */
+export async function syncAllBrokersCreditCardTransactions() {
+  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
+
+  const perBroker: {
+    broker: string;
+    transactionsSynced: number;
+    transactionsSkipped: number;
+    installmentsCreated: number;
+    categorizedCount: number;
+    error?: string;
+  }[] = [];
+
+  for (const broker of brokers) {
+    try {
+      const result = await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!);
+      perBroker.push({ broker: broker.name, ...result });
+    } catch (err) {
+      perBroker.push({
+        broker: broker.name,
+        transactionsSynced: 0,
+        transactionsSkipped: 0,
+        installmentsCreated: 0,
+        categorizedCount: 0,
+        error: (err as Error).message,
+      });
+    }
+  }
+
+  const totals = perBroker.reduce(
+    (acc, r) => ({
+      transactionsSynced: acc.transactionsSynced + r.transactionsSynced,
+      transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
+      installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
+      categorizedCount: acc.categorizedCount + r.categorizedCount,
+    }),
+    { transactionsSynced: 0, transactionsSkipped: 0, installmentsCreated: 0, categorizedCount: 0 }
+  );
+
+  return { ...totals, perBroker };
+}
