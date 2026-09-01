@@ -242,6 +242,50 @@
   margin-top: 6px;
 }
 
+/* ---------- linha "Total do mês" em destaque ---------- */
+/* Separada visualmente do resto da lista (fundo próprio, texto maior) —
+   pra bater o olho e ver a diferença entre o total e as categorias sem
+   precisar ler número por número. */
+.totalRow {
+  background: var(--fill-muted);
+  border-radius: var(--r-lg);
+  padding: var(--space-4);
+}
+
+.totalLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+}
+
+.totalLabel span:first-child {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.totalLabel span:last-child {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.totalTrack {
+  height: 14px;
+  background: var(--surface);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.totalFill {
+  height: 100%;
+  border-radius: var(--r-full);
+}
+
 /* ---------- projects ---------- */
 .projectRow {
   display: flex;

@@ -7,6 +7,17 @@
 // creditCardMetadata.{installmentNumber,totalInstallments,billForecastDate}
 // quando a compra é parcelada — é exatamente o dado que faltava pra
 // automatizar o que vínhamos fazendo à mão (bater fatura da Caixa).
+//
+// REGRA TRAVADA (01/09), vale pra quando essa rodada de conta BANK for
+// implementada: Luiz faz muita transferência entre as próprias contas (BTG
+// <-> C6, recebimento de cliente que passa pela conta corrente antes de ir
+// pra outro lugar etc.) — uma entrada de dinheiro na conta corrente NUNCA
+// pode virar `Transaction.type: "income"` automaticamente só por ter
+// chegado lá. "Entrada" só existe quando ele lança manualmente ("recebi R$X
+// no dia Y", via POST /transactions ou um fluxo equivalente ligado a
+// Projetos) — o sync de conta BANK, quando existir, deve gravar a
+// movimentação (se gravar) sempre como transferência (isTransfer: true),
+// nunca como receita inferida.
 import { prisma } from "../prisma.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
 import { suggestCategory } from "./categorization.js";

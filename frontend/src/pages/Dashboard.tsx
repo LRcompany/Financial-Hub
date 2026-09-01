@@ -215,16 +215,16 @@ export function Dashboard() {
 
             {!budgetError && budget && budget.categories.length > 0 && (
               <>
-                <div className={styles.progressRow} style={{ marginBottom: 'var(--space-4)' }}>
-                  <div className={styles.progressLabel}>
+                <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
+                  <div className={styles.totalLabel}>
                     <span>Total do mês</span>
                     <span>
                       R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
                     </span>
                   </div>
-                  <div className={styles.progressTrack}>
+                  <div className={styles.totalTrack}>
                     <div
-                      className={styles.progressFill}
+                      className={styles.totalFill}
                       style={{
                         width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`,
                         background: 'var(--accent)',

@@ -3,6 +3,15 @@ import { prisma } from "../prisma.js";
 
 export const transactionsRouter = Router();
 
+// Luiz decidiu (01/09) não voltar categorizando o passado inteiro — 72
+// transações antigas sem categoria ficariam pendentes pra sempre e isso não
+// ia acontecer. A partir de hoje sim, categoria vira algo que se cobra de
+// verdade. Transação mais antiga que essa data e sem categoria fica de fora
+// da contagem/aviso pra sempre (nunca é apagada, só para de aparecer no
+// banner e no modal de revisão — o valor dela continua contando nos totais
+// de gasto normalmente, só não força categorização retroativa).
+const CATEGORIZATION_TRACKING_START = new Date("2026-09-01T00:00:00");
+
 // GET /api/transactions?month=8&year=2026
 transactionsRouter.get("/transactions", async (req, res) => {
   const { month, year } = req.query;
@@ -31,7 +40,7 @@ transactionsRouter.get("/transactions", async (req, res) => {
 // "status bar" de compra sem categoria + o modal de revisão.
 transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) => {
   const transactions = await prisma.transaction.findMany({
-    where: { categoryId: null, type: "expense", isTransfer: false },
+    where: { categoryId: null, type: "expense", isTransfer: false, date: { gte: CATEGORIZATION_TRACKING_START } },
     orderBy: { date: "desc" },
   });
 

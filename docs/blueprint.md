@@ -688,6 +688,18 @@ Perguntei direto: como deveria funcionar, já que toda corretora tem histórico?
 
 Ajuste rápido: a seção "Arquivadas" em Configurações agora começa colapsada, atrás de um botão "Mostrar arquivadas (N)" — antes ficava sempre visível, poluindo a tela justamente pras corretoras que o Luiz não quer ver no dia a dia. Confirmado ao vivo com os 8 arquivamentos reais que ele já tinha feito (Binance, Easynvest, Monetus, Nexoos, Nuinvest, Picpay, XP Investimento, Órama).
 
+### 3 ajustes (01/09): corte de categorização, categoria de encargos, total em destaque, regra de entrada
+
+**1. Categorização retroativa abandonada, começa a valer a partir de hoje.** Luiz não vai voltar categorizando as 72 transações antigas sem categoria — `CATEGORIZATION_TRACKING_START = 2026-09-01` filtra `GET /transactions/uncategorized-groups` (usado pelo banner do Dashboard e pelo `TransactionReviewModal`) pra só considerar transação a partir dessa data. As 72 antigas continuam no banco e contando nos totais de gasto normalmente — só param de aparecer no aviso/modal de revisão, pra sempre.
+
+Também percebeu (olhando as antigas) que várias eram **custo operacional do próprio cartão**: 12× "Tarifa Anuidade Diferenciada" (R$98 cada, cobrada mensalmente), "Encargos de Refinanciamento", "IOF Rotativo"/"Iof", "Juros de Mora", "Multa"/"Multa Contratual" — sinal de um período com fatura rotativa. Criada `Administrativo > Encargos de Cartão` e categorizadas as 20 transações reais que batiam esse padrão (R$1.376,04 no total). Ficou de fora "Loungekey" (assinatura de sala VIP, não é encargo) e "MASTERCARD" genérico (ambíguo demais pra adivinhar) — ambos já saem do aviso pelo corte de data de qualquer forma.
+
+Confirmação: também é a deixa pra registrar o hábito real do Luiz — ele não usa conta corrente, todo pagamento é no cartão de crédito. Isso reforça por que o sync de conta BANK nunca foi prioridade (ver ponto 3 abaixo).
+
+**2. "Total do mês" em destaque no Dashboard.** A barra de total (Orçamento do mês) tinha o mesmo estilo visual das barras por categoria — pedido pra separar e destacar, "bater o olho e ver a diferença". Ganhou fundo próprio (`--fill-muted`), rótulo maiúsculo, valor bem maior (20.8px vs 13.5px das linhas normais) e barra mais grossa (14px vs 8px) — vira claramente uma linha diferente das outras, não mais uma barra igual no meio da lista.
+
+**3. Regra travada: "entrada" nunca é inferida de transferência entre contas.** Luiz faz muita transferência entre as próprias contas (BTG↔C6, recebimento de cliente que passa pela conta corrente antes de ir pra outro lugar). Isso NUNCA pode virar `Transaction.type: "income"` só por ter chegado numa conta — só quando ele lançar manualmente "recebi R$X no dia Y". Como o sync de conta BANK (extrato corrente, diferente do sync de cartão de crédito que já existe) ainda não foi implementado, travei a regra direto no comentário de `pluggyTransactionSync.ts` pra não esquecer quando chegar a hora: futuro sync de conta BANK grava movimentação (se gravar) sempre como `isTransfer: true`, nunca como receita inferida — receita continua sendo sempre um lançamento manual explícito.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
