@@ -721,6 +721,17 @@ O problema de fundo: o banco não tem endpoint de "usado em outubro" pro futuro 
 - **Bug lateral pego durante o teste** (não relacionado ao pedido, achado sem querer): `changeMonth` fechava sobre `month`/`year` do momento do clique — 2-3 cliques em sequência rápida no "›" (mais rápido que o React re-renderiza) computavam todos a partir do mesmo mês antigo, "perdendo" avanços. Corrigido com um `useRef` espelhando o período atual de forma síncrona. Confirmado ao vivo: 3 cliques rápidos em "Próximo mês" agora leva certinho de Set/2026 pra Dez/2026 (antes ia só até Out).
 - Testado ao vivo: Set/2026 (mês atual) mostra os valores reais sem badge; Dez/2026 mostra BTG caindo de R$53.859,40 pra R$42.317,71 e C6 de R$34.764,22 pra R$26.505,62, com o badge e a nota.
 
+### Popup de posições manuais: campos por corretora + tela legível (01/09)
+
+Luiz mandou print do popup de atualização manual (Nomad/INCO/Wise, ver entrada anterior) — campos cortados, ilegíveis, e um pedido pra simplificar diferente por corretora, já que cada uma tem uma realidade diferente de dado:
+
+- **Nomad**: tira Qtd./Valor unit., adiciona **Valor investido** editável (antes só existia auto-derivado, nunca digitável) — fica Ativo/Tipo/Moeda/Investido/Atual.
+- **Wise**: só a reserva de emergência — tira Tipo (sempre "Renda Fixa", fixo), tira Qtd./Valor unit./Valor investido — fica só Ativo/Moeda/Valor atual.
+- **INCO**: moeda sempre Real (sem seletor), sem Tipo (sempre "Renda Fixa"), sem Qtd., sem Valor unit. — fica Ativo/Investido/Atual. E os itens que **não são empreendimento de verdade** ("ATIVOS", "CDB 110%" — resíduo de um formato antigo, de 2024/2025, antes de virar item por empreendimento) somem da lista — sem apagar o histórico deles do banco, só saem do popup.
+- Backend: `MANUAL_POSITION_CONFIG` (por broker) define moeda fixa/seletor, quais campos aparecem, tipo fixo e nomes a excluir; `GET`/`PUT /brokers/:id/positions` ficaram genéricos em cima dessa config — `investedAmount` agora é aceito como valor digitado (não só herdado do snapshot anterior) quando a corretora usa esse campo.
+- **Tela cortada** (causa real, não só "aumentar fonte"): `.nameCell` tinha especificidade CSS menor que `.table td` (classe vs. classe+tipo), então o min-width maior do nome nunca era aplicado — corrigido pra `.table td.nameCell`. Colunas foram pra 170px (nome 260px), modal de 720px pra 920px, e os valores voltando de USD pra exibição pararam de vir com resíduo de ponto flutuante (`7513.170000000002` → `7513.17`, arredondado na desconversão).
+- Testado ao vivo: as 3 telas renderizam as colunas certas (Nomad com Investido, Wise só Moeda+Atual, INCO sem ATIVOS/CDB 110% e sem seletor de moeda); medido via canvas que "Renda Fixa" cabe com folga (70px de texto em ~106px disponível); salvamento com `investedAmount` explícito testado via API (gravou 80 quando pedido, não teria calculado sozinho), depois removido do banco sem afetar dado real.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

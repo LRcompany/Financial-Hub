@@ -19,7 +19,7 @@
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   padding: var(--space-5);
   width: 100%;
-  max-width: 720px;
+  max-width: 920px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-md);
@@ -79,8 +79,10 @@
 
 .table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 13.5px;
+  table-layout: auto;
 }
 
 .table th {
@@ -90,15 +92,33 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  min-width: 170px;
+}
+
+/* Select/Input dentro da célula preenchem a célula (largura vem do
+   min-width do <td>, não do próprio campo) — é o min-width da célula que
+   evita o texto cortado que a gente viu ("Renda Fix" virando "R", "BRL"
+   virando "L"), a largura do input sozinho não resolve isso. */
+.table td :is(input, select) {
+  min-width: 0;
+}
+
+.table td.nameCell {
+  min-width: 260px;
+}
+
+.table td:last-child {
+  min-width: 40px;
+  width: 40px;
 }
 
 .lastUpdated {

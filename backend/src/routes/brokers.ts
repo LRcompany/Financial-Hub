@@ -72,18 +72,53 @@ brokersRouter.post("/brokers/:id/unarchive", async (req, res) => {
 // teria um parser certo sem um extrato real dele pra calibrar). Luiz pediu
 // pra trocar por um popup direto: ele vê a lista do que já tá cadastrado e
 // digita o valor atual de cada um, mês a mês — sem extrato, sem parser.
-const MANUAL_POSITION_BROKERS = new Set(["NOMAD", "INCO", "WISE"]);
+//
+// Cada corretora tem uma realidade diferente de campo (01/09, ajustado depois
+// de ver a tela real): Nomad é título/ETF de verdade (tem tipo e moeda
+// variados, mas o que importa acompanhar é investido vs. atual, não
+// qtd./preço unitário aqui). Wise é só a reserva de emergência, sempre
+// "Renda Fixa" (nunca outro tipo) — moeda pode variar, mas não tem custo de
+// aquisição separado do valor atual (é liquidez, não investimento). INCO é
+// sempre em Real, sem quantidade, e os itens de verdade são só os
+// empreendimentos (real estate crowdfunding) — "CDB 110%"/"ATIVOS" são
+// resíduo de um formato antigo de acompanhar a carteira (dados de 2024/2025,
+// antes de virar item por empreendimento); ficam de fora do popup mas o
+// histórico deles continua no banco, intocado.
+interface PositionFieldConfig {
+  currency: "USD" | "BRL" | "selectable";
+  showType: boolean;
+  showQuantity: boolean;
+  showUnitValue: boolean;
+  showInvestedAmount: boolean;
+  fixedType?: string;
+  excludeSecurityNames?: string[];
+}
+
+const MANUAL_POSITION_CONFIG: Record<string, PositionFieldConfig> = {
+  NOMAD: { currency: "selectable", showType: true, showQuantity: false, showUnitValue: false, showInvestedAmount: true },
+  WISE: { currency: "selectable", showType: false, showQuantity: false, showUnitValue: false, showInvestedAmount: false, fixedType: "Renda Fixa" },
+  INCO: {
+    currency: "BRL",
+    showType: false,
+    showQuantity: false,
+    showUnitValue: false,
+    showInvestedAmount: true,
+    fixedType: "Renda Fixa",
+    excludeSecurityNames: ["ATIVOS", "CDB 110%"],
+  },
+};
 
 // GET /api/brokers/:id/positions — última posição conhecida de cada ativo
 // dessa corretora (não só a "ativa hoje" pela janela de 2 meses do
 // Patrimônio — é justamente o ativo que ficou pra trás que mais precisa
-// aparecer aqui pra ser atualizado). Fica de fora só o que já está zerado
-// dos dois lados (marketValue e investedAmount) — posição encerrada não
-// precisa reaparecer no popup toda vez.
+// aparecer aqui pra ser atualizado). Fica de fora o que já está zerado dos
+// dois lados (marketValue e investedAmount) e o que a config exclui por
+// nome (resíduo de formato antigo, ver comentário acima).
 brokersRouter.get("/brokers/:id/positions", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
-  if (!MANUAL_POSITION_BROKERS.has(broker.name)) {
+  const fieldConfig = MANUAL_POSITION_CONFIG[broker.name];
+  if (!fieldConfig) {
     return res.status(400).json({ error: `${broker.name} não está configurada pra atualização manual de posições.` });
   }
 
@@ -100,43 +135,54 @@ brokersRouter.get("/brokers/:id/positions", async (req, res) => {
 
   const positions = [...latestBySecurity.values()]
     .filter((s) => s.marketValue > 0 || s.investedAmount > 0)
+    .filter((s) => !fieldConfig.excludeSecurityNames?.includes(s.security.name))
     .map((s) => {
-      // O banco guarda tudo em BRL (marketValue/unitValue já convertidos na
-      // hora de salvar) — pra reexibir no formulário precisa desconverter de
-      // volta pra USD usando a taxa daquele snapshot específico, senão o
-      // campo mostraria um número em BRL com o rótulo "USD" do lado, e o
-      // Luiz digitaria por cima olhando o valor errado no app dele (que
-      // mostra USD). Ao salvar de novo, a conversão usa a cotação de HOJE,
-      // não essa antiga — é sempre assim que preço convertido funciona aqui.
+      // O banco guarda tudo em BRL (marketValue/unitValue/investedAmount já
+      // convertidos na hora de salvar) — pra reexibir no formulário precisa
+      // desconverter de volta pra USD usando a taxa daquele snapshot
+      // específico, senão o campo mostraria um número em BRL com o rótulo
+      // "USD" do lado, e o Luiz digitaria por cima olhando o valor errado no
+      // app dele (que mostra USD). Ao salvar de novo, a conversão usa a
+      // cotação de HOJE, não essa antiga — é sempre assim que preço
+      // convertido funciona aqui.
       const fx = s.fxRateToBRL;
       const usd = s.security.currency === "USD" && fx;
+      // Arredonda pra 2 casas na volta — dividir por uma taxa de câmbio
+      // sempre sobra resíduo de ponto flutuante (7513.170000000002), e isso
+      // ia aparecer digitável no campo, cortado, sem servir pra nada real
+      // (ninguém digita centavo com 12 casas decimais).
+      const round2 = (n: number) => Math.round(n * 100) / 100;
       return {
         securityId: s.securityId,
         name: s.security.name,
         type: s.security.type,
         currency: s.security.currency,
         quantity: s.quantity,
-        unitValue: usd && s.unitValue != null ? s.unitValue / fx : s.unitValue,
-        marketValue: usd ? s.marketValue / fx : s.marketValue,
+        unitValue: usd && s.unitValue != null ? round2(s.unitValue / fx) : s.unitValue,
+        marketValue: usd ? round2(s.marketValue / fx) : s.marketValue,
+        investedAmount: usd ? round2(s.investedAmount / fx) : s.investedAmount,
         lastUpdated: `${String(s.month).padStart(2, "0")}/${s.year}`,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
-  res.json({ positions, brokerLastSyncedAt: broker.lastSyncedAt });
+  res.json({ positions, brokerLastSyncedAt: broker.lastSyncedAt, fieldConfig });
 });
 
 // PUT /api/brokers/:id/positions — grava um PositionSnapshot novo (mês/ano
 // de hoje) pra cada posição enviada, uma por uma — é assim que o histórico
 // mês a mês continua existindo (nunca sobrescreve o snapshot antigo, só
-// soma um novo). Ativo sem securityId é novo (Luiz adicionou no popup);
-// investedAmount herda do snapshot anterior do mesmo ativo (mesma regra já
-// usada no sync on-chain e no lançamento manual avulso) — atualizar o valor
-// de mercado não pode inventar um custo de aquisição novo.
+// soma um novo). Ativo sem securityId é novo (Luiz adicionou no popup).
+// investedAmount: pra corretora com `showInvestedAmount` (Nomad, INCO) vem
+// digitado por ele — é um valor real que ele está informando, não estamos
+// inventando; pras demais (Wise) continua herdando do snapshot anterior
+// (mesma regra de sempre: atualizar o valor de mercado não pode inventar um
+// custo de aquisição novo sozinho).
 brokersRouter.put("/brokers/:id/positions", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
-  if (!MANUAL_POSITION_BROKERS.has(broker.name)) {
+  const fieldConfig = MANUAL_POSITION_CONFIG[broker.name];
+  if (!fieldConfig) {
     return res.status(400).json({ error: `${broker.name} não está configurada pra atualização manual de posições.` });
   }
 
@@ -160,14 +206,16 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
     quantity?: number | null;
     unitValue?: number | null;
     marketValue?: number;
+    investedAmount?: number | null;
   }[]) {
     const name = raw.name?.trim();
     if (!name || typeof raw.marketValue !== "number") continue;
 
-    const assetCurrency = raw.currency === "USD" ? "USD" : "BRL";
+    const assetCurrency = fieldConfig.currency === "selectable" ? (raw.currency === "USD" ? "USD" : "BRL") : fieldConfig.currency;
     let marketValue = raw.marketValue;
-    let unitValue = typeof raw.unitValue === "number" ? raw.unitValue : null;
-    const quantity = typeof raw.quantity === "number" ? raw.quantity : null;
+    let unitValue = fieldConfig.showUnitValue && typeof raw.unitValue === "number" ? raw.unitValue : null;
+    let investedAmountInput = fieldConfig.showInvestedAmount && typeof raw.investedAmount === "number" ? raw.investedAmount : null;
+    const quantity = fieldConfig.showQuantity && typeof raw.quantity === "number" ? raw.quantity : null;
 
     if (assetCurrency === "USD") {
       if (usdRate == null) {
@@ -179,20 +227,25 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       }
       marketValue = marketValue * usdRate;
       if (unitValue != null) unitValue = unitValue * usdRate;
+      if (investedAmountInput != null) investedAmountInput = investedAmountInput * usdRate;
     }
 
+    const type = fieldConfig.fixedType ?? raw.type ?? "Outro";
     const securityId = raw.securityId || `MANUAL:${broker.name}:${name}`.toUpperCase();
     await prisma.security.upsert({
       where: { id: securityId },
-      update: { name, type: raw.type || "Outro", currency: assetCurrency },
-      create: { id: securityId, name, type: raw.type || "Outro", currency: assetCurrency },
+      update: { name, type, currency: assetCurrency },
+      create: { id: securityId, name, type, currency: assetCurrency },
     });
 
-    const previous = await prisma.positionSnapshot.findFirst({
-      where: { brokerId: broker.id, securityId },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-    });
-    const investedAmount = previous?.investedAmount ?? marketValue;
+    let investedAmount = investedAmountInput;
+    if (investedAmount == null) {
+      const previous = await prisma.positionSnapshot.findFirst({
+        where: { brokerId: broker.id, securityId },
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+      });
+      investedAmount = previous?.investedAmount ?? marketValue;
+    }
 
     await prisma.positionSnapshot.upsert({
       where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId, month, year } },

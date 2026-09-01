@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
-import { api, type BrokerPosition } from '../lib/api'
+import { api, type BrokerPosition, type PositionFieldConfig } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
 import styles from './ManualPositionsModal.module.css'
@@ -15,6 +15,7 @@ interface Row {
   quantity: string
   unitValue: string
   marketValue: string
+  investedAmount: string
   lastUpdated?: string
 }
 
@@ -27,18 +28,31 @@ function toRow(p: BrokerPosition): Row {
     quantity: p.quantity != null ? String(p.quantity) : '',
     unitValue: p.unitValue != null ? String(p.unitValue) : '',
     marketValue: String(p.marketValue),
+    investedAmount: String(p.investedAmount),
     lastUpdated: p.lastUpdated,
   }
 }
 
-const EMPTY_ROW: Row = { name: '', type: 'Renda Fixa', currency: 'BRL', quantity: '', unitValue: '', marketValue: '' }
+function emptyRow(config: PositionFieldConfig): Row {
+  return {
+    name: '',
+    type: config.fixedType ?? 'Renda Fixa',
+    currency: config.currency === 'selectable' ? 'BRL' : config.currency,
+    quantity: '',
+    unitValue: '',
+    marketValue: '',
+    investedAmount: '',
+  }
+}
 
 /** Popup de atualização manual mês a mês (Nomad, INCO, Wise — corretora sem
  * sync automático e sem extrato num formato que dá pra ler). Luiz abre o app
  * dele, olha o valor de cada investimento e digita aqui — nada é adivinhado.
  * Salvar grava um PositionSnapshot novo pro mês/ano de hoje por posição, sem
  * sobrescrever o histórico anterior (é assim que a evolução mês a mês
- * continua existindo). */
+ * continua existindo). Colunas variam por corretora (`fieldConfig`, vindo do
+ * backend) — Nomad acompanha investido/atual, Wise só o saldo, INCO nem tem
+ * quantidade nem moeda pra escolher. */
 export function ManualPositionsModal({
   brokerId,
   brokerName,
@@ -52,6 +66,7 @@ export function ManualPositionsModal({
 }) {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<Row[]>([])
+  const [fieldConfig, setFieldConfig] = useState<PositionFieldConfig | null>(null)
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -62,6 +77,7 @@ export function ManualPositionsModal({
       .then((r) => {
         setRows(r.positions.map(toRow))
         setLastSyncedAt(r.brokerLastSyncedAt)
+        setFieldConfig(r.fieldConfig)
       })
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false))
@@ -76,24 +92,27 @@ export function ManualPositionsModal({
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { ...EMPTY_ROW }])
+    if (!fieldConfig) return
+    setRows((prev) => [...prev, emptyRow(fieldConfig)])
   }
 
   async function handleSave() {
+    if (!fieldConfig) return
     setError(null)
     const payload = rows
       .filter((r) => r.name.trim() && r.marketValue !== '')
       .map((r) => ({
         securityId: r.securityId,
         name: r.name.trim(),
-        type: r.type,
-        currency: r.currency,
-        quantity: r.quantity !== '' ? Number(r.quantity) : null,
-        unitValue: r.unitValue !== '' ? Number(r.unitValue) : null,
+        type: fieldConfig.fixedType ?? r.type,
+        currency: fieldConfig.currency === 'selectable' ? r.currency : fieldConfig.currency,
+        quantity: fieldConfig.showQuantity && r.quantity !== '' ? Number(r.quantity) : null,
+        unitValue: fieldConfig.showUnitValue && r.unitValue !== '' ? Number(r.unitValue) : null,
         marketValue: Number(r.marketValue),
+        investedAmount: fieldConfig.showInvestedAmount && r.investedAmount !== '' ? Number(r.investedAmount) : null,
       }))
     if (payload.length === 0) {
-      setError('Preencha ao menos um ativo com valor de mercado.')
+      setError('Preencha ao menos um ativo com valor atual.')
       return
     }
     setSaving(true)
@@ -124,14 +143,14 @@ export function ManualPositionsModal({
           </button>
         </div>
 
-        {loading ? (
+        {loading || !fieldConfig ? (
           <p className={styles.helperText}>Carregando...</p>
         ) : (
           <>
             <p className={styles.helperText}>
               Abra o app da {brokerName} e digite o valor atual de cada investimento. Cada salvamento vira um registro do
-              mês — o histórico anterior não é sobrescrito. Encerrou algum? Deixe o valor de mercado em 0 em vez de
-              remover a linha (remover só tira do salvamento de agora, não marca como zerado).
+              mês — o histórico anterior não é sobrescrito. Encerrou algum? Deixe o valor atual em 0 em vez de remover a
+              linha (remover só tira do salvamento de agora, não marca como zerado).
             </p>
 
             <div className={styles.tableWrap}>
@@ -139,59 +158,63 @@ export function ManualPositionsModal({
                 <thead>
                   <tr>
                     <th>Ativo</th>
-                    <th>Tipo</th>
-                    <th>Moeda</th>
-                    <th>Qtd.</th>
-                    <th>Valor unit.</th>
-                    <th>Valor de mercado</th>
+                    {fieldConfig.showType && <th>Tipo</th>}
+                    {fieldConfig.currency === 'selectable' && <th>Moeda</th>}
+                    {fieldConfig.showQuantity && <th>Qtd.</th>}
+                    {fieldConfig.showUnitValue && <th>Valor unit.</th>}
+                    {fieldConfig.showInvestedAmount && <th>Valor investido</th>}
+                    <th>Valor atual</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={r.securityId ?? `new-${i}`}>
-                      <td>
+                      <td className={styles.nameCell}>
                         <Input placeholder="Nome do ativo" value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })} />
                         {r.lastUpdated && <div className={styles.lastUpdated}>atualizado {r.lastUpdated}</div>}
                       </td>
+                      {fieldConfig.showType && (
+                        <td>
+                          <Select value={r.type} onChange={(e) => updateRow(i, { type: e.target.value })}>
+                            {SECURITY_TYPES.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
+                      )}
+                      {fieldConfig.currency === 'selectable' && (
+                        <td>
+                          <Select value={r.currency} onChange={(e) => updateRow(i, { currency: e.target.value })}>
+                            <option value="BRL">BRL</option>
+                            <option value="USD">USD</option>
+                          </Select>
+                        </td>
+                      )}
+                      {fieldConfig.showQuantity && (
+                        <td>
+                          <Input type="number" step="0.000001" value={r.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} />
+                        </td>
+                      )}
+                      {fieldConfig.showUnitValue && (
+                        <td>
+                          <Input type="number" step="0.01" value={r.unitValue} onChange={(e) => updateRow(i, { unitValue: e.target.value })} />
+                        </td>
+                      )}
+                      {fieldConfig.showInvestedAmount && (
+                        <td>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={r.investedAmount}
+                            onChange={(e) => updateRow(i, { investedAmount: e.target.value })}
+                          />
+                        </td>
+                      )}
                       <td>
-                        <Select value={r.type} onChange={(e) => updateRow(i, { type: e.target.value })}>
-                          {SECURITY_TYPES.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </Select>
-                      </td>
-                      <td>
-                        <Select value={r.currency} onChange={(e) => updateRow(i, { currency: e.target.value })}>
-                          <option value="BRL">BRL</option>
-                          <option value="USD">USD</option>
-                        </Select>
-                      </td>
-                      <td>
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          value={r.quantity}
-                          onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={r.unitValue}
-                          onChange={(e) => updateRow(i, { unitValue: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={r.marketValue}
-                          onChange={(e) => updateRow(i, { marketValue: e.target.value })}
-                        />
+                        <Input type="number" step="0.01" value={r.marketValue} onChange={(e) => updateRow(i, { marketValue: e.target.value })} />
                       </td>
                       <td>
                         <button className={styles.iconBtn} onClick={() => removeRow(i)} aria-label="Remover linha">

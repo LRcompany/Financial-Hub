@@ -238,7 +238,18 @@ export interface BrokerPosition {
   quantity: number | null
   unitValue: number | null
   marketValue: number
+  investedAmount: number
   lastUpdated: string
+}
+
+export interface PositionFieldConfig {
+  currency: 'USD' | 'BRL' | 'selectable'
+  showType: boolean
+  showQuantity: boolean
+  showUnitValue: boolean
+  showInvestedAmount: boolean
+  fixedType?: string
+  excludeSecurityNames?: string[]
 }
 
 export const api = {
@@ -363,10 +374,20 @@ export const api = {
   },
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
-  brokerPositions: (brokerId: string) => request<{ positions: BrokerPosition[]; brokerLastSyncedAt: string | null }>(`/brokers/${brokerId}/positions`),
+  brokerPositions: (brokerId: string) =>
+    request<{ positions: BrokerPosition[]; brokerLastSyncedAt: string | null; fieldConfig: PositionFieldConfig }>(`/brokers/${brokerId}/positions`),
   updateBrokerPositions: async (
     brokerId: string,
-    positions: { securityId?: string; name: string; type: string; currency: string; quantity: number | null; unitValue: number | null; marketValue: number }[]
+    positions: {
+      securityId?: string
+      name: string
+      type: string
+      currency: string
+      quantity: number | null
+      unitValue: number | null
+      marketValue: number
+      investedAmount: number | null
+    }[]
   ) => {
     const response = await fetch(`${API_URL}/brokers/${brokerId}/positions`, {
       method: 'PUT',
