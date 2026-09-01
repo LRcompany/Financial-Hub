@@ -196,6 +196,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
       id: i.id,
       dueDate: i.dueDate,
       description: i.description,
+      note: i.note,
       amount: i.amount,
       category: i.category?.name ?? null,
       cardLabel: i.cardLabel,
@@ -226,7 +227,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
 
   const groups = new Map<
     string,
-    { description: string; amount: number; cardLabel: string | null; categoryId: string | null; categoryPath: string | null; ids: string[]; dueDates: Date[] }
+    { description: string; note: string | null; amount: number; cardLabel: string | null; categoryId: string | null; categoryPath: string | null; ids: string[]; dueDates: Date[] }
   >();
   for (const i of installments) {
     const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
@@ -240,6 +241,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
     } else {
       groups.set(key, {
         description: purchaseBase(i.description),
+        note: i.note,
         amount: i.amount,
         cardLabel: i.cardLabel,
         categoryId: i.categoryId,
@@ -253,6 +255,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
   const result = [...groups.values()]
     .map((g) => ({
       description: g.description,
+      note: g.note,
       amount: g.amount,
       cardLabel: g.cardLabel,
       categoryId: g.categoryId,
@@ -286,18 +289,19 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
   res.json({ groups: result, knownCards, categories });
 });
 
-// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount?, categoryId? }.
+// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount?, categoryId?, note? }.
 // Aplica em TODAS as linhas da compra de uma vez (as parcelas restantes dela)
 // — é a correção "essa compra inteira é do C6" ou "essa compra é Farmácia",
 // não uma parcela isolada.
 budgetRouter.put("/upcoming-installments/group", async (req, res) => {
-  const { ids, cardLabel, amount, categoryId } = req.body ?? {};
+  const { ids, cardLabel, amount, categoryId, note } = req.body ?? {};
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: "ids precisa ser uma lista não vazia" });
   }
-  const data: { cardLabel?: string | null; amount?: number; categoryId?: string | null } = {};
+  const data: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null } = {};
   if (cardLabel !== undefined) data.cardLabel = cardLabel === "" ? null : cardLabel;
   if (typeof amount === "number" && amount >= 0) data.amount = amount;
+  if (note !== undefined) data.note = note === "" ? null : note;
   if (categoryId !== undefined) {
     if (categoryId === "" || categoryId === null) {
       data.categoryId = null;
@@ -313,7 +317,7 @@ budgetRouter.put("/upcoming-installments/group", async (req, res) => {
     }
   }
   if (Object.keys(data).length === 0) {
-    return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel, amount e/ou categoryId" });
+    return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel, amount, categoryId e/ou note" });
   }
   const result = await prisma.upcomingInstallment.updateMany({ where: { id: { in: ids } }, data });
   res.json({ updated: result.count });

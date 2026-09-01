@@ -23,13 +23,14 @@ function GroupRow({
   group: InstallmentGroup
   knownCards: string[]
   categories: LeafCategoryOption[]
-  onSaved: (ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null }) => void
+  onSaved: (ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null }) => void
   onDeleted: (ids: string[]) => void
 }) {
   const [cardChoice, setCardChoice] = useState(group.cardLabel ?? '')
   const [customCard, setCustomCard] = useState('')
   const [categoryChoice, setCategoryChoice] = useState(group.categoryId ?? '')
   const [amount, setAmount] = useState(String(group.amount))
+  const [note, setNote] = useState(group.note ?? '')
   const [saving, setSaving] = useState(false)
 
   const isOther = cardChoice === OTHER
@@ -37,6 +38,7 @@ function GroupRow({
     cardChoice !== (group.cardLabel ?? '') ||
     Number(amount) !== group.amount ||
     categoryChoice !== (group.categoryId ?? '') ||
+    note !== (group.note ?? '') ||
     (isOther && customCard.trim() !== '')
 
   async function save() {
@@ -45,9 +47,10 @@ function GroupRow({
     if (Number.isNaN(numericAmount) || numericAmount < 0) return
     setSaving(true)
     try {
-      await api.updateInstallmentGroup(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null })
+      const trimmedNote = note.trim() || null
+      await api.updateInstallmentGroup(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, note: trimmedNote })
       const categoryPath = categories.find((c) => c.id === categoryChoice)?.path ?? null
-      onSaved(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, categoryPath })
+      onSaved(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, categoryPath, note: trimmedNote })
     } finally {
       setSaving(false)
     }
@@ -67,6 +70,15 @@ function GroupRow({
   return (
     <tr className={group.categoryId === null ? styles.unconfiguredRow : ''}>
       <td>{group.description}</td>
+      <td>
+        <Input
+          placeholder="O que foi essa compra?"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className={styles.noteInput}
+          disabled={saving}
+        />
+      </td>
       <td className={styles.numCell}>{group.count}x</td>
       <td className={styles.numCell}>
         {formatDate(group.firstDueDate)}
@@ -132,7 +144,7 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
 
   useEffect(load, [])
 
-  function handleSaved(ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null }) {
+  function handleSaved(ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null }) {
     setGroups((prev) => prev?.map((g) => (g.ids === ids || sameIds(g.ids, ids) ? { ...g, ...changes } : g)) ?? null)
   }
 
@@ -173,6 +185,7 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
               <thead>
                 <tr>
                   <th>Compra</th>
+                  <th>Descrição</th>
                   <th>Parcelas</th>
                   <th>Período</th>
                   <th>Valor/parcela</th>

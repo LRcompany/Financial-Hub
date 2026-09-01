@@ -332,7 +332,16 @@ export function Orcamento() {
                   {upcoming.installments.slice(0, 20).map((i) => (
                     <tr key={i.id}>
                       <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
-                      <td>{i.description}</td>
+                      <td>
+                        {i.note ? (
+                          <>
+                            {i.note}
+                            <div className={styles.installmentRawName}>{i.description}</div>
+                          </>
+                        ) : (
+                          i.description
+                        )}
+                      </td>
                       <td>{i.cardLabel ?? '—'}</td>
                       <td>{i.category ?? '—'}</td>
                       <td>R$ {currency(i.amount)}</td>

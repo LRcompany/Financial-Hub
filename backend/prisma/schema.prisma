@@ -59,6 +59,11 @@ model UpcomingInstallment {
   id          String   @id @default(uuid())
   dueDate     DateTime
   description String
+  // Nome real do comerciante geralmente vem ilegível da fatura (ex:
+  // "AMAZONMKTPLC HEIMONLTD") — `note` é o detalhe que o Luiz mesmo escreve
+  // ("fone de ouvido bluetooth") pra lembrar o que a compra foi de verdade.
+  // Nunca sobrescreve `description` (que continua batendo com a fatura real).
+  note        String?
   amount      Float
   // Qual cartão/fatura essa parcela pertence (ex: "Caixa 5709", "C6", "BTG")
   // — null pra parcela que veio da planilha sem essa informação (não dava

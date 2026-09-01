@@ -79,6 +79,7 @@ export interface UpcomingInstallment {
   id: string
   dueDate: string
   description: string
+  note: string | null
   amount: number
   category: string | null
   cardLabel: string | null
@@ -93,6 +94,7 @@ export interface UpcomingInstallmentsSummary {
 
 export interface InstallmentGroup {
   description: string
+  note: string | null
   amount: number
   cardLabel: string | null
   categoryId: string | null
@@ -287,7 +289,7 @@ export const api = {
   },
   installmentGroups: () =>
     request<{ groups: InstallmentGroup[]; knownCards: string[]; categories: LeafCategoryOption[] }>('/upcoming-installments/groups'),
-  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number; categoryId?: string | null }) =>
+  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null }) =>
     request<{ updated: number }>('/upcoming-installments/group', { method: 'PUT', body: JSON.stringify({ ids, ...changes }) }),
   deleteInstallmentGroup: (ids: string[]) =>
     request<{ deleted: number }>('/upcoming-installments/group', { method: 'DELETE', body: JSON.stringify({ ids }) }),

@@ -569,6 +569,10 @@ Depois de criar a árvore, Luiz pediu uma varredura geral: "não quero um sistem
 - **Corrigido**: o tipo `Category` no frontend (`api.ts`) ainda tinha `essential: boolean` e `usage: 'personal'|'business'|null` — resíduo do modelo antigo (antes de `kind` existir), nunca batia com o que a API de fato manda há dias. Removidos os dois campos, `Category` agora usa `kind: CategoryKind` (o tipo real). `tsc` confirmou zero lugar lendo esses campos — eram mortos de verdade, não só desatualizados.
 - **Achado, não removido — perguntei antes**: `Category.usage` no **schema do banco** (não só o tipo TS) não é lido nem escrito em lugar nenhum do código — candidato real a sair do schema, mas isso é migração (mexe na estrutura do banco), então não fiz sozinho. `CategorizationRule` (model + `backend/src/services/categorization.ts`, 34 linhas) também está com zero uso hoje — mas tem um TODO explícito em `pluggy.ts` linkando ele ao sync de transação futuro ("rodar sugestão de categoria antes de salvar"), então não é sujeira abandonada, é peça de um recurso ainda não construído — recomendo manter.
 
+### Campo "Descrição" nas parcelas — anotação por cima do nome real do comerciante (31/08)
+
+O nome que vem da fatura do cartão costuma ser ilegível ("AMAZONMKTPLC HEIMONLTD") — Luiz pediu um campo pra ele mesmo detalhar o que a compra foi de verdade. `UpcomingInstallment.note` (migração `20260831210000_installment_note`, `ADD COLUMN` simples) — nunca sobrescreve `description` (que continua batendo com a fatura real, útil pra conferência futura). Editável na ferramenta "Revisar parcelas" (mesma regra de grupo — aplica em todas as parcelas da mesma compra de uma vez) e exibido na tabela "Comprometido em parcelas futuras" do Orçamento: quando tem nota, mostra ela em destaque com o nome real do comerciante embaixo, pequeno, cinza (referência, não é o texto principal mais).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

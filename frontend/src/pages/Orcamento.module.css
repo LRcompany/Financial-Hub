@@ -304,6 +304,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.installmentRawName {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: normal;
+  margin-top: 2px;
+}
+
 .table tbody tr:last-child td {
   border-bottom: none;
 }

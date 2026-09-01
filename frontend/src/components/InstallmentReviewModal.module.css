@@ -130,6 +130,11 @@
   height: 32px;
 }
 
+.noteInput {
+  width: 160px !important;
+  height: 32px;
+}
+
 .customCardInput {
   width: 110px !important;
   height: 32px;
