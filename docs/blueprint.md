@@ -464,6 +464,10 @@ Luiz perguntou por que BTG e C6 não atualizam quando ele navega o mês em Orça
 
 **Delay medido de verdade (01/09)**: a transação mais recente que a Pluggy tinha do C6, no dia em que rodamos o sync de transação (ver "Sync real de transação de cartão de crédito" abaixo), era de 27/08 — **~4 dias de atraso** entre a compra acontecer e ela ficar disponível pra puxar por aqui. Confirma na prática a limitação documentada acima: não tem nada no nosso app que reduza isso, só o Meu Pluggy resincronizando por conta própria (ou, se existir, algum "atualizar agora" dentro do próprio app/site do Meu Pluggy — não testado, é fora do nosso sistema).
 
+**Confirmado na documentação oficial (01/09)** — não é bug nem atraso do Meu Pluggy, é comportamento padrão documentado:
+- Pluggy ([Data sync: Update an Item](https://docs.pluggy.ai/docs/data-sync-update-an-item)): cada sync usa uma "lookback window" — conector direto = **4 a 5 dias corridos** desde a última sync (bate exatamente com o que medimos), conector Open Finance regulado = 7 dias. Sync automático roda **1x por dia** sozinho, sem gatilho manual.
+- Open Finance Brasil em geral: transação nova pode levar de horas até ~5 dias pra ficar disponível — e essa parte é responsabilidade da **instituição financeira** (o banco), não do agregador. Fonte: [Latência na Disponibilização de Dados Open Finance — Tecnospeed](https://atendimento.tecnospeed.com.br/hc/pt-br/articles/35987450931863-Lat%C3%AAncia-na-Disponibiliza%C3%A7%C3%A3o-de-Dados-Open-Finance).
+
 ### Ferramenta de revisão de parcelas + cartões Pluggy ganham quebra month-aware (30/08)
 
 Luiz pediu uma interface pra conferir e corrigir as parcelas futuras de uma vez (dropdown de cartão + campo de valor por compra), em vez de eu ficar corrigindo uma por uma via chat. Construído:
