@@ -21,7 +21,7 @@ model Transaction {
   description String
   amount      Float
   source      String   @default("manual") // manual | pluggy | ofx_import
-  externalId  String? // id da transação na Pluggy/OFX, evita duplicar import
+  externalId  String?  @unique // id da transação na Pluggy/OFX, evita duplicar import (upsert)
   isTransfer  Boolean  @default(false) // true = não conta como gasto/receita real
 
   categoryId String?
@@ -70,6 +70,10 @@ model UpcomingInstallment {
   // pra saber o cartão só pelo livro-razão). Permite sintetizar "quanto
   // ainda falta em cada cartão", não só o total geral.
   cardLabel   String?
+  // "pluggy:<id da transação>:<parcela N>" pra parcela que veio do sync real
+  // da Pluggy — evita recriar a mesma parcela futura toda vez que o sync
+  // roda de novo. Null pra parcela importada da planilha (sem esse conceito).
+  externalId String? @unique
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])

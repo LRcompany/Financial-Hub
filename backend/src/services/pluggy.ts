@@ -55,6 +55,12 @@ export function getInvestments(itemId: string) {
   return pluggyGet(`/investments?itemId=${itemId}`);
 }
 
+// v1 /transactions retorna 410 (deprecado) — confirmado em 29/08. v2 não
+// aceita pageSize (ignora o parâmetro se mandar), então só accountId mesmo.
+export function getTransactions(accountId: string) {
+  return pluggyGet(`/v2/transactions?accountId=${accountId}`);
+}
+
 /**
  * Cria um Connect Token pro widget (docs.pluggy.ai/reference/connect-token-create).
  * Sem itemId: abre o widget pra conectar um banco novo.
@@ -73,8 +79,4 @@ export async function createConnectToken(itemId?: string): Promise<{ accessToken
   return response.json() as Promise<{ accessToken: string }>;
 }
 
-// TODO: quando formos ligar o sync de transações —
-// 1. Puxar GET /transactions?accountId= por conta
-// 2. Mapear pra Transaction (source: "pluggy", externalId: id da Pluggy)
-// 3. Rodar a sugestão de categoria (categorization.ts) antes de salvar
-// 4. Detectar pagamento de fatura (Caixa → C6) e marcar isTransfer: true
+// Sync de transação real: ver services/pluggyTransactionSync.ts (31/08).

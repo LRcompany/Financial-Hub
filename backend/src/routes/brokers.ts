@@ -3,6 +3,7 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
+import { syncBrokerCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
 import { parseNomadStatement } from "../services/nomadStatement.js";
 import { getUsdToBrlRateOnDate } from "../services/fx.js";
@@ -254,4 +255,46 @@ brokersRouter.get("/credit-cards", async (req, res) => {
   }
 
   res.json({ cards });
+});
+
+// POST /api/credit-cards/sync-transactions — puxa as transações reais de
+// TODOS os cartões de crédito conectados via Pluggy (BTG, C6...) de uma vez.
+// Grava Transaction (source: "pluggy", externalId evita duplicar em sync
+// repetido) e, pra compra parcelada, as parcelas futuras restantes em
+// UpcomingInstallment — automatizando o que antes era feito à mão batendo
+// fatura (ver Caixa em 29/08). Tenta categorizar automaticamente (mapeamento
+// conservador de categoria da Pluggy + CategorizationRule já aprendida);
+// o que não bate com confiança fica sem categoria, pra revisar manualmente.
+brokersRouter.post("/credit-cards/sync-transactions", async (_req, res) => {
+  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
+
+  const perBroker: { broker: string; transactionsSynced: number; transactionsSkipped: number; installmentsCreated: number; categorizedCount: number; error?: string }[] = [];
+
+  for (const broker of brokers) {
+    try {
+      const result = await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!);
+      perBroker.push({ broker: broker.name, ...result });
+    } catch (err) {
+      perBroker.push({
+        broker: broker.name,
+        transactionsSynced: 0,
+        transactionsSkipped: 0,
+        installmentsCreated: 0,
+        categorizedCount: 0,
+        error: (err as Error).message,
+      });
+    }
+  }
+
+  const totals = perBroker.reduce(
+    (acc, r) => ({
+      transactionsSynced: acc.transactionsSynced + r.transactionsSynced,
+      transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
+      installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
+      categorizedCount: acc.categorizedCount + r.categorizedCount,
+    }),
+    { transactionsSynced: 0, transactionsSkipped: 0, installmentsCreated: 0, categorizedCount: 0 }
+  );
+
+  res.json({ ...totals, perBroker });
 });

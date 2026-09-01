@@ -314,3 +314,13 @@
 .table tbody tr:last-child td {
   border-bottom: none;
 }
+
+.spinningIcon {
+  animation: orcamentoSpin 0.8s linear infinite;
+}
+
+@keyframes orcamentoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
