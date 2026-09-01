@@ -1,8 +1,16 @@
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  RegistrationResponseJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  AuthenticationResponseJSON,
+} from '@simplewebauthn/browser'
+
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3333/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // manda o cookie de sessão — sem isso toda rota autenticada vira 401
     ...options,
   })
   if (!response.ok) {
@@ -246,18 +254,66 @@ export interface PositionFieldConfig {
   excludeSecurityNames?: string[]
 }
 
+export interface AuthStatus {
+  authenticated: boolean
+  hasPinConfigured: boolean
+  hasWebauthnCredential: boolean
+}
+
+export interface WebauthnCredentialInfo {
+  id: string
+  deviceLabel: string
+  createdAt: string
+}
+
+async function postForAuth<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error ?? `Falha (${response.status})`)
+  return data as T
+}
+
 export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
+  authStatus: () => request<AuthStatus>('/auth/status'),
+  authSetup: (pin: string) => postForAuth<{ ok: true }>('/auth/setup', { pin }),
+  authLogin: (pin: string) => postForAuth<{ ok: true }>('/auth/login', { pin }),
+  authLogout: () => postForAuth<{ ok: true }>('/auth/logout'),
+  changePin: async (currentPin: string, newPin: string) => {
+    const response = await fetch(`${API_URL}/auth/pin`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ currentPin, newPin }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao trocar a senha (${response.status})`)
+    return data as { ok: true }
+  },
+  webauthnCredentials: () => request<WebauthnCredentialInfo[]>('/auth/webauthn/credentials'),
+  deleteWebauthnCredential: (id: string) =>
+    request<{ ok: true }>(`/auth/webauthn/${id}`, { method: 'DELETE' }),
+  webauthnRegisterOptions: () => postForAuth<PublicKeyCredentialCreationOptionsJSON>('/auth/webauthn/register-options'),
+  webauthnRegisterVerify: (response: RegistrationResponseJSON, deviceLabel: string) =>
+    postForAuth<{ ok: true }>('/auth/webauthn/register-verify', { response, deviceLabel }),
+  webauthnLoginOptions: () => postForAuth<PublicKeyCredentialRequestOptionsJSON>('/auth/webauthn/login-options'),
+  webauthnLoginVerify: (response: AuthenticationResponseJSON) =>
+    postForAuth<{ ok: true }>('/auth/webauthn/login-verify', { response }),
   brokers: () => request<Broker[]>('/brokers'),
   syncBroker: (id: string) => request<{ synced: true; count: number }>(`/brokers/${id}/sync`, { method: 'POST' }),
   archiveBroker: async (id: string) => {
-    const response = await fetch(`${API_URL}/brokers/${id}/archive`, { method: 'POST' })
+    const response = await fetch(`${API_URL}/brokers/${id}/archive`, { method: 'POST', credentials: 'include' })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error ?? `Falha ao arquivar a conexão (${response.status})`)
     return data as Broker
   },
   unarchiveBroker: async (id: string) => {
-    const response = await fetch(`${API_URL}/brokers/${id}/unarchive`, { method: 'POST' })
+    const response = await fetch(`${API_URL}/brokers/${id}/unarchive`, { method: 'POST', credentials: 'include' })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error ?? `Falha ao desarquivar a conexão (${response.status})`)
     return data as Broker
@@ -287,6 +343,7 @@ export const api = {
     const response = await fetch(`${API_URL}/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(input),
     })
     const data = await response.json()
@@ -297,6 +354,7 @@ export const api = {
     const response = await fetch(`${API_URL}/categories/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(input),
     })
     const data = await response.json()
@@ -304,7 +362,7 @@ export const api = {
     return data as Category
   },
   deleteCategory: async (id: string) => {
-    const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' })
+    const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE', credentials: 'include' })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error ?? `Falha ao excluir categoria (${response.status})`)
     return data as { deleted: true }
@@ -379,6 +437,7 @@ export const api = {
     const response = await fetch(`${API_URL}/brokers/${brokerId}/positions`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ positions }),
     })
     const data = await response.json()

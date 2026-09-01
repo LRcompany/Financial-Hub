@@ -346,3 +346,27 @@ model SupplierPayment {
 
   transactions Transaction[]
 }
+
+// ---------- Módulo 3: Acesso (login do app, uso pessoal) ----------
+
+// Trava de acesso do app inteiro — uso pessoal, um usuário só, sem sistema de
+// contas/cadastro. Singleton (igual WealthGoal): guarda só o hash da senha
+// de 6 dígitos (nunca a senha em texto puro). Criada no primeiro acesso
+// (POST /auth/setup), trocável depois em Configurações.
+model AppAuth {
+  id      String @id @default(uuid())
+  pinHash String
+}
+
+// Credencial Face ID/Touch ID (WebAuthn) cadastrada por aparelho — atalho
+// pra não digitar a senha de 6 dígitos toda vez; a senha continua sendo o
+// mecanismo real (sempre disponível como alternativa). `id` é o credential
+// ID que o próprio navegador gera (base64url), não é gerado por nós.
+model WebauthnCredential {
+  id          String   @id
+  publicKey   Bytes
+  counter     Int      @default(0)
+  transports  String? // JSON array (ex: ["internal"])
+  deviceLabel String // ex: "iPhone do Luiz" — escolhido no cadastro
+  createdAt   DateTime @default(now())
+}

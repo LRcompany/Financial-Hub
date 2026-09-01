@@ -6,6 +6,7 @@ import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
 import { ManualPositionsModal } from '../components/ManualPositionsModal'
 import { CategoryManager } from '../components/CategoryManager'
+import { SecuritySettings } from '../components/SecuritySettings'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
@@ -121,6 +122,12 @@ export function Settings() {
   return (
     <div className={cards.page}>
       <h1 className={styles.pageTitle}>Configurações</h1>
+
+      {/* ---------- Segurança ---------- */}
+      <section>
+        <h2 className={cards.sectionTitle}>Segurança</h2>
+        <SecuritySettings />
+      </section>
 
       {/* ---------- Variáveis fixas ---------- */}
       <section>
