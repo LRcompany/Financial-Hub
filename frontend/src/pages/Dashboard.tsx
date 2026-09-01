@@ -420,8 +420,8 @@ export function Dashboard() {
                 <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
                 {wealth.movers.length === 0 && <div className={styles.emptyState}>Sem histórico suficiente pra comparar.</div>}
                 {wealth.movers.map((m, i) => (
-                  <div key={`${m.ticker}-${i}`} className={styles.moverRow}>
-                    <span className={styles.moverTicker}>{m.ticker}</span>
+                  <div key={`${m.category}-${i}`} className={styles.moverRow}>
+                    <span className={styles.moverTicker}>{m.category}</span>
                     <span className={styles.moverChange}>
                       {m.changePct >= 0 ? (
                         <TrendingUp size={14} className={styles.dirIn} />

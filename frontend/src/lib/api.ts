@@ -151,7 +151,7 @@ export interface WealthOverview {
   investedLastMonth?: number | null
   projectedDividends?: number | null
   projectedDividendsLastMonth?: number | null
-  movers: { ticker: string; changePct: number }[]
+  movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null
   /** Retorno médio mensal REAL (%), calculado do histórico de PositionSnapshot
    * — null quando não tem pelo menos 2 meses de dado pra calcular. */

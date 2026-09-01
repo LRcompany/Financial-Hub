@@ -92,45 +92,34 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const projectedDividends = dividendsSum(latestSnaps);
   const projectedDividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
 
-  // ---- destaques do mês: maior variação % de valor de mercado por ativo ----
-  // `s.month`/`s.year` aqui é a data REAL do snapshot no banco — quando um
-  // broker não foi ressincronizado esse mês, `activeSnapshotsAsOf` "carrega"
-  // pra frente o snapshot antigo (é assim que deve ser pro total geral), mas
-  // isso NÃO é uma posição que "não mudou este mês" — é uma posição sem dado
-  // novo nenhum. Contar como destaque de 0% seria mentir que sabemos que não
-  // mudou; o correto é exigir dado realmente datado do mês corrente.
-  function marketValueBySecurity(snaps: { securityId: string; marketValue: number; month: number; year: number; security: { name: string; ticker: string | null } }[]) {
-    const map = new Map<string, { name: string; ticker: string | null; value: number; month: number; year: number }>();
+  // ---- destaques do mês: maior variação % por CATEGORIA (não por ativo) ----
+  // Antes mostrava o ativo individual (ticker/CUSIP) — pra título de renda
+  // fixa isso vira um código sem significado nenhum pra ele (ex: "105756CG3",
+  // o CUSIP de um bond da Nomad). Trocado pra a mesma categoria já usada na
+  // "Alocação de investimentos" logo acima (tipo do ativo, ou o nome da
+  // corretora quando ela é "standalone" tipo Nomad/INCO) — sempre uma
+  // categoria reconhecível (Renda Fixa, Ação, FII, NOMAD...), nunca um
+  // identificador técnico de ativo.
+  function totalByCategory(snaps: { marketValue: number; security: { type: string }; broker: { name: string; standalone: boolean } }[]) {
+    const map = new Map<string, number>();
     for (const s of snaps) {
-      const existing = map.get(s.securityId);
-      map.set(s.securityId, {
-        name: s.security.name,
-        ticker: s.security.ticker,
-        value: (existing?.value ?? 0) + s.marketValue,
-        month: s.month,
-        year: s.year,
-      });
+      const key = s.broker.standalone ? s.broker.name : s.security.type;
+      map.set(key, (map.get(key) ?? 0) + s.marketValue);
     }
     return map;
   }
-  const curYear = Math.floor((nowYm - 1) / 12);
-  const curMonth = nowYm - curYear * 12;
-  const latestBySecurity = marketValueBySecurity(latestSnaps);
-  const previousBySecurity = marketValueBySecurity(previousSnaps);
-  const movers = [...latestBySecurity.entries()]
-    // só ativo com dado datado deste mês mesmo — carry-forward do mês
-    // passado não é "destaque do mês", é ausência de dado novo
-    .filter(([, cur]) => cur.year === curYear && cur.month === curMonth)
-    .map(([securityId, cur]) => {
-      const prior = previousBySecurity.get(securityId);
-      // sem posição equivalente no mês anterior (ex: broker que acabou de
-      // migrar de estimativa manual pra Pluggy — o id muda) — não dá pra
-      // saber "quanto mudou", não inventa 0%, só não aparece como destaque
-      if (!prior || prior.value === 0) return null;
-      const changePct = ((cur.value - prior.value) / prior.value) * 100;
-      return { ticker: cur.ticker ?? cur.name, changePct };
+  const latestByCategory = totalByCategory(latestSnaps);
+  const previousByCategory = totalByCategory(previousSnaps);
+  const movers = [...latestByCategory.entries()]
+    .map(([category, curValue]) => {
+      const priorValue = previousByCategory.get(category);
+      // categoria não existia no mês anterior — não dá pra saber "quanto
+      // mudou", não inventa 0%, só não aparece como destaque
+      if (!priorValue) return null;
+      const changePct = ((curValue - priorValue) / priorValue) * 100;
+      return { category, changePct };
     })
-    .filter((m): m is { ticker: string; changePct: number } => m !== null)
+    .filter((m): m is { category: string; changePct: number } => m !== null)
     .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
     .slice(0, 5);
 

@@ -136,7 +136,7 @@ export function MonthlySummaryModal({ month, year, onClose }: { month: number; y
                   <p className={styles.highlight}>
                     {bestMover ? (
                       <>
-                        Investimento que mais rendeu: <strong>{bestMover.ticker}</strong> (+{bestMover.changePct.toFixed(1)}%)
+                        Categoria que mais rendeu: <strong>{bestMover.category}</strong> (+{bestMover.changePct.toFixed(1)}%)
                       </>
                     ) : (
                       'Nenhum ativo com alta este mês.'

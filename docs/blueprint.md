@@ -761,6 +761,14 @@ Luiz pediu pra simplificar e tornar "mais dinâmico e no cenário real": em vez 
 - Frontend: formulário virou 2 campos só (meta geral + aporte mensal), uma linha nova mostra o retorno usado ("retorno médio real: -0,15% ao mês (~-1,8% ao ano), média dos últimos 12 meses de dado real" — transparente sobre de onde vem o número), tabela "Projeção ano a ano" mantida (pediu pra "conseguir visualizar"), sem mais tag "estimado" por ano (não existe mais extrapolação, é uma taxa única).
 - Testado ao vivo: retorno real calculado em -0,15%/mês a partir do histórico de 12 meses; projeção "chega lá em setembro de 2031" com aporte de R$7.500/mês; testado o salvamento (mudar aporte pra R$8.000 antecipou a data pra abril/2031, restaurado depois).
 
+### 2 ajustes de visualização (01/09): carrossel "Por mês" e destaques por categoria
+
+**1. "Por mês" (parcelas futuras) virou carrossel.** A lista de 15 meses quebrava em várias linhas desorganizadas. Criado `components/Carousel.tsx` — componente genérico (setas + dots, N itens por página), reaproveitável em qualquer lista curta do tipo "N por vez". Aplicado só em "Por mês" (5 por página, 3 dots pros 15 meses atuais) — "Por cartão" ficou como estava, tem poucos itens e não precisa.
+
+**2. "Destaques do mês" mostra categoria, não o ativo.** Luiz viu "105756CG3" no Dashboard (é o CUSIP do bond BRAZIL da Nomad) e perguntou o que era — identificador técnico sem significado nenhum pra ele. Trocado: em vez de calcular a variação % por ativo individual, `wealth.ts` agora agrupa por categoria (mesma regra já usada na "Alocação de investimentos" — tipo do ativo, ou nome da corretora quando ela é "standalone" tipo Nomad/INCO) e mostra a variação da categoria inteira. Simplificou o código de quebra (não precisa mais da regra de "só ativo com dado datado deste mês" — comparar total por categoria não tem esse problema de identidade). Testado: "NOMAD +2,1%", "Renda Fixa -1,9%", "Cripto -1,5%" no lugar de tickers/CUSIPs.
+
+**Confirmando a pergunta sobre proventos**: correto, não dá pra saber o valor exato de proventos (dividendos de ação, aluguel de FII) mesmo sabendo que um ativo é FII ou Ação — a Pluggy não manda esse dado no plano pessoal (`PositionSnapshot.dividends` fica `null`, documentado desde 25/08: "não vem no payload de `/investments`, precisaria de uma chamada extra em `/investments/{id}/transactions`"). Segue como pendência em aberto, não é bug.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

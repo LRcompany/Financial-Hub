@@ -294,8 +294,8 @@ export function Patrimonio() {
               <CardHeader icon={Activity} title="Destaques do mês" />
               {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
               {wealth.movers.map((m, i) => (
-                <div key={`${m.ticker}-${i}`} className={cards.moverRow}>
-                  <span className={cards.moverTicker}>{m.ticker}</span>
+                <div key={`${m.category}-${i}`} className={cards.moverRow}>
+                  <span className={cards.moverTicker}>{m.category}</span>
                   <span className={cards.moverChange}>
                     {m.changePct >= 0 ? (
                       <TrendingUp size={14} className={cards.dirIn} />

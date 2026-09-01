@@ -8,6 +8,7 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
+import { Carousel } from '../components/Carousel'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -355,14 +356,17 @@ export function Orcamento() {
             <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
               Por mês
             </h4>
-            <div className={styles.upcomingByMonth}>
-              {upcoming.byMonth.map((m) => (
-                <div key={m.month} className={styles.upcomingMonthChip}>
+            <Carousel
+              items={upcoming.byMonth}
+              perPage={5}
+              keyExtractor={(m) => m.month}
+              renderItem={(m) => (
+                <div className={styles.upcomingMonthChip}>
                   <span>{formatMonthLabel(m.month)}</span>
                   <strong>R$ {currency(m.amount)}</strong>
                 </div>
-              ))}
-            </div>
+              )}
+            />
             <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
               <table className={styles.table}>
                 <thead>
