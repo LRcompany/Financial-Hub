@@ -648,6 +648,10 @@ Luiz achou o resumo "pobre" e pediu mais números e gráfico. Enriquecido:
 - Categoria "LR" renomeada pra "Empresa" (mesma árvore, só o nome).
 - "Últimas transações" no Dashboard mostra o banco de origem (`Transaction.broker.name`, já vinha do backend, só não estava no tipo/render do frontend) — ex: "Restaurante · C6".
 
+### Projeto renomeado: Financial Hub → Command OS (01/09)
+
+Luiz decidiu renomear — "é onde eu vou controlar minha vida", não é só finanças. Atualizado onde o nome aparece de verdade pro usuário: título da aba (`index.html`), nome/short_name do manifest do PWA (`vite.config.ts` — nome que aparece ao instalar o app na tela inicial), wordmark no sidebar (`AppLayout.tsx`), título do PDF do resumo mensal, log de boot do backend. **Não mexido de propósito**: nome de pasta do projeto (`~/Desktop/Work/CLAUDE/Financial-Hub`), nome dos pacotes npm (`financial-hub-backend`/`financial-hub-frontend`) e o histórico de decisões já registrado neste documento (narrativa de "o que aconteceu" fica como aconteceu, sob o nome de então) — só o nome do PRODUTO como o Luiz vê/usa mudou.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

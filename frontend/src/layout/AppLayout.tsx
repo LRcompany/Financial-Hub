@@ -39,7 +39,7 @@ export function AppLayout() {
       <aside className={styles.sidebar}>
         <div className={styles.sidebarBrand}>
           <img src="/favicon.svg" alt="" width={22} height={22} />
-          Financial Hub
+          Command OS
         </div>
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink

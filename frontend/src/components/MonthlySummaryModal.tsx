@@ -76,7 +76,7 @@ export function MonthlySummaryModal({ month, year, onClose }: { month: number; y
 
         {!loading && (
           <div className={styles.content}>
-            <p className={styles.printTitle}>Financial Hub — Resumo de {monthLabel}</p>
+            <p className={styles.printTitle}>Command OS — Resumo de {monthLabel}</p>
 
             <section className={styles.block}>
               <h4 className={styles.blockTitle}>Orçamento</h4>

@@ -33,6 +33,6 @@ app.use("/api", brokersRouter);
 app.use("/api", pluggyConnectRouter);
 
 app.listen(port, () => {
-  console.log(`Financial Hub backend rodando em http://localhost:${port}`);
+  console.log(`Command OS backend rodando em http://localhost:${port}`);
   startCreditCardSyncScheduler();
 });
