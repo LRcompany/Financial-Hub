@@ -14,16 +14,14 @@ import {
   Building2,
   Bitcoin,
   DollarSign,
-  FileUp,
 } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType, type Position, type Broker } from '../lib/api'
+import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
-import { StatementUploadModal } from '../components/StatementUploadModal'
 import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
@@ -144,8 +142,6 @@ export function Patrimonio() {
   const [positions, setPositions] = useState<PositionsByType[]>([])
   const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
-  const [brokers, setBrokers] = useState<Broker[]>([])
-  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -195,10 +191,6 @@ export function Patrimonio() {
     api
       .fxRate()
       .then((r) => setUsdToBrl(r.usdToBrl))
-      .catch(() => {})
-    api
-      .brokers()
-      .then(setBrokers)
       .catch(() => {})
   }
 
@@ -370,27 +362,10 @@ export function Patrimonio() {
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
               const usdTotal = groupUsdTotal(group, usdToBrl)
-              // Upload de extrato é específico do formato Nomad/Apex Clearing
-              // (parseNomadStatement) — não é genérico pra qualquer corretora
-              // manual_statement (INCO também é standalone+manual, mas não
-              // tem PDF nesse formato; usaria o parser errado).
-              const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
-              const supportsStatementUpload = broker?.name === 'NOMAD'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader
-                    icon={Icon}
-                    title={title}
-                    action={
-                      supportsStatementUpload && broker ? (
-                        <button className={styles.uploadBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
-                          <FileUp size={13} strokeWidth={2} />
-                          Atualizar por extrato
-                        </button>
-                      ) : undefined
-                    }
-                  />
+                  <CardHeader icon={Icon} title={title} />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
@@ -650,18 +625,6 @@ export function Patrimonio() {
       <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
-
-      {uploadTarget && (
-        <StatementUploadModal
-          brokerId={uploadTarget.id}
-          brokerName={uploadTarget.name}
-          onClose={() => setUploadTarget(null)}
-          onSaved={() => {
-            setUploadTarget(null)
-            load()
-          }}
-        />
-      )}
 
       {showAddForm && (
         <div className={styles.overlay} onClick={() => setShowAddForm(false)}>

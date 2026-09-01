@@ -229,22 +229,15 @@ export interface Broker {
   archivedAt: string | null
 }
 
-export interface ParsedStatementPosition {
+export interface BrokerPosition {
+  securityId: string
   name: string
-  cusip: string
-  quantity: number
-  unitValue: number
-  marketValue: number
   type: string
-}
-
-export interface ParsedStatement {
-  positions: ParsedStatementPosition[]
-  fdicBalance: number | null
-  totalNetWorth: number | null
-  securitiesValuation: number | null
-  periodEnd: string | null
-  warnings: string[]
+  currency: string
+  quantity: number | null
+  unitValue: number | null
+  marketValue: number
+  lastUpdated: string
 }
 
 export const api = {
@@ -369,22 +362,20 @@ export const api = {
   },
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
-  previewStatement: async (brokerId: string, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    const response = await fetch(`${API_URL}/brokers/${brokerId}/statement-preview`, { method: 'POST', body: form })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.error ?? `Falha ao ler o extrato (${response.status})`)
-    return data as { parsed: ParsedStatement; month: number; year: number }
-  },
-  confirmStatement: (
+  brokerPositions: (brokerId: string) => request<{ positions: BrokerPosition[]; brokerLastSyncedAt: string | null }>(`/brokers/${brokerId}/positions`),
+  updateBrokerPositions: async (
     brokerId: string,
-    input: { month: number; year: number; periodEnd: string; positions: ParsedStatementPosition[]; fdicBalance: number | null }
-  ) =>
-    request<{ saved: true; count: number; month: number; year: number }>(`/brokers/${brokerId}/statement-confirm`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+    positions: { securityId?: string; name: string; type: string; currency: string; quantity: number | null; unitValue: number | null; marketValue: number }[]
+  ) => {
+    const response = await fetch(`${API_URL}/brokers/${brokerId}/positions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positions }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao salvar as posições (${response.status})`)
+    return data as { saved: true; count: number; month: number; year: number }
+  },
   positionsHistory: (group: string) =>
     request<{ history: { label: string; value: number }[] }>(`/positions/history?group=${encodeURIComponent(group)}`),
   addPosition: (input: {

@@ -1,20 +1,18 @@
 import { useEffect, useState } from 'react'
 import { PluggyConnect } from 'pluggy-connect-sdk'
-import { Plus, RefreshCw, Landmark, Target, FileUp, Archive, ArchiveRestore } from 'lucide-react'
+import { Plus, RefreshCw, Landmark, Target, PencilLine, Archive, ArchiveRestore } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
-import { StatementUploadModal } from '../components/StatementUploadModal'
+import { ManualPositionsModal } from '../components/ManualPositionsModal'
 import { CategoryManager } from '../components/CategoryManager'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
 
-// Corretoras "manual_statement" que já têm um parser de extrato ligado
-// (formato Apex Clearing) — as outras (Binance, XP, Órama...) continuam sem
-// botão de upload até terem um parser próprio, pra não abrir um fluxo que
-// nunca extrai nada.
-const STATEMENT_UPLOAD_BROKERS = new Set(['NOMAD', 'INCO'])
+// Corretoras sem sync automático onde o Luiz atualiza o valor olhando o app
+// dele mesmo, mês a mês, num popup — não tem extrato/PDF nem parser aqui.
+const MANUAL_POSITION_BROKERS = new Set(['NOMAD', 'INCO', 'WISE'])
 
 function formatLastSync(iso: string | null) {
   if (!iso) return 'nunca sincronizado'
@@ -30,7 +28,7 @@ export function Settings() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [archiveErrorId, setArchiveErrorId] = useState<{ id: string; message: string } | null>(null)
-  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
+  const [positionsTarget, setPositionsTarget] = useState<{ id: string; name: string } | null>(null)
   const [showArchived, setShowArchived] = useState(false)
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
@@ -194,7 +192,7 @@ export function Settings() {
 
         <div className={styles.list}>
           {activeBrokers.map((broker) => {
-            const canUploadStatement = broker.dataSource === 'manual_statement' && STATEMENT_UPLOAD_BROKERS.has(broker.name)
+            const canUpdatePositions = MANUAL_POSITION_BROKERS.has(broker.name)
             const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
             return (
               <div key={broker.id} className={styles.row}>
@@ -224,10 +222,10 @@ export function Settings() {
                       Sincronizar
                     </button>
                   )}
-                  {canUploadStatement && (
-                    <button className={styles.actionBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
-                      <FileUp size={13} strokeWidth={2} />
-                      Atualizar por extrato
+                  {canUpdatePositions && (
+                    <button className={styles.actionBtn} onClick={() => setPositionsTarget({ id: broker.id, name: broker.name })}>
+                      <PencilLine size={13} strokeWidth={2} />
+                      Atualizar posições
                     </button>
                   )}
                   <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
@@ -279,13 +277,13 @@ export function Settings() {
         )}
       </section>
 
-      {uploadTarget && (
-        <StatementUploadModal
-          brokerId={uploadTarget.id}
-          brokerName={uploadTarget.name}
-          onClose={() => setUploadTarget(null)}
+      {positionsTarget && (
+        <ManualPositionsModal
+          brokerId={positionsTarget.id}
+          brokerName={positionsTarget.name}
+          onClose={() => setPositionsTarget(null)}
           onSaved={() => {
-            setUploadTarget(null)
+            setPositionsTarget(null)
             loadBrokers()
           }}
         />

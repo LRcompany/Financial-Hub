@@ -1,19 +1,12 @@
 import { Router } from "express";
-import multer from "multer";
-import { PDFParse } from "pdf-parse";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
 import { syncAllBrokersCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
-import { parseNomadStatement } from "../services/nomadStatement.js";
-import { getUsdToBrlRateOnDate } from "../services/fx.js";
+import { getUsdToBrlRate } from "../services/fx.js";
 import { getAccounts } from "../services/pluggy.js";
 
 export const brokersRouter = Router();
-
-// Upload de extrato PDF fica só em memória (arquivo pequeno, alguns segundos
-// de vida) — nunca grava o PDF em disco, extrai o texto e descarta.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 brokersRouter.get("/brokers", async (_req, res) => {
   const brokers = await prisma.broker.findMany({ orderBy: { name: "asc" } });
@@ -72,94 +65,140 @@ brokersRouter.post("/brokers/:id/unarchive", async (req, res) => {
   res.json(updated);
 });
 
-// POST /api/brokers/:id/statement-preview — extrai texto do PDF (extrato
-// mensal, hoje só o formato Nomad/Apex Clearing) e devolve uma prévia
-// (posições, saldo FDIC, período) SEM gravar nada no banco. A confirmação é
-// um passo separado (statement-confirm) — layout de extrato mudar não
-// corrompe dado, na pior das hipóteses a extração falha e mostra aviso pra
-// conferência manual em vez de gravar às cegas.
-brokersRouter.post("/brokers/:id/statement-preview", upload.single("file"), async (req, res) => {
+// Corretoras sem sync automático (nem Pluggy, nem consulta on-chain) onde o
+// Luiz atualiza o valor olhando o app dele mesmo — Nomad, INCO e Wise. Antes
+// (até 01/09) isso era feito mandando um PDF de extrato pra gente tentar ler
+// (só funcionava de verdade pra Nomad, formato Apex Clearing — INCO nunca
+// teria um parser certo sem um extrato real dele pra calibrar). Luiz pediu
+// pra trocar por um popup direto: ele vê a lista do que já tá cadastrado e
+// digita o valor atual de cada um, mês a mês — sem extrato, sem parser.
+const MANUAL_POSITION_BROKERS = new Set(["NOMAD", "INCO", "WISE"]);
+
+// GET /api/brokers/:id/positions — última posição conhecida de cada ativo
+// dessa corretora (não só a "ativa hoje" pela janela de 2 meses do
+// Patrimônio — é justamente o ativo que ficou pra trás que mais precisa
+// aparecer aqui pra ser atualizado). Fica de fora só o que já está zerado
+// dos dois lados (marketValue e investedAmount) — posição encerrada não
+// precisa reaparecer no popup toda vez.
+brokersRouter.get("/brokers/:id/positions", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
-  if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado (campo 'file')" });
-
-  try {
-    const parser = new PDFParse({ data: req.file.buffer });
-    const { text } = await parser.getText();
-    await parser.destroy();
-
-    const parsed = parseNomadStatement(text);
-    if (!parsed.periodEnd) {
-      return res.status(422).json({ error: "Não consegui identificar o período do extrato — layout inesperado.", parsed });
-    }
-    const [year, month] = parsed.periodEnd.split("-").map(Number);
-    res.json({ parsed, month, year });
-  } catch (err) {
-    res.status(422).json({ error: `Falha ao ler o PDF: ${(err as Error).message}` });
+  if (!MANUAL_POSITION_BROKERS.has(broker.name)) {
+    return res.status(400).json({ error: `${broker.name} não está configurada pra atualização manual de posições.` });
   }
+
+  const snapshots = await prisma.positionSnapshot.findMany({
+    where: { brokerId: broker.id },
+    include: { security: true },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
+
+  const latestBySecurity = new Map<string, (typeof snapshots)[number]>();
+  for (const s of snapshots) {
+    if (!latestBySecurity.has(s.securityId)) latestBySecurity.set(s.securityId, s);
+  }
+
+  const positions = [...latestBySecurity.values()]
+    .filter((s) => s.marketValue > 0 || s.investedAmount > 0)
+    .map((s) => {
+      // O banco guarda tudo em BRL (marketValue/unitValue já convertidos na
+      // hora de salvar) — pra reexibir no formulário precisa desconverter de
+      // volta pra USD usando a taxa daquele snapshot específico, senão o
+      // campo mostraria um número em BRL com o rótulo "USD" do lado, e o
+      // Luiz digitaria por cima olhando o valor errado no app dele (que
+      // mostra USD). Ao salvar de novo, a conversão usa a cotação de HOJE,
+      // não essa antiga — é sempre assim que preço convertido funciona aqui.
+      const fx = s.fxRateToBRL;
+      const usd = s.security.currency === "USD" && fx;
+      return {
+        securityId: s.securityId,
+        name: s.security.name,
+        type: s.security.type,
+        currency: s.security.currency,
+        quantity: s.quantity,
+        unitValue: usd && s.unitValue != null ? s.unitValue / fx : s.unitValue,
+        marketValue: usd ? s.marketValue / fx : s.marketValue,
+        lastUpdated: `${String(s.month).padStart(2, "0")}/${s.year}`,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+  res.json({ positions, brokerLastSyncedAt: broker.lastSyncedAt });
 });
 
-// POST /api/brokers/:id/statement-confirm — grava as posições já revisadas
-// (vindas da tela de prévia, possivelmente editadas manualmente antes de
-// confirmar). Base de custo (investedAmount) herda do snapshot anterior do
-// mesmo ativo (mesma regra do sync on-chain) — um extrato de posição não
-// traz preço de compra, então não inventa um custo novo todo mês; só usa o
-// valor de mercado como base na primeira vez que aquele ativo aparece.
-brokersRouter.post("/brokers/:id/statement-confirm", async (req, res) => {
+// PUT /api/brokers/:id/positions — grava um PositionSnapshot novo (mês/ano
+// de hoje) pra cada posição enviada, uma por uma — é assim que o histórico
+// mês a mês continua existindo (nunca sobrescreve o snapshot antigo, só
+// soma um novo). Ativo sem securityId é novo (Luiz adicionou no popup);
+// investedAmount herda do snapshot anterior do mesmo ativo (mesma regra já
+// usada no sync on-chain e no lançamento manual avulso) — atualizar o valor
+// de mercado não pode inventar um custo de aquisição novo.
+brokersRouter.put("/brokers/:id/positions", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
-
-  const { month, year, periodEnd, positions, fdicBalance } = req.body ?? {};
-  if (!month || !year || !periodEnd || !Array.isArray(positions)) {
-    return res.status(400).json({ error: "Campos obrigatórios: month, year, periodEnd, positions[]" });
+  if (!MANUAL_POSITION_BROKERS.has(broker.name)) {
+    return res.status(400).json({ error: `${broker.name} não está configurada pra atualização manual de posições.` });
   }
 
-  // Câmbio do dia de fechamento do extrato, não o de hoje — um extrato de
-  // julho enviado em agosto (ou revisado depois) não pode recotar julho com
-  // o dólar de agosto.
-  let usdRate: number;
-  try {
-    usdRate = await getUsdToBrlRateOnDate(periodEnd);
-  } catch (err) {
-    return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+  const { positions } = req.body ?? {};
+  if (!Array.isArray(positions) || positions.length === 0) {
+    return res.status(400).json({ error: "positions precisa ser uma lista não vazia" });
   }
 
-  async function upsertUsdPosition(securityId: string, name: string, type: string, quantity: number | null, unitValueUsd: number | null, marketValueUsd: number, extra?: { issuer?: string }) {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  let usdRate: number | null = null;
+  let count = 0;
+
+  for (const raw of positions as {
+    securityId?: string;
+    name?: string;
+    type?: string;
+    currency?: string;
+    quantity?: number | null;
+    unitValue?: number | null;
+    marketValue?: number;
+  }[]) {
+    const name = raw.name?.trim();
+    if (!name || typeof raw.marketValue !== "number") continue;
+
+    const assetCurrency = raw.currency === "USD" ? "USD" : "BRL";
+    let marketValue = raw.marketValue;
+    let unitValue = typeof raw.unitValue === "number" ? raw.unitValue : null;
+    const quantity = typeof raw.quantity === "number" ? raw.quantity : null;
+
+    if (assetCurrency === "USD") {
+      if (usdRate == null) {
+        try {
+          usdRate = await getUsdToBrlRate();
+        } catch (err) {
+          return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+        }
+      }
+      marketValue = marketValue * usdRate;
+      if (unitValue != null) unitValue = unitValue * usdRate;
+    }
+
+    const securityId = raw.securityId || `MANUAL:${broker.name}:${name}`.toUpperCase();
     await prisma.security.upsert({
       where: { id: securityId },
-      update: { name, type, currency: "USD", ...(extra?.issuer ? { issuer: extra.issuer } : {}) },
-      create: { id: securityId, name, type, currency: "USD", ...(extra?.issuer ? { issuer: extra.issuer } : {}) },
+      update: { name, type: raw.type || "Outro", currency: assetCurrency },
+      create: { id: securityId, name, type: raw.type || "Outro", currency: assetCurrency },
     });
-    const marketValue = marketValueUsd * usdRate;
-    const unitValue = unitValueUsd != null ? unitValueUsd * usdRate : null;
+
     const previous = await prisma.positionSnapshot.findFirst({
-      where: { brokerId: broker!.id, securityId },
+      where: { brokerId: broker.id, securityId },
       orderBy: [{ year: "desc" }, { month: "desc" }],
     });
     const investedAmount = previous?.investedAmount ?? marketValue;
-    await prisma.positionSnapshot.upsert({
-      where: { brokerId_securityId_month_year: { brokerId: broker!.id, securityId, month, year } },
-      update: { marketValue, investedAmount, fxRateToBRL: usdRate, quantity, unitValue },
-      create: { brokerId: broker!.id, securityId, month, year, marketValue, investedAmount, fxRateToBRL: usdRate, quantity, unitValue },
-    });
-  }
 
-  let count = 0;
-  for (const p of positions as { name: string; cusip: string; type: string; quantity: number; unitValue: number; marketValue: number }[]) {
-    if (!p.name || !p.cusip || !p.marketValue) continue;
-    await upsertUsdPosition(`MANUAL:${broker.name}:${p.cusip}`, p.name, p.type || "Renda Fixa", p.quantity ?? null, p.unitValue ?? null, p.marketValue);
-    count++;
-  }
-  if (typeof fdicBalance === "number" && fdicBalance > 0) {
-    await upsertUsdPosition(
-      `MANUAL:${broker.name}:FDIC_CASH`,
-      "FDIC Insured Deposit",
-      "Moeda",
-      null,
-      null,
-      fdicBalance,
-      { issuer: "Saldo em caixa não investido, protegido pelo seguro federal dos EUA (FDIC) até US$250 mil por banco" }
-    );
+    await prisma.positionSnapshot.upsert({
+      where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId, month, year } },
+      update: { marketValue, investedAmount, quantity, unitValue, fxRateToBRL: assetCurrency === "USD" ? usdRate : null },
+      create: { brokerId: broker.id, securityId, month, year, marketValue, investedAmount, quantity, unitValue, fxRateToBRL: assetCurrency === "USD" ? usdRate : null },
+    });
     count++;
   }
 
