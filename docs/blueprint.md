@@ -732,6 +732,14 @@ Luiz mandou print do popup de atualização manual (Nomad/INCO/Wise, ver entrada
 - **Tela cortada** (causa real, não só "aumentar fonte"): `.nameCell` tinha especificidade CSS menor que `.table td` (classe vs. classe+tipo), então o min-width maior do nome nunca era aplicado — corrigido pra `.table td.nameCell`. Colunas foram pra 170px (nome 260px), modal de 720px pra 920px, e os valores voltando de USD pra exibição pararam de vir com resíduo de ponto flutuante (`7513.170000000002` → `7513.17`, arredondado na desconversão).
 - Testado ao vivo: as 3 telas renderizam as colunas certas (Nomad com Investido, Wise só Moeda+Atual, INCO sem ATIVOS/CDB 110% e sem seletor de moeda); medido via canvas que "Renda Fixa" cabe com folga (70px de texto em ~106px disponível); salvamento com `investedAmount` explícito testado via API (gravou 80 quando pedido, não teria calculado sozinho), depois removido do banco sem afetar dado real.
 
+### Nomad/Wise: mais 2 rodadas de limpeza no popup de posições (01/09)
+
+Luiz viu a lista real e apontou mais itens que não fazem sentido no popup:
+
+- **Nomad**: "FDIC Insured Deposit" é a conta corrente (caixa parado, não investimento) e "USD" era um bucket de "valor total" agregado — os dois duplicavam/misturavam com a soma dos 3 títulos reais (o bond BRAZIL, o ETF ISHARES, o bond NVIDIA). Excluídos do popup (`excludeSecurityNames`), histórico intocado — igual ao INCO antes.
+- **Wise**: só existe UM ativo de verdade aqui, o saldo da conta corrente — "CDB MAXIMA" e "FUNDO" não são tocados desde 03/2023 (carteira antiga, não existem mais). Excluídos, e o ativo que sobra ("CDB - Liquidez Diária") foi **renomeado pra "Conta Corrente"** direto no banco (mesmo `securityId`, mesmo histórico — não é um ativo novo, só o nome mudou pra refletir o que ele realmente é).
+- Testado ao vivo: Nomad mostra só os 3 títulos reais, Wise mostra só "Conta Corrente" com o valor de julho intacto (R$5.515,35).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

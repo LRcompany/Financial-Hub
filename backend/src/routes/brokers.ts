@@ -95,8 +95,31 @@ interface PositionFieldConfig {
 }
 
 const MANUAL_POSITION_CONFIG: Record<string, PositionFieldConfig> = {
-  NOMAD: { currency: "selectable", showType: true, showQuantity: false, showUnitValue: false, showInvestedAmount: true },
-  WISE: { currency: "selectable", showType: false, showQuantity: false, showUnitValue: false, showInvestedAmount: false, fixedType: "Renda Fixa" },
+  NOMAD: {
+    currency: "selectable",
+    showType: true,
+    showQuantity: false,
+    showUnitValue: false,
+    showInvestedAmount: true,
+    // "FDIC Insured Deposit" é a conta corrente (caixa parado, não é
+    // investimento) e "USD" era um bucket de "valor total" agregado — os 2
+    // duplicavam/misturavam com a soma dos 3 títulos de verdade (confirmado
+    // por ele, 01/09). Ficam de fora, histórico intocado.
+    excludeSecurityNames: ["FDIC Insured Deposit", "USD"],
+  },
+  WISE: {
+    currency: "selectable",
+    showType: false,
+    showQuantity: false,
+    showUnitValue: false,
+    showInvestedAmount: false,
+    fixedType: "Renda Fixa",
+    // "CDB MAXIMA" e "FUNDO" não são tocados desde 03/2023 — resíduo de uma
+    // carteira antiga, não existem mais. Confirmado (01/09): só sobra UM
+    // ativo de verdade aqui, o saldo da conta corrente (era "CDB - Liquidez
+    // Diária", renomeado — mesma posição, mesmo histórico, só o nome mudou).
+    excludeSecurityNames: ["CDB MAXIMA", "FUNDO"],
+  },
   INCO: {
     currency: "BRL",
     showType: false,
