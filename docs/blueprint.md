@@ -620,6 +620,10 @@ Sem endpoint novo — `MonthlySummaryModal.tsx` reaproveita `budgetSummary` (mê
 
 **Nota real**: resumo de agosto sai com "Total gasto: R$0,00" — não é bug, é porque as categorias/transações de agosto foram zeradas na limpeza de 31/08 ("começar do zero a partir de setembro"). Só vai ter número de verdade ali a partir do resumo de setembro em diante.
 
+### Categorias em accordion por pai + resumo previsto/gasto no topo (01/09)
+
+Com ~80 folhas reais, listar tudo solto (como era desde 30/08) ficou ilegível. `/budget-summary` ganha `parentId`/`parentName` por categoria (sempre a categoria-mãe de TOPO, mesmo pra folha 3 níveis fundo tipo Transporte > Carro > Aluguel — agrupa em "Transporte", não em "Carro"). Frontend: cada seção (essencial/não essencial) ganha uma barra de resumo (Previsto/Gasto somando todas as categorias daquela seção) no topo, e as categorias agora ficam em accordion por pai — fechado por padrão, mostra o agregado (soma das filhas) na header; abre pra ver cada folha. Testado real: "Moradia" fechado mostra "R$0 / R$5.203,66", abre e lista Aluguel/Internet/Gás/Luz/Lavanderia/Telefonia/Seguro Residência/Água cada um com sua própria meta.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

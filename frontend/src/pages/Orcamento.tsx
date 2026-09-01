@@ -380,20 +380,43 @@ export function Orcamento() {
           </div>
         )}
 
-        {/* ---------- categorias, uma coluna por kind, lado a lado ---------- */}
+        {/* ---------- categorias, uma coluna por kind, agrupadas por pai ---------- */}
         <div className={`${cards.fullWidth} ${styles.categoryColumns}`}>
           {KIND_SECTIONS.map(({ kind, title }) => {
             const items = budget.categories.filter((c) => c.kind === kind)
+            const totalPlanned = items.reduce((s, c) => s + c.planned, 0)
+            const totalSpent = items.reduce((s, c) => s + c.spent, 0)
+
+            const groups = new Map<string, BudgetCategory[]>()
+            for (const item of items) {
+              const key = item.parentName ?? 'Outras'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key)!.push(item)
+            }
+            const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+
             return (
               <div key={kind} className={cards.card}>
                 <h3 className={styles.groupTitle}>{title}</h3>
+                {items.length > 0 && (
+                  <div className={styles.kindSummary}>
+                    <div>
+                      <span className={styles.kindSummaryLabel}>Previsto</span>
+                      <span className={styles.kindSummaryValue}>R$ {currency(totalPlanned)}</span>
+                    </div>
+                    <div>
+                      <span className={styles.kindSummaryLabel}>Gasto</span>
+                      <span className={styles.kindSummaryValue}>R$ {currency(totalSpent)}</span>
+                    </div>
+                  </div>
+                )}
                 {items.length === 0 && (
                   <div className={cards.emptyState}>
                     Nenhuma meta de {title.toLowerCase()} pra {MONTH_NAMES[month - 1]}/{year}.
                   </div>
                 )}
-                {items.map((item) => (
-                  <CategoryRow key={item.categoryId} item={item} />
+                {sortedGroups.map(([parentName, groupItems]) => (
+                  <ParentAccordion key={parentName} parentName={parentName} items={groupItems} />
                 ))}
               </div>
             )
@@ -420,6 +443,41 @@ export function Orcamento() {
             loadCardsAndUpcoming()
           }}
         />
+      )}
+    </div>
+  )
+}
+
+/** Uma categoria-mãe (Moradia, Transporte...) em accordion — fechada mostra só
+ * o total agregado das filhas, aberta lista cada uma. Fechado por padrão:
+ * ~80 folhas juntas listadas de uma vez era ilegível, aqui só abre quem
+ * interessa no momento. */
+function ParentAccordion({ parentName, items }: { parentName: string; items: BudgetCategory[] }) {
+  const [open, setOpen] = useState(false)
+  const planned = items.reduce((s, c) => s + c.planned, 0)
+  const spent = items.reduce((s, c) => s + c.spent, 0)
+  const isOver = planned > 0 && spent > planned
+
+  return (
+    <div className={styles.accordion}>
+      <button className={styles.accordionHeader} onClick={() => setOpen((v) => !v)}>
+        <span className={styles.accordionChevron}>{open ? '▾' : '▸'}</span>
+        <span className={styles.accordionName}>
+          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
+          {parentName}
+        </span>
+        <span className={styles.categoryRowValues}>
+          <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(spent)}</span>
+          {' / '}
+          <span className={`${styles.plannedBold} ${isOver ? styles.spentOver : ''}`}>R$ {currency(planned)}</span>
+        </span>
+      </button>
+      {open && (
+        <div className={styles.accordionBody}>
+          {items.map((item) => (
+            <CategoryRow key={item.categoryId} item={item} />
+          ))}
+        </div>
       )}
     </div>
   )

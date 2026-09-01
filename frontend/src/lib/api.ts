@@ -38,6 +38,8 @@ export interface BudgetCategory {
   categoryId: string
   name: string
   kind: CategoryKind
+  parentId: string | null
+  parentName: string | null
   planned: number
   spent: number
   previousSpent: number

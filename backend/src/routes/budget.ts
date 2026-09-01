@@ -38,7 +38,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     // de despesa, sem fazer sentido no "quanto gastei este mês").
     prisma.budgetTarget.findMany({
       where: { month, year, category: { type: "expense", kind: { not: "investment" } } },
-      include: { category: true },
+      include: { category: { include: { parent: { include: { parent: true } } } } },
     }),
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
   ]);
@@ -65,10 +65,17 @@ budgetRouter.get("/budget-summary", async (req, res) => {
           _sum: { amount: true },
         }),
       ]);
+      // Categoria-mãe direta (Moradia) e avó, se a folha estiver 3 níveis
+      // fundo (Transporte > Carro > Aluguel) — front agrupa por essa mãe pra
+      // exibir em accordion, em vez de listar as ~80 folhas soltas.
+      const parent = target.category.parent;
+      const parentName = parent?.parent?.name ?? parent?.name ?? null;
       return {
         categoryId: target.categoryId,
         name: target.category.name,
         kind: target.category.kind, // essential | non_essential | investment
+        parentId: (parent?.parent?.id ?? parent?.id) ?? null,
+        parentName,
         planned: target.plannedAmount,
         spent: spentAgg._sum.amount ?? 0,
         previousSpent: previousSpentAgg._sum.amount ?? 0,

@@ -136,6 +136,74 @@
   margin: 0 0 var(--space-4);
 }
 
+.kindSummary {
+  display: flex;
+  gap: var(--space-5);
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.kindSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kindSummaryLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.kindSummaryValue {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- accordion por categoria-mãe ---------- */
+.accordion {
+  border-bottom: 1px solid var(--border);
+}
+
+.accordion:last-child {
+  border-bottom: none;
+}
+
+.accordionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  padding: var(--space-3) 0;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+}
+
+.accordionChevron {
+  color: var(--ink-faint);
+  font-size: 11px;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.accordionName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.accordionBody {
+  padding: 0 0 var(--space-3) 18px;
+}
+
 .categoryColumns {
   display: grid;
   grid-template-columns: 1fr;
