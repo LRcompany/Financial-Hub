@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { projectFirstMillion } from "../services/wealthProjection.js";
+import { computeAverageMonthlyReturnPct, projectFirstMillion } from "../services/wealthProjection.js";
 import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
 
 export const wealthRouter = Router();
@@ -13,17 +13,14 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const all = await fetchAllSnapshots();
 
   if (all.length === 0) {
-    const [wealthGoal, wealthGoalYearly] = await Promise.all([
-      prisma.wealthGoal.findFirst(),
-      prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
-    ]);
+    const wealthGoal = await prisma.wealthGoal.findFirst();
     return res.json({
       hasData: false,
       wealthGoal,
-      wealthGoalYearly,
       evolution: [],
       allocation: [],
       movers: [],
+      avgMonthlyReturnPct: null,
       projection: null,
       yearlyBreakdown: [],
     });
@@ -51,7 +48,11 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const allocation = [...allocationMap.entries()].map(([label, value]) => ({ label, value }));
 
   // ---- evolução: últimos 12 meses corridos, carregando o último valor ativo de cada mês ----
+  // Guarda o investedAmount total junto (não só marketValue) — é o que
+  // permite calcular o retorno médio REAL da carteira mais abaixo (separar
+  // valorização de mercado de dinheiro novo que entrou).
   const evolution: { label: string; value: number }[] = [];
+  const monthlyTotals: { marketValue: number; investedAmount: number }[] = [];
   for (let i = 11; i >= 0; i--) {
     const ym = nowYm - i;
     const year = Math.floor((ym - 1) / 12);
@@ -62,7 +63,12 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
       label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
       value: snaps.reduce((sum, s) => sum + s.marketValue, 0),
     });
+    monthlyTotals.push({
+      marketValue: snaps.reduce((sum, s) => sum + s.marketValue, 0),
+      investedAmount: snaps.reduce((sum, s) => sum + s.investedAmount, 0),
+    });
   }
+  const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals);
 
   // ---- aportes do mês: variação do total investido (não posição por posição) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
@@ -128,12 +134,14 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
     .slice(0, 5);
 
-  // ---- projeção "primeira milhão" (meta ano a ano, ver services/wealthProjection.ts) ----
-  const [wealthGoal, wealthGoalYearly] = await Promise.all([
-    prisma.wealthGoal.findFirst(),
-    prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
-  ]);
-  const { projection, yearlyBreakdown } = projectFirstMillion(total, wealthGoal?.targetAmount ?? null, wealthGoalYearly);
+  // ---- projeção "primeira milhão" (retorno real + aporte mensal, ver services/wealthProjection.ts) ----
+  const wealthGoal = await prisma.wealthGoal.findFirst();
+  const { projection, yearlyBreakdown } = projectFirstMillion(
+    total,
+    wealthGoal?.targetAmount ?? null,
+    wealthGoal?.monthlyContribution ?? 0,
+    avgMonthlyReturnPct
+  );
 
   res.json({
     hasData: true,
@@ -147,7 +155,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     projectedDividendsLastMonth,
     movers,
     wealthGoal,
-    wealthGoalYearly,
+    avgMonthlyReturnPct,
     projection,
     yearlyBreakdown,
   });

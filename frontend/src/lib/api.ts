@@ -126,13 +126,7 @@ export interface LeafCategoryOption {
 export interface WealthGoal {
   id: string
   targetAmount: number
-}
-
-export interface WealthGoalYearly {
-  id: string
-  year: number
-  savingsTarget: number
-  annualReturnAssumptionPct: number
+  monthlyContribution: number
 }
 
 export interface YearBreakdown {
@@ -140,13 +134,11 @@ export interface YearBreakdown {
   startBalance: number
   contribution: number
   endBalance: number
-  extrapolated: boolean
 }
 
 export interface Projection {
   monthsToGoal: number
   projectedDate: string
-  usedExtrapolation: boolean
 }
 
 export interface WealthOverview {
@@ -161,7 +153,9 @@ export interface WealthOverview {
   projectedDividendsLastMonth?: number | null
   movers: { ticker: string; changePct: number }[]
   wealthGoal: WealthGoal | null
-  wealthGoalYearly: WealthGoalYearly[]
+  /** Retorno médio mensal REAL (%), calculado do histórico de PositionSnapshot
+   * — null quando não tem pelo menos 2 meses de dado pra calcular. */
+  avgMonthlyReturnPct: number | null
   projection: Projection | null
   yearlyBreakdown: YearBreakdown[]
 }
@@ -320,15 +314,8 @@ export const api = {
     return request<BudgetSummary>(`/budget-summary${query}`)
   },
   wealthOverview: () => request<WealthOverview>('/wealth-overview'),
-  wealthGoal: () => request<{ targetAmount: number | null; yearly: WealthGoalYearly[] }>('/wealth-goal'),
-  setWealthGoalTarget: (targetAmount: number) =>
-    request<WealthGoal>('/wealth-goal', { method: 'PUT', body: JSON.stringify({ targetAmount }) }),
-  setWealthGoalYearly: (year: number, savingsTarget: number, annualReturnAssumptionPct: number) =>
-    request<WealthGoalYearly>(`/wealth-goal/yearly/${year}`, {
-      method: 'PUT',
-      body: JSON.stringify({ savingsTarget, annualReturnAssumptionPct }),
-    }),
-  deleteWealthGoalYearly: (year: number) => request<void>(`/wealth-goal/yearly/${year}`, { method: 'DELETE' }),
+  setWealthGoal: (input: { targetAmount?: number; monthlyContribution?: number }) =>
+    request<WealthGoal>('/wealth-goal', { method: 'PUT', body: JSON.stringify(input) }),
   dailyGoalHistory: () => request<DailyGoalEntry[]>('/daily-goal/history'),
   budgetReview: (month: number, year: number) =>
     request<{ categories: BudgetReviewCategory[] }>(`/budget-target/review?month=${month}&year=${year}`),

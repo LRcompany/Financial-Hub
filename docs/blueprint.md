@@ -751,6 +751,16 @@ Corrigido, sem tocar em histórico legítimo:
 - Como Luiz pediu pra remover FDIC de vez ("isso é a conta corrente"), apagada também a única linha real dele (07/2026, R$215) e a `Security` órfã resultante — diferente do "USD", que ainda tem história real anterior a preservar.
 - Nomad volta a bater com os 3 ativos reais: **R$39.550,88** (antes R$78.388,83). Confirmado ao vivo no Patrimônio.
 
+### "Primeira Milhão" reescrita: retorno real em vez de chute (01/09)
+
+Luiz pediu pra simplificar e tornar "mais dinâmico e no cenário real": em vez de ele digitar, ano a ano, um "retorno assumido" (chute) e um "aporte no ano" numa tabela, usar a rentabilidade REAL da carteira que ele já tem + um único aporte mensal.
+
+- **`WealthGoalYearly` removida** (tabela ano a ano com retorno chutado) — trocada por `WealthGoal.monthlyContribution` (um número só). Migração preserva a intenção que já existia: R$90.000/ano configurado virou R$7.500/mês.
+- **Retorno médio real, não chute** (`computeAverageMonthlyReturnPct` em `wealthProjection.ts`): compara `marketValue` mês a mês dos últimos 12 meses de `PositionSnapshot`, mas **descontando a variação de `investedAmount`** (dinheiro novo que entrou) — senão um aporte grande num mês pareceria "rentabilidade" e infla a projeção pra sempre (double-counting: contaria o mesmo aporte 2x, uma vez como "entrou dinheiro" e outra como "taxa de crescimento" aplicada pra sempre daí pra frente). Precisa de pelo menos 2 meses de histórico; menos que isso, mostra aviso em vez de inventar taxa.
+- **Projeção**: juro composto mês a mês com essa taxa real + o aporte mensal informado, até bater a meta (teto de 50 anos). Sem mais "extrapolação de meta configurada" — só existe uma taxa agora.
+- Frontend: formulário virou 2 campos só (meta geral + aporte mensal), uma linha nova mostra o retorno usado ("retorno médio real: -0,15% ao mês (~-1,8% ao ano), média dos últimos 12 meses de dado real" — transparente sobre de onde vem o número), tabela "Projeção ano a ano" mantida (pediu pra "conseguir visualizar"), sem mais tag "estimado" por ano (não existe mais extrapolação, é uma taxa única).
+- Testado ao vivo: retorno real calculado em -0,15%/mês a partir do histórico de 12 meses; projeção "chega lá em setembro de 2031" com aporte de R$7.500/mês; testado o salvamento (mudar aporte pra R$8.000 antecipou a data pra abril/2031, restaurado depois).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

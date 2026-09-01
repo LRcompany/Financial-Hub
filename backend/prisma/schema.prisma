@@ -245,21 +245,17 @@ model PositionSnapshot {
   @@unique([brokerId, securityId, month, year])
 }
 
-// Meta geral (o "1º milhão" em si) — singleton, só o valor alvo.
+// Meta geral (o "1º milhão" em si) — singleton: valor alvo + quanto o Luiz
+// pretende investir por mês. Substituiu (01/09) a antiga WealthGoalYearly
+// (tabela ano a ano com "retorno assumido" chutado por ele) — o retorno
+// agora vem calculado de verdade a partir do histórico real de
+// PositionSnapshot (ver services/wealthProjection.ts), só o aporte mensal
+// continua sendo algo só ele sabe (intenção futura, não tem como derivar
+// de dado passado).
 model WealthGoal {
-  id           String @id @default(uuid())
-  targetAmount Float
-}
-
-// Meta ano a ano — espelha a aba "Primeira Milha(o)" da planilha: cada ano
-// tem seu próprio aporte planejado e retorno assumido (em vez de uma taxa
-// única valendo pra sempre). Ano sem linha aqui usa a última configurada
-// (extrapolação, sinalizada na resposta da API).
-model WealthGoalYearly {
-  id                        String @id @default(uuid())
-  year                      Int    @unique
-  savingsTarget             Float // quanto planeja guardar/aportar no ano
-  annualReturnAssumptionPct Float
+  id                 String @id @default(uuid())
+  targetAmount       Float
+  monthlyContribution Float @default(0)
 }
 
 model CategorizationRule {

@@ -345,12 +345,10 @@ export function Dashboard() {
 
               <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={Flag} title="Primeira Milhão" href="/patrimonio" />
-                {(!wealthGoal || wealth.wealthGoalYearly.length === 0) && (
-                  <div className={styles.emptyState}>
-                    Configure sua meta (valor alvo + aporte/retorno por ano) na página de Patrimônio pra ver a projeção.
-                  </div>
+                {!wealthGoal && (
+                  <div className={styles.emptyState}>Configure sua meta na página de Patrimônio pra ver a projeção.</div>
                 )}
-                {wealthGoal && wealth.wealthGoalYearly.length > 0 && (
+                {wealthGoal && (
                   <>
                     <div className={styles.dailyGoalTop}>
                       <div>
@@ -367,7 +365,7 @@ export function Dashboard() {
                     </div>
                     <div className={styles.chartMeta}>
                       {wealth.projection === null && (
-                        <span>no ritmo das metas anuais configuradas, a meta não é alcançada nos próximos 50 anos</span>
+                        <span>no ritmo atual (retorno real + aporte mensal), a meta não é alcançada nos próximos 50 anos</span>
                       )}
                       {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
                       {wealth.projection && wealth.projection.monthsToGoal > 0 && (
@@ -378,7 +376,6 @@ export function Dashboard() {
                             year: 'numeric',
                           })}{' '}
                           (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
-                          {wealth.projection.usedExtrapolation && ' — usando a meta do último ano configurado pra frente'}
                         </span>
                       )}
                     </div>
