@@ -18,6 +18,7 @@ import {
   api,
   type Transaction,
   type BudgetSummary,
+  type BudgetCategory,
   type WealthOverview,
   type ProjectsSummary,
 } from '../lib/api'
@@ -26,6 +27,7 @@ import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { MonthlySummaryModal } from '../components/MonthlySummaryModal'
+import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
@@ -35,6 +37,24 @@ const MONTH_NAMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
 function formatDayLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+/** Agrega as ~80 folhas por categoria-mãe — Dashboard mostra visão geral
+ * (Moradia, Transporte...), o detalhe por folha fica na página Orçamento. */
+function groupByParent(categories: BudgetCategory[]) {
+  const groups = new Map<string, { parentName: string; planned: number; spent: number; previousSpent: number }>()
+  for (const c of categories) {
+    const key = c.parentName ?? 'Outras'
+    const existing = groups.get(key)
+    if (existing) {
+      existing.planned += c.planned
+      existing.spent += c.spent
+      existing.previousSpent += c.previousSpent
+    } else {
+      groups.set(key, { parentName: key, planned: c.planned, spent: c.spent, previousSpent: c.previousSpent })
+    }
+  }
+  return [...groups.values()].sort((a, b) => b.spent - a.spent)
 }
 
 export function Dashboard() {
@@ -51,17 +71,26 @@ export function Dashboard() {
   const [projectsError, setProjectsError] = useState(false)
 
   const [showMonthlySummary, setShowMonthlySummary] = useState(false)
+  const [uncategorizedCount, setUncategorizedCount] = useState(0)
+  const [showTransactionReview, setShowTransactionReview] = useState(false)
+
+  function loadUncategorizedCount() {
+    api.uncategorizedTransactionGroups().then((r) => setUncategorizedCount(r.total)).catch(() => {})
+  }
 
   useEffect(() => {
-    const now = new Date()
+    // Sem filtro de mês — "últimas compras" de verdade, não "compras deste
+    // mês" (viraria vazio nos primeiros dias, quando as compras reais mais
+    // recentes ainda são do mês anterior no cartão).
     api
-      .transactions({ month: now.getMonth() + 1, year: now.getFullYear() })
+      .transactions()
       .then((data) => setTransactions(data.slice(0, 5)))
       .catch(() => setTransactionsError(true))
 
     api.budgetSummary().then(setBudget).catch(() => setBudgetError(true))
     api.wealthOverview().then(setWealth).catch(() => setWealthError(true))
     api.projectsSummary().then(setProjects).catch(() => setProjectsError(true))
+    loadUncategorizedCount()
   }, [])
 
   const today = budget?.last14Days[budget.last14Days.length - 1]?.amount ?? 0
@@ -93,6 +122,27 @@ export function Dashboard() {
 
       {showMonthlySummary && (
         <MonthlySummaryModal month={summaryMonth} year={summaryYear} onClose={() => setShowMonthlySummary(false)} />
+      )}
+
+      {uncategorizedCount > 0 && (
+        <div className={styles.banner}>
+          <Receipt size={16} strokeWidth={2} />
+          <span>
+            {uncategorizedCount} compra{uncategorizedCount !== 1 ? 's' : ''} no cartão sem categoria.
+          </span>
+          <button className={styles.bannerBtn} onClick={() => setShowTransactionReview(true)}>
+            Categorizar
+          </button>
+        </div>
+      )}
+
+      {showTransactionReview && (
+        <TransactionReviewModal
+          onClose={() => {
+            setShowTransactionReview(false)
+            loadUncategorizedCount()
+          }}
+        />
       )}
 
       {/* ---------- Orçamento ---------- */}
@@ -182,25 +232,25 @@ export function Dashboard() {
                     />
                   </div>
                 </div>
-                {budget.categories.map((item) => (
-                  <div key={item.categoryId} className={styles.progressRow}>
+                {groupByParent(budget.categories).map((group) => (
+                  <div key={group.parentName} className={styles.progressRow}>
                     <div className={styles.progressLabel}>
-                      <span>{item.name}</span>
+                      <span>{group.parentName}</span>
                       <span>
-                        R$ {currency(item.spent)} / R$ {currency(item.planned)}
+                        R$ {currency(group.spent)} / R$ {currency(group.planned)}
                       </span>
                     </div>
                     <div className={styles.progressTrack}>
                       <div
                         className={styles.progressFill}
                         style={{
-                          width: `${Math.min((item.spent / item.planned) * 100, 100)}%`,
+                          width: `${group.planned > 0 ? Math.min((group.spent / group.planned) * 100, 100) : 0}%`,
                           background: 'var(--accent)',
                         }}
                       />
                     </div>
                     <div className={styles.deltaRow}>
-                      <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
+                      <MonthDelta current={group.spent} previous={group.previousSpent} higherIsBetter={false} />
                     </div>
                   </div>
                 ))}

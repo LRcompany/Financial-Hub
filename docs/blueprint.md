@@ -624,6 +624,14 @@ Sem endpoint novo — `MonthlySummaryModal.tsx` reaproveita `budgetSummary` (mê
 
 Com ~80 folhas reais, listar tudo solto (como era desde 30/08) ficou ilegível. `/budget-summary` ganha `parentId`/`parentName` por categoria (sempre a categoria-mãe de TOPO, mesmo pra folha 3 níveis fundo tipo Transporte > Carro > Aluguel — agrupa em "Transporte", não em "Carro"). Frontend: cada seção (essencial/não essencial) ganha uma barra de resumo (Previsto/Gasto somando todas as categorias daquela seção) no topo, e as categorias agora ficam em accordion por pai — fechado por padrão, mostra o agregado (soma das filhas) na header; abre pra ver cada folha. Testado real: "Moradia" fechado mostra "R$0 / R$5.203,66", abre e lista Aluguel/Internet/Gás/Luz/Lavanderia/Telefonia/Seguro Residência/Água cada um com sua própria meta.
 
+### Dashboard: categorias-mãe + últimas compras reais + alerta de sem categoria (01/09)
+
+Três ajustes no Dashboard, todos reagindo à árvore nova de categorias e ao sync real de transação:
+
+- **"Orçamento do mês"**: mostrava as ~80 folhas soltas (ilegível) — agora agrega por categoria-mãe (`groupByParent`, client-side, mesmo dado de `/budget-summary`), ordenado por quem gastou mais.
+- **"Últimas transações"**: filtrava por mês corrente — nos primeiros dias do mês novo ficava vazio (compra real mais recente ainda é do mês anterior no cartão). Tirado o filtro de mês, mostra as 5 mais recentes de verdade, sem depender de estar "dentro do mês".
+- **Alerta de compra sem categoria**: banner (mesmo padrão do resumo mensal) mostrando "N compras no cartão sem categoria" sempre que existir alguma — abre `TransactionReviewModal` (novo componente, mesmo padrão do `InstallmentReviewModal`, mas pra `Transaction` — gasto que JÁ aconteceu, agrupado por comerciante exato, sem edição de valor/cartão). Backend: `GET /transactions/uncategorized-groups` + `PUT /transactions/group`. Testado real: 298 transações sincronizadas da Pluggy estavam sem categoria (132 comerciantes distintos) — categorizei "CAPPTA *MANUS LANCHES" (4 compras) como Restaurante ao vivo, confirmado persistido no banco.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

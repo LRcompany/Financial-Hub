@@ -32,6 +32,14 @@ export interface Transaction {
   category: Category | null
 }
 
+export interface UncategorizedTransactionGroup {
+  description: string
+  count: number
+  totalAmount: number
+  lastDate: string
+  ids: string[]
+}
+
 export type CategoryKind = 'essential' | 'non_essential' | 'investment'
 
 export interface BudgetCategory {
@@ -254,6 +262,12 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<Transaction[]>(`/transactions${query}`)
   },
+  uncategorizedTransactionGroups: () =>
+    request<{ total: number; groups: UncategorizedTransactionGroup[]; categories: LeafCategoryOption[] }>(
+      '/transactions/uncategorized-groups'
+    ),
+  categorizeTransactionGroup: (ids: string[], categoryId: string) =>
+    request<{ updated: number }>('/transactions/group', { method: 'PUT', body: JSON.stringify({ ids, categoryId }) }),
   categories: () => request<Category[]>('/categories'),
   budgetSummary: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
