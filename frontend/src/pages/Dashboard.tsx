@@ -12,6 +12,7 @@ import {
   Coins,
   Activity,
   Briefcase,
+  FileText,
 } from 'lucide-react'
 import {
   api,
@@ -24,8 +25,11 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
+import { MonthlySummaryModal } from '../components/MonthlySummaryModal'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
+
+const MONTH_NAMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
 /** "2026-08-21" -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por UTC). */
 function formatDayLabel(iso: string): string {
@@ -46,6 +50,8 @@ export function Dashboard() {
   const [projects, setProjects] = useState<ProjectsSummary | null>(null)
   const [projectsError, setProjectsError] = useState(false)
 
+  const [showMonthlySummary, setShowMonthlySummary] = useState(false)
+
   useEffect(() => {
     const now = new Date()
     api
@@ -65,8 +71,30 @@ export function Dashboard() {
   const wealthTotal = wealth?.total ?? 0
   const goalProgress = wealthGoal ? Math.min((wealthTotal / wealthGoal.targetAmount) * 100, 100) : 0
 
+  // Banner do resumo mensal só nos primeiros 5 dias do mês — depois disso
+  // some sozinho (não tem histórico ainda, só o mês que acabou de fechar).
+  const now = new Date()
+  const showSummaryBanner = now.getDate() <= 5
+  const summaryMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const summaryMonth = summaryMonthDate.getMonth() + 1
+  const summaryYear = summaryMonthDate.getFullYear()
+
   return (
     <div className={styles.page}>
+      {showSummaryBanner && (
+        <div className={styles.banner}>
+          <FileText size={16} strokeWidth={2} />
+          <span>Resumo de {MONTH_NAMES[summaryMonth - 1]} pronto.</span>
+          <button className={styles.bannerBtn} onClick={() => setShowMonthlySummary(true)}>
+            Ver resumo
+          </button>
+        </div>
+      )}
+
+      {showMonthlySummary && (
+        <MonthlySummaryModal month={summaryMonth} year={summaryYear} onClose={() => setShowMonthlySummary(false)} />
+      )}
+
       {/* ---------- Orçamento ---------- */}
       <section>
         <h1 className={styles.sectionTitle}>Orçamento</h1>

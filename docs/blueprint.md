@@ -610,6 +610,16 @@ Luiz pediu pra automatizar o "Atualizar transações" em vez de precisar clicar 
 
 **Por que 1x/dia, não "quando passar 4-5 dias desde a última transação"**: a própria Pluggy só resincroniza com o banco 1x por dia por conta própria, e o lookback window dela (4-5 dias) já cobre atraso sozinho — rodar mais que 1x/dia não traria dado mais novo, só bateria a API à toa. Testado real: primeira rodada automática (01/09) achou 2 transações novas desde o sync manual de minutos antes.
 
+### Resumo mensal — banner no Dashboard + modal + PDF (01/09)
+
+Luiz pediu um "resumo do mês que fechou" (highlights: gasto vs meta, investimento, destaque de rentabilidade) e perguntou qual a melhor forma de mostrar — página nova, seção que some, ou modal temporária. Decidido junto: **banner no Dashboard, visível só do dia 1 ao 5 do mês** (mesmo padrão do banner "revisar orçamento" que já existe em Orçamento) + **modal com o resumo completo** ao clicar "Ver resumo". Escopo combinado: só Orçamento + Patrimônio por agora — Projetos fica de fora até esse módulo ser remontado (não tem "Entradas" real conectada ainda).
+
+Sem endpoint novo — `MonthlySummaryModal.tsx` reaproveita `budgetSummary` (mês fechado, passado como parâmetro) e `wealthOverview` (já calcula `investedThisMonth` e `movers`, usado aqui como "destaque de rentabilidade" — maior alta positiva; se nenhum ativo subiu, mostra isso explicitamente, não inventa destaque).
+
+**"Baixar PDF" via `window.print()`** — sem biblioteca nova (nada de jspdf/html2canvas), usa o "Salvar como PDF" nativo do diálogo de impressão do navegador. CSS de impressão dedicado (`@media print`): esconde a página inteira por trás do modal (`body * { visibility: hidden }`) e mostra só o `.sheet`, escondendo botões/chrome via `.noPrint`. Bug pego antes de testar: a classe `.noPrint` tinha ido pro container inteiro do modal por engano, o que escondia o conteúdo junto — corrigido pra ficar só no header (botões).
+
+**Nota real**: resumo de agosto sai com "Total gasto: R$0,00" — não é bug, é porque as categorias/transações de agosto foram zeradas na limpeza de 31/08 ("começar do zero a partir de setembro"). Só vai ter número de verdade ali a partir do resumo de setembro em diante.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

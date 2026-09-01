@@ -1,0 +1,223 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .overlay {
+    align-items: center;
+  }
+}
+
+.sheet {
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--space-5);
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 640px) {
+  .sheet {
+    border-radius: var(--r-lg);
+  }
+}
+
+.loading {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.pdfBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdfBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--fill-muted);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.printTitle {
+  display: none;
+}
+
+.block {
+  margin-bottom: var(--space-6);
+}
+
+.block:last-of-type {
+  margin-bottom: 0;
+}
+
+.blockTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-4);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-3);
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.statValue {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.good {
+  color: var(--success);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.splitRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.emptyNote {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+.footer {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: var(--space-4) 0 0;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+/* ---------- impressão / "baixar PDF" via window.print() ----------
+   Esconde a página inteira (Dashboard por trás do modal) e mostra só o
+   conteúdo do .sheet — sem isso a impressão sairia com a página toda atrás,
+   não só o resumo. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .sheet,
+  .sheet * {
+    visibility: visible;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .overlay {
+    position: static;
+    background: none;
+    display: block;
+  }
+
+  .sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-shadow: none;
+    max-width: 100%;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .printTitle {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 var(--space-5);
+    text-transform: capitalize;
+  }
+
+  .stat {
+    background: none;
+    border: 1px solid var(--border);
+  }
+}
