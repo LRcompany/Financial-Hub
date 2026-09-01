@@ -219,20 +219,34 @@ function purchaseBase(description: string): string {
 // que dê pra corrigir em lote (todas as parcelas da mesma compra de uma vez,
 // não uma por uma).
 budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
-  const installments = await prisma.upcomingInstallment.findMany({ orderBy: { dueDate: "asc" } });
+  const installments = await prisma.upcomingInstallment.findMany({
+    orderBy: { dueDate: "asc" },
+    include: { category: { include: { parent: { include: { parent: true } } } } },
+  });
 
   const groups = new Map<
     string,
-    { description: string; amount: number; cardLabel: string | null; ids: string[]; dueDates: Date[] }
+    { description: string; amount: number; cardLabel: string | null; categoryId: string | null; categoryPath: string | null; ids: string[]; dueDates: Date[] }
   >();
   for (const i of installments) {
     const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
+    const categoryPath = i.category
+      ? [i.category.parent?.parent?.name, i.category.parent?.name, i.category.name].filter(Boolean).join(" > ")
+      : null;
     const existing = groups.get(key);
     if (existing) {
       existing.ids.push(i.id);
       existing.dueDates.push(i.dueDate);
     } else {
-      groups.set(key, { description: purchaseBase(i.description), amount: i.amount, cardLabel: i.cardLabel, ids: [i.id], dueDates: [i.dueDate] });
+      groups.set(key, {
+        description: purchaseBase(i.description),
+        amount: i.amount,
+        cardLabel: i.cardLabel,
+        categoryId: i.categoryId,
+        categoryPath,
+        ids: [i.id],
+        dueDates: [i.dueDate],
+      });
     }
   }
 
@@ -241,35 +255,65 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
       description: g.description,
       amount: g.amount,
       cardLabel: g.cardLabel,
+      categoryId: g.categoryId,
+      categoryPath: g.categoryPath,
       count: g.ids.length,
       firstDueDate: g.dueDates.reduce((a, b) => (a < b ? a : b)),
       lastDueDate: g.dueDates.reduce((a, b) => (a > b ? a : b)),
       ids: g.ids,
     }))
-    // Sem cartão primeiro (é o que precisa de atenção), depois por descrição.
+    // Sem categoria primeiro (é o que precisa de atenção), depois por descrição.
     .sort((a, b) => {
-      if ((a.cardLabel === null) !== (b.cardLabel === null)) return a.cardLabel === null ? -1 : 1;
+      if ((a.categoryId === null) !== (b.categoryId === null)) return a.categoryId === null ? -1 : 1;
       return a.description.localeCompare(b.description, "pt-BR");
     });
 
   const knownCards = [...new Set(installments.map((i) => i.cardLabel).filter((c): c is string => c !== null))].sort();
 
-  res.json({ groups: result, knownCards });
+  // Só categoria-folha entra no dropdown — meta/gasto real nunca no pai.
+  const leafCategories = await prisma.category.findMany({
+    where: { type: "expense", children: { none: {} } },
+    include: { parent: { include: { parent: true } } },
+    orderBy: { name: "asc" },
+  });
+  const categories = leafCategories
+    .map((c) => ({
+      id: c.id,
+      path: [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > "),
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
+
+  res.json({ groups: result, knownCards, categories });
 });
 
-// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount? }.
+// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount?, categoryId? }.
 // Aplica em TODAS as linhas da compra de uma vez (as parcelas restantes dela)
-// — é a correção "essa compra inteira é do C6", não uma parcela isolada.
+// — é a correção "essa compra inteira é do C6" ou "essa compra é Farmácia",
+// não uma parcela isolada.
 budgetRouter.put("/upcoming-installments/group", async (req, res) => {
-  const { ids, cardLabel, amount } = req.body ?? {};
+  const { ids, cardLabel, amount, categoryId } = req.body ?? {};
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: "ids precisa ser uma lista não vazia" });
   }
-  const data: { cardLabel?: string | null; amount?: number } = {};
+  const data: { cardLabel?: string | null; amount?: number; categoryId?: string | null } = {};
   if (cardLabel !== undefined) data.cardLabel = cardLabel === "" ? null : cardLabel;
   if (typeof amount === "number" && amount >= 0) data.amount = amount;
+  if (categoryId !== undefined) {
+    if (categoryId === "" || categoryId === null) {
+      data.categoryId = null;
+    } else {
+      // Só aceita categoria-folha — meta/gasto real nunca deveria estar
+      // "solto" numa categoria-mãe (mesma regra do PUT /budget-target).
+      const category = await prisma.category.findUnique({ where: { id: categoryId }, include: { children: true } });
+      if (!category) return res.status(404).json({ error: "Categoria não encontrada" });
+      if (category.children.length > 0) {
+        return res.status(400).json({ error: "Essa categoria é uma categoria-mãe — escolha uma subcategoria (folha)" });
+      }
+      data.categoryId = categoryId;
+    }
+  }
   if (Object.keys(data).length === 0) {
-    return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel e/ou amount" });
+    return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel, amount e/ou categoryId" });
   }
   const result = await prisma.upcomingInstallment.updateMany({ where: { id: { in: ids } }, data });
   res.json({ updated: result.count });

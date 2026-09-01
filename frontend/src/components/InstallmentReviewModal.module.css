@@ -125,6 +125,11 @@
   height: 32px;
 }
 
+.categorySelect {
+  width: 220px !important;
+  height: 32px;
+}
+
 .customCardInput {
   width: 110px !important;
   height: 32px;

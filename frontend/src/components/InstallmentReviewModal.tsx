@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { api, type InstallmentGroup } from '../lib/api'
+import { api, type InstallmentGroup, type LeafCategoryOption } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
 import styles from './InstallmentReviewModal.module.css'
@@ -16,21 +16,28 @@ function formatDate(iso: string): string {
 function GroupRow({
   group,
   knownCards,
+  categories,
   onSaved,
   onDeleted,
 }: {
   group: InstallmentGroup
   knownCards: string[]
-  onSaved: (ids: string[], changes: { cardLabel: string | null; amount: number }) => void
+  categories: LeafCategoryOption[]
+  onSaved: (ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null }) => void
   onDeleted: (ids: string[]) => void
 }) {
   const [cardChoice, setCardChoice] = useState(group.cardLabel ?? '')
   const [customCard, setCustomCard] = useState('')
+  const [categoryChoice, setCategoryChoice] = useState(group.categoryId ?? '')
   const [amount, setAmount] = useState(String(group.amount))
   const [saving, setSaving] = useState(false)
 
   const isOther = cardChoice === OTHER
-  const dirty = cardChoice !== (group.cardLabel ?? '') || Number(amount) !== group.amount || (isOther && customCard.trim() !== '')
+  const dirty =
+    cardChoice !== (group.cardLabel ?? '') ||
+    Number(amount) !== group.amount ||
+    categoryChoice !== (group.categoryId ?? '') ||
+    (isOther && customCard.trim() !== '')
 
   async function save() {
     const cardLabel = isOther ? customCard.trim() || null : cardChoice || null
@@ -38,8 +45,9 @@ function GroupRow({
     if (Number.isNaN(numericAmount) || numericAmount < 0) return
     setSaving(true)
     try {
-      await api.updateInstallmentGroup(group.ids, { cardLabel, amount: numericAmount })
-      onSaved(group.ids, { cardLabel, amount: numericAmount })
+      await api.updateInstallmentGroup(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null })
+      const categoryPath = categories.find((c) => c.id === categoryChoice)?.path ?? null
+      onSaved(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, categoryPath })
     } finally {
       setSaving(false)
     }
@@ -57,7 +65,7 @@ function GroupRow({
   }
 
   return (
-    <tr className={group.cardLabel === null ? styles.unconfiguredRow : ''}>
+    <tr className={group.categoryId === null ? styles.unconfiguredRow : ''}>
       <td>{group.description}</td>
       <td className={styles.numCell}>{group.count}x</td>
       <td className={styles.numCell}>
@@ -87,6 +95,16 @@ function GroupRow({
           />
         )}
       </td>
+      <td>
+        <Select value={categoryChoice} onChange={(e) => setCategoryChoice(e.target.value)} className={styles.categorySelect} disabled={saving}>
+          <option value="">— sem categoria —</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.path}
+            </option>
+          ))}
+        </Select>
+      </td>
       <td className={styles.actionsCell}>
         <button className={styles.saveBtn} onClick={save} disabled={!dirty || saving}>
           Salvar
@@ -102,17 +120,19 @@ function GroupRow({
 export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
   const [groups, setGroups] = useState<InstallmentGroup[] | null>(null)
   const [knownCards, setKnownCards] = useState<string[]>([])
+  const [categories, setCategories] = useState<LeafCategoryOption[]>([])
 
   function load() {
     api.installmentGroups().then((r) => {
       setGroups(r.groups)
       setKnownCards(r.knownCards)
+      setCategories(r.categories)
     })
   }
 
   useEffect(load, [])
 
-  function handleSaved(ids: string[], changes: { cardLabel: string | null; amount: number }) {
+  function handleSaved(ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null }) {
     setGroups((prev) => prev?.map((g) => (g.ids === ids || sameIds(g.ids, ids) ? { ...g, ...changes } : g)) ?? null)
   }
 
@@ -124,8 +144,8 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
     return a.length === b.length && a.every((v, i) => v === b[i])
   }
 
-  const unconfigured = groups?.filter((g) => g.cardLabel === null) ?? []
-  const configured = groups?.filter((g) => g.cardLabel !== null) ?? []
+  const unconfigured = groups?.filter((g) => g.categoryId === null) ?? []
+  const configured = groups?.filter((g) => g.categoryId !== null) ?? []
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -135,7 +155,7 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
             <h3 className={styles.title}>Revisar parcelas futuras</h3>
             {groups && (
               <p className={styles.subtitle}>
-                {unconfigured.length} compra{unconfigured.length !== 1 ? 's' : ''} sem cartão · {configured.length} já configurada
+                {unconfigured.length} compra{unconfigured.length !== 1 ? 's' : ''} sem categoria · {configured.length} já categorizada
                 {configured.length !== 1 ? 's' : ''}
               </p>
             )}
@@ -157,15 +177,16 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
                   <th>Período</th>
                   <th>Valor/parcela</th>
                   <th>Cartão</th>
+                  <th>Categoria</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {unconfigured.map((g) => (
-                  <GroupRow key={g.ids.join(',')} group={g} knownCards={knownCards} onSaved={handleSaved} onDeleted={handleDeleted} />
+                  <GroupRow key={g.ids.join(',')} group={g} knownCards={knownCards} categories={categories} onSaved={handleSaved} onDeleted={handleDeleted} />
                 ))}
                 {configured.map((g) => (
-                  <GroupRow key={g.ids.join(',')} group={g} knownCards={knownCards} onSaved={handleSaved} onDeleted={handleDeleted} />
+                  <GroupRow key={g.ids.join(',')} group={g} knownCards={knownCards} categories={categories} onSaved={handleSaved} onDeleted={handleDeleted} />
                 ))}
               </tbody>
             </table>

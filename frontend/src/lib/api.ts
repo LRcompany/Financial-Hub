@@ -95,10 +95,17 @@ export interface InstallmentGroup {
   description: string
   amount: number
   cardLabel: string | null
+  categoryId: string | null
+  categoryPath: string | null
   count: number
   firstDueDate: string
   lastDueDate: string
   ids: string[]
+}
+
+export interface LeafCategoryOption {
+  id: string
+  path: string
 }
 
 export interface WealthGoal {
@@ -278,8 +285,9 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<UpcomingInstallmentsSummary>(`/upcoming-installments${query}`)
   },
-  installmentGroups: () => request<{ groups: InstallmentGroup[]; knownCards: string[] }>('/upcoming-installments/groups'),
-  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number }) =>
+  installmentGroups: () =>
+    request<{ groups: InstallmentGroup[]; knownCards: string[]; categories: LeafCategoryOption[] }>('/upcoming-installments/groups'),
+  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number; categoryId?: string | null }) =>
     request<{ updated: number }>('/upcoming-installments/group', { method: 'PUT', body: JSON.stringify({ ids, ...changes }) }),
   deleteInstallmentGroup: (ids: string[]) =>
     request<{ deleted: number }>('/upcoming-installments/group', { method: 'DELETE', body: JSON.stringify({ ids }) }),
