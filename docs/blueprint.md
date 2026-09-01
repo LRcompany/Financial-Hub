@@ -684,6 +684,10 @@ Perguntei direto: como deveria funcionar, já que toda corretora tem histórico?
 - Settings.tsx: lista virou 2 blocos — ativas (com Sincronizar/Reconectar/Atualizar por extrato/Arquivar) e "Arquivadas" (esmaecida, só com Desarquivar).
 - Testado ao vivo: arquivei o PICPAY de verdade → sumiu de `/positions` na hora → desarquivei → voltou a existir no `GET /brokers` com `archivedAt: null` (não reapareceu em `/positions` porque o snapshot mais recente dele é de 09/2022, fora da janela de "ativo hoje" de 2 meses — comportamento correto e anterior a essa mudança, não regressão).
 
+### Corretoras arquivadas ficam ocultas por padrão (01/09)
+
+Ajuste rápido: a seção "Arquivadas" em Configurações agora começa colapsada, atrás de um botão "Mostrar arquivadas (N)" — antes ficava sempre visível, poluindo a tela justamente pras corretoras que o Luiz não quer ver no dia a dia. Confirmado ao vivo com os 8 arquivamentos reais que ele já tinha feito (Binance, Easynvest, Monetus, Nexoos, Nuinvest, Picpay, XP Investimento, Órama).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

@@ -31,6 +31,7 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null)
   const [archiveErrorId, setArchiveErrorId] = useState<{ id: string; message: string } | null>(null)
   const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
   const [dailyGoalInput, setDailyGoalInput] = useState('')
@@ -241,33 +242,39 @@ export function Settings() {
 
         {archivedBrokers.length > 0 && (
           <>
-            <h3 className={styles.subheading}>Arquivadas</h3>
-            <p className={styles.helperText}>
-              Fora do Patrimônio, da fatura de cartão e do sync automático — o histórico continua guardado, é só desarquivar pra voltar.
-            </p>
-            <div className={styles.list}>
-              {archivedBrokers.map((broker) => {
-                const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
-                return (
-                  <div key={broker.id} className={`${styles.row} ${styles.rowArchived}`}>
-                    <div className={styles.rowIcon}>
-                      <Landmark size={18} strokeWidth={2} />
-                    </div>
-                    <div className={styles.rowBody}>
-                      <div className={styles.rowName}>{broker.name}</div>
-                      <div className={styles.rowMeta}>arquivada {broker.archivedAt ? formatDate(broker.archivedAt) : ''}</div>
-                      {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
-                    </div>
-                    <div className={styles.rowActions}>
-                      <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
-                        <ArchiveRestore size={13} strokeWidth={2} />
-                        Desarquivar
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <button className={styles.showArchivedBtn} onClick={() => setShowArchived((v) => !v)}>
+              {showArchived ? 'Ocultar' : 'Mostrar'} arquivadas ({archivedBrokers.length})
+            </button>
+            {showArchived && (
+              <>
+                <p className={styles.helperText}>
+                  Fora do Patrimônio, da fatura de cartão e do sync automático — o histórico continua guardado, é só desarquivar pra voltar.
+                </p>
+                <div className={styles.list}>
+                  {archivedBrokers.map((broker) => {
+                    const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
+                    return (
+                      <div key={broker.id} className={`${styles.row} ${styles.rowArchived}`}>
+                        <div className={styles.rowIcon}>
+                          <Landmark size={18} strokeWidth={2} />
+                        </div>
+                        <div className={styles.rowBody}>
+                          <div className={styles.rowName}>{broker.name}</div>
+                          <div className={styles.rowMeta}>arquivada {broker.archivedAt ? formatDate(broker.archivedAt) : ''}</div>
+                          {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
+                        </div>
+                        <div className={styles.rowActions}>
+                          <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
+                            <ArchiveRestore size={13} strokeWidth={2} />
+                            Desarquivar
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
