@@ -594,6 +594,10 @@ Nova folha: Moradia > Seguro Residência (essencial). Aproveitei pra conferir se
 
 Corrigido: `/budget-target/review` agora devolve `path` (ex: "Transporte > Carro > Aluguel" pros casos de 3 níveis), ordenado pelo caminho completo (não só pelo nome da folha, senão duplicata de nome ainda ficaria espalhada na lista). `BudgetReviewModal` mostra o caminho do pai em cinza pequeno acima do nome da categoria.
 
+### "Imposto - Contador" separado em duas (31/08)
+
+Luiz achou estranho ver "Imposto - Contador" junto numa linha só do "Revisar orçamento" (print sem o caminho do pai, provavelmente de antes do fix documentado acima) e pediu confirmação de onde vinha cada categoria antes de mexer — conferido direto no banco: só existia UMA categoria "Imposto - Contador" (não tinha duplicata), em LR > Fiscal. Separada em duas folhas distintas: **LR > Fiscal > Imposto** e **LR > Fiscal > Contador**, ambas essenciais. 82 folhas reais agora.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
