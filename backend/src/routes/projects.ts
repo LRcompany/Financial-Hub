@@ -13,8 +13,8 @@ function monthRange(year: number, month: number) {
 projectsRouter.get("/projects-summary", async (req, res) => {
   const now = new Date();
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
-  const month = now.getMonth() + 1;
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const lastMonthDate = new Date(year, month - 2, 1);
 
   const [receivedThisMonthAgg, receivedLastMonthAgg, receivedThisYearAgg, taxAgg, allReceipts, projects] =
     await Promise.all([
@@ -74,6 +74,20 @@ projectsRouter.get("/projects-summary", async (req, res) => {
       received: p.receipts.reduce((s, r) => s + r.amount, 0),
     }));
 
+  // Projeto que mais recebeu especificamente NO MÊS pedido (não all-time —
+  // usado no resumo mensal, "o projeto que mais rendeu em agosto").
+  const receivedByProjectThisMonth = new Map<string, number>();
+  const monthRangeReq = monthRange(year, month);
+  for (const r of allReceipts) {
+    if (r.paymentDate < monthRangeReq.gte || r.paymentDate >= monthRangeReq.lt) continue;
+    const name = r.project.name;
+    receivedByProjectThisMonth.set(name, (receivedByProjectThisMonth.get(name) ?? 0) + r.amount);
+  }
+  const bestProjectThisMonth =
+    [...receivedByProjectThisMonth.entries()]
+      .map(([name, received]) => ({ name, received }))
+      .sort((a, b) => b.received - a.received)[0] ?? null;
+
   res.json({
     receivedThisMonth,
     receivedLastMonth: receivedLastMonthAgg._sum.amount ?? 0,
@@ -85,5 +99,6 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     monthlyReceived,
     clientRevenue,
     activeProjects,
+    bestProjectThisMonth,
   });
 });

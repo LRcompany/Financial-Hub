@@ -632,6 +632,16 @@ Três ajustes no Dashboard, todos reagindo à árvore nova de categorias e ao sy
 - **"Últimas transações"**: filtrava por mês corrente — nos primeiros dias do mês novo ficava vazio (compra real mais recente ainda é do mês anterior no cartão). Tirado o filtro de mês, mostra as 5 mais recentes de verdade, sem depender de estar "dentro do mês".
 - **Alerta de compra sem categoria**: banner (mesmo padrão do resumo mensal) mostrando "N compras no cartão sem categoria" sempre que existir alguma — abre `TransactionReviewModal` (novo componente, mesmo padrão do `InstallmentReviewModal`, mas pra `Transaction` — gasto que JÁ aconteceu, agrupado por comerciante exato, sem edição de valor/cartão). Backend: `GET /transactions/uncategorized-groups` + `PUT /transactions/group`. Testado real: 298 transações sincronizadas da Pluggy estavam sem categoria (132 comerciantes distintos) — categorizei "CAPPTA *MANUS LANCHES" (4 compras) como Restaurante ao vivo, confirmado persistido no banco.
 
+### Resumo mensal enriquecido — gráfico + 3 destaques + Projetos (01/09)
+
+Luiz achou o resumo "pobre" e pediu mais números e gráfico. Enriquecido:
+
+- **Orçamento**: ganhou o gráfico de pizza (`ClientPieChart`, mesmo componente já usado em Orçamento) de gasto agregado por categoria-mãe + destaque de texto "categoria que mais gastou".
+- **Patrimônio**: mantido o destaque de investimento (`wealth.movers`, maior alta positiva).
+- **Projetos**: seção nova. `/projects-summary` ganhou parâmetro `month` (antes só `year`, sempre calculava "esse mês" a partir de `now` — não dava pra pedir um mês fechado específico) e um campo novo `bestProjectThisMonth` (maior recebimento por projeto, filtrado pro mês pedido, calculado a partir de `ProjectReceipt` real).
+
+**Achado real ao testar**: o resumo de agosto sai vazio nos 3 blocos — não por bug, mas porque **não existe nenhum `BudgetTarget` pra agosto** (a limpeza de 30/08 zerou tudo, e o Luiz só configurou metas a partir de setembro) e **`ProjectReceipt` tem 0 linhas no banco** (Projetos nunca foi populado com dado real). O gráfico de pizza e os 3 destaques só vão aparecer de verdade a partir do resumo de setembro (visto em outubro), quando finalmente existe meta + gasto real no mesmo mês pra comparar.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

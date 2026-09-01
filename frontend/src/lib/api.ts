@@ -182,6 +182,7 @@ export interface ProjectsSummary {
     contractValue: number
     received: number
   }[]
+  bestProjectThisMonth: { name: string; received: number } | null
 }
 
 export interface DailyGoalEntry {
@@ -320,9 +321,11 @@ export const api = {
     request<{ deleted: number }>('/upcoming-installments/group', { method: 'DELETE', body: JSON.stringify({ ids }) }),
   setDailyGoal: (amount: number) => request<DailyGoalEntry>('/daily-goal', { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteDailyGoal: (id: string) => request<void>(`/daily-goal/${id}`, { method: 'DELETE' }),
-  projectsSummary: (params?: { year?: number }) => {
-    const query = params?.year ? `?year=${params.year}` : ''
-    return request<ProjectsSummary>(`/projects-summary${query}`)
+  projectsSummary: (params?: { month?: number; year?: number }) => {
+    const parts: string[] = []
+    if (params?.month) parts.push(`month=${params.month}`)
+    if (params?.year) parts.push(`year=${params.year}`)
+    return request<ProjectsSummary>(`/projects-summary${parts.length ? `?${parts.join('&')}` : ''}`)
   },
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),

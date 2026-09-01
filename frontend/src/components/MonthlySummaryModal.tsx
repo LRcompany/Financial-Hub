@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { X, Download } from 'lucide-react'
-import { api, type BudgetSummary, type WealthOverview } from '../lib/api'
+import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
+import { ClientPieChart } from './ClientPieChart'
 import styles from './MonthlySummaryModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -9,31 +10,49 @@ const MONTH_NAMES_FULL = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 ]
 
-/** Resumo do mês fechado — só Orçamento + Patrimônio por enquanto (Projetos
- * ainda não tem "Entradas" real conectada, entra quando esse módulo for
- * remontado). Sem endpoint novo: reaproveita budgetSummary + wealthOverview,
- * que já calculam tudo que precisamos (inclusive o "destaque" de investimento
- * via wealth.movers). */
+/** Agrega gasto por categoria-mãe pra alimentar a pizza e o "quem mais
+ * gastou" — mesma função de Dashboard.tsx, duplicada aqui de propósito (é
+ * pequena, não vale importar entre página e componente por isso). */
+function spentByParent(categories: BudgetCategory[]) {
+  const map = new Map<string, number>()
+  for (const c of categories) {
+    const key = c.parentName ?? 'Outras'
+    map.set(key, (map.get(key) ?? 0) + c.spent)
+  }
+  return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+}
+
+/** Resumo do mês fechado — Orçamento + Patrimônio + Projetos (o que já tem
+ * dado real pra cada um). Sem endpoint novo pra Orçamento/Patrimônio:
+ * reaproveita budgetSummary + wealthOverview. Projetos ganhou suporte a
+ * `month` em /projects-summary + `bestProjectThisMonth` computado no
+ * backend, especificamente pra esse resumo. */
 export function MonthlySummaryModal({ month, year, onClose }: { month: number; year: number; onClose: () => void }) {
   const [budget, setBudget] = useState<BudgetSummary | null>(null)
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
+  const [projects, setProjects] = useState<ProjectsSummary | null>(null)
 
   useEffect(() => {
     api.budgetSummary({ month, year }).then(setBudget)
     api.wealthOverview().then(setWealth)
+    api.projectsSummary({ month, year }).then(setProjects)
   }, [month, year])
 
   function downloadPdf() {
     window.print()
   }
 
-  const loading = !budget || !wealth
+  const loading = !budget || !wealth || !projects
   const monthLabel = `${MONTH_NAMES_FULL[month - 1]} de ${year}`
 
   const essentialSpent = budget?.categories.filter((c) => c.kind === 'essential').reduce((s, c) => s + c.spent, 0) ?? 0
   const nonEssentialSpent = budget?.categories.filter((c) => c.kind === 'non_essential').reduce((s, c) => s + c.spent, 0) ?? 0
   const diffFromPlanned = budget ? budget.totalPlanned - budget.totalSpent : 0
   const withinBudget = diffFromPlanned >= 0
+
+  const byParent = budget ? spentByParent(budget.categories) : []
+  const pieData = byParent.filter((p) => p.value > 0)
+  const topCategory = pieData[0] ?? null
 
   const bestMover = wealth?.movers.filter((m) => m.changePct > 0).sort((a, b) => b.changePct - a.changePct)[0] ?? null
 
@@ -81,6 +100,21 @@ export function MonthlySummaryModal({ month, year, onClose }: { month: number; y
                 <span>Essencial: R$ {currency(essentialSpent)}</span>
                 <span>Não essencial: R$ {currency(nonEssentialSpent)}</span>
               </div>
+
+              {pieData.length > 0 ? (
+                <>
+                  <div className={styles.chartWrap}>
+                    <ClientPieChart data={pieData} />
+                  </div>
+                  {topCategory && (
+                    <p className={styles.highlight}>
+                      Categoria que mais gastou: <strong>{topCategory.label}</strong> (R$ {currency(topCategory.value)})
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className={styles.emptyNote}>Nenhum gasto categorizado em {monthLabel} ainda.</p>
+              )}
             </section>
 
             <section className={styles.block}>
@@ -99,22 +133,42 @@ export function MonthlySummaryModal({ month, year, onClose }: { month: number; y
                       <span className={styles.statValue}>R$ {currency(wealth!.total ?? 0)}</span>
                     </div>
                   </div>
-                  <div className={styles.splitRow}>
+                  <p className={styles.highlight}>
                     {bestMover ? (
-                      <span>
-                        Destaque do mês: <strong>{bestMover.ticker}</strong> (+{bestMover.changePct.toFixed(1)}%)
-                      </span>
+                      <>
+                        Investimento que mais rendeu: <strong>{bestMover.ticker}</strong> (+{bestMover.changePct.toFixed(1)}%)
+                      </>
                     ) : (
-                      <span>Nenhum ativo com alta este mês.</span>
+                      'Nenhum ativo com alta este mês.'
                     )}
-                  </div>
+                  </p>
                 </>
               ) : (
                 <p className={styles.emptyNote}>Sem dado de patrimônio ainda.</p>
               )}
             </section>
 
-            <p className={styles.footer}>Entradas e Projetos entram aqui quando esse módulo for remontado.</p>
+            <section className={styles.block}>
+              <h4 className={styles.blockTitle}>Projetos</h4>
+              {projects!.receivedThisMonth > 0 || projects!.bestProjectThisMonth ? (
+                <>
+                  <div className={styles.statGrid}>
+                    <div className={styles.stat}>
+                      <span className={styles.statLabel}>Recebido no mês</span>
+                      <span className={styles.statValue}>R$ {currency(projects!.receivedThisMonth)}</span>
+                    </div>
+                  </div>
+                  {projects!.bestProjectThisMonth && (
+                    <p className={styles.highlight}>
+                      Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (R${' '}
+                      {currency(projects!.bestProjectThisMonth.received)})
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className={styles.emptyNote}>Sem recebimento de projeto registrado em {monthLabel} ainda.</p>
+              )}
+            </section>
           </div>
         )}
       </div>
