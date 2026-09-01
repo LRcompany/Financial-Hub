@@ -10,6 +10,19 @@ const GRADIENT_STOPS = [
   { offset: '100%', color: '#3E5BFA' },
 ]
 
+/** Índices dos pontos que ganham uma linha vertical de referência sempre
+ * visível (não só no hover) — demarcação mínima pra dar uma noção de escala
+ * de primeira, sem precisar passar o mouse. Com poucos pontos, marca todos;
+ * com muitos (ex: 24 meses), limita a um número razoável pra não virar um
+ * "código de barras" — sempre inclui o primeiro e o último. */
+function pickTickIndices(count: number, max = 8): number[] {
+  if (count <= max) return Array.from({ length: count }, (_, i) => i)
+  const step = (count - 1) / (max - 1)
+  const indices = new Set<number>()
+  for (let i = 0; i < max; i++) indices.add(Math.round(i * step))
+  return [...indices].sort((a, b) => a - b)
+}
+
 /** Catmull-Rom → cúbica de Bézier — curva suave passando por todos os pontos. */
 function smoothPath(points: [number, number][]): string {
   if (points.length < 2) return ''
@@ -67,6 +80,7 @@ export function SmoothLineChart({
   const linePath = smoothPath(points)
   const areaPath = `${linePath} L${points[points.length - 1][0]},${height} L0,${height} Z`
   const thresholdY = threshold !== undefined ? height - padY - ((threshold - min) / range) * (height - padY * 2) : null
+  const tickIndices = pickTickIndices(points.length)
 
   function updateHoverFromClientX(clientX: number) {
     const rect = wrapRef.current?.getBoundingClientRect()
@@ -100,6 +114,14 @@ export function SmoothLineChart({
           </linearGradient>
         </defs>
 
+        {/* Demarcação sempre visível (não só no hover) — dá uma referência de
+            escala de primeira, sem precisar passar o mouse. Bem sutil de
+            propósito (opacidade baixa) pra não competir com a linha de dado;
+            o hover continua sendo o jeito de ver o valor exato de cada uma. */}
+        {tickIndices.map((i) => (
+          <line key={i} x1={points[i][0]} y1={0} x2={points[i][0]} y2={height} stroke="var(--border)" strokeWidth={1} opacity={0.5} />
+        ))}
+
         {thresholdY !== null && (
           <line x1={0} y1={thresholdY} x2={width} y2={thresholdY} stroke="var(--ink-faint)" strokeWidth={1} strokeDasharray="4 4" />
         )}
@@ -107,7 +129,7 @@ export function SmoothLineChart({
         <path d={areaPath} fill={`url(#${gradientId}-fill)`} stroke="none" />
         <path d={linePath} fill="none" stroke={`url(#${gradientId})`} strokeWidth={3} strokeLinecap="round" />
 
-        {hover && <line x1={hover[0]} y1={0} x2={hover[0]} y2={height} stroke="var(--border)" strokeWidth={1} />}
+        {hover && <line x1={hover[0]} y1={0} x2={hover[0]} y2={height} stroke="var(--ink-soft)" strokeWidth={1} />}
       </svg>
 
       {/* Pontos como HTML por cima do SVG — um <circle> de SVG dentro de um viewBox
