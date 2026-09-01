@@ -551,6 +551,8 @@ Total: 16 pais, ~52 filhas, ~20 netas.
 
 **Pendente**: recategorizar os 177 parcelamentos (`UpcomingInstallment`, hoje sem categoria) usando essa árvore nova — Luiz vai indicar caso a caso.
 
+**Ajuste em 31/08**: "Usina Solar" (dentro de Outros) virou categoria-mãe — ganhou 4 filhas: Luz, Custo, Mão de Obra, Administrativo (essa colide de nome com o "Administrativo" top-level, mas o contexto — dentro de Usina — deixa claro que são coisas diferentes; schema permite, `@@unique([name, parentId])` é por par). 75 folhas reais agora (era 72).
+
 ### Limpeza de sujeira pedida por Luiz (31/08, mesmo dia)
 
 Depois de criar a árvore, Luiz pediu uma varredura geral: "não quero um sistema com sujeiras e coisas que não estamos usando". Achados e o que foi feito:
