@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
@@ -459,9 +459,9 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
   const isOver = planned > 0 && spent > planned
 
   return (
-    <div className={styles.accordion}>
+    <div className={`${styles.accordion} ${open ? styles.accordionOpen : ''}`}>
       <button className={styles.accordionHeader} onClick={() => setOpen((v) => !v)}>
-        <span className={styles.accordionChevron}>{open ? '▾' : '▸'}</span>
+        <span className={styles.accordionToggle}>{open ? <Minus size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}</span>
         <span className={styles.accordionName}>
           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {parentName}

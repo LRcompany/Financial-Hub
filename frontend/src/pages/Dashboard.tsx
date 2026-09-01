@@ -275,7 +275,10 @@ export function Dashboard() {
                   <div className={styles.listIcon}>💳</div>
                   <div className={styles.listBody}>
                     <div className={styles.listTitle}>{t.description}</div>
-                    <div className={styles.listSub}>{t.category?.name ?? 'Sem categoria'}</div>
+                    <div className={styles.listSub}>
+                      {t.category?.name ?? 'Sem categoria'}
+                      {t.broker && ` · ${t.broker.name}`}
+                    </div>
                   </div>
                   <div className={styles.listValue}>
                     {t.type === 'income' ? (

@@ -642,6 +642,12 @@ Luiz achou o resumo "pobre" e pediu mais números e gráfico. Enriquecido:
 
 **Achado real ao testar**: o resumo de agosto sai vazio nos 3 blocos — não por bug, mas porque **não existe nenhum `BudgetTarget` pra agosto** (a limpeza de 30/08 zerou tudo, e o Luiz só configurou metas a partir de setembro) e **`ProjectReceipt` tem 0 linhas no banco** (Projetos nunca foi populado com dado real). O gráfico de pizza e os 3 destaques só vão aparecer de verdade a partir do resumo de setembro (visto em outubro), quando finalmente existe meta + gasto real no mesmo mês pra comparar.
 
+### 3 ajustes rápidos (01/09): accordion +/-, LR→Empresa, banco na transação
+
+- Accordion do Orçamento trocou seta ▸/▾ por ícone +/- (Lucide `Plus`/`Minus`), e ganhou fundo `--accent-soft` (mesmo azul claro do design system) quando aberto — referência visual que o Luiz mandou. Ícone vira um badge circular branco (`--surface`) quando aberto.
+- Categoria "LR" renomeada pra "Empresa" (mesma árvore, só o nome).
+- "Últimas transações" no Dashboard mostra o banco de origem (`Transaction.broker.name`, já vinha do backend, só não estava no tipo/render do frontend) — ex: "Restaurante · C6".
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

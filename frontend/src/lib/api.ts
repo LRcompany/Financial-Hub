@@ -30,6 +30,7 @@ export interface Transaction {
   amount: number
   isTransfer: boolean
   category: Category | null
+  broker: { id: string; name: string } | null
 }
 
 export interface UncategorizedTransactionGroup {
