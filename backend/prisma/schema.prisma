@@ -189,6 +189,11 @@ model Broker {
   // de espalhar as posições por tipo de ativo (Nomad: bonds e ETF ficam
   // juntos, não bonds em "Renda Fixa" e ETF em "Fundo" — é uma carteira só).
   standalone        Boolean  @default(false)
+  // Conexão que o Luiz não usa mais, mas cujo histórico real (posições,
+  // transações) não pode ser apagado sem querer — arquivar tira a corretora
+  // das telas ativas (Patrimônio, sync automático, botão Sincronizar) sem
+  // perder nenhum registro. Reversível a qualquer momento (desarquivar).
+  archivedAt        DateTime?
 
   transactions     Transaction[]
   positionSnapshots PositionSnapshot[]

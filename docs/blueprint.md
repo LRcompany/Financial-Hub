@@ -672,6 +672,18 @@ Luiz pediu pra não depender mais de mim rodando SQL na mão quando surgir categ
 - **Frontend**: `CategoryManager.tsx` — árvore com accordion (expandir/colapsar), + pra nova subcategoria (só até neto), lápis pra editar, lixeira com confirmação em 2 cliques, tudo dentro de Configurações.
 - **Bug pego em teste manual, antes de ir pro ar**: a checagem de profundidade original só olhava 1 nível acima do pai (`parent.parentId`) pra decidir se already é neto — isso trata filho (profundidade 2) e neto (profundidade 3) como a mesma coisa, e deixou criar um bisneto de verdade num teste direto (`POST` com `parentId` de "Detran", que já é neto). Corrigido pra subir 2 níveis (`parent.parent.parentId`) antes de decidir a profundidade; registro de teste apagado do banco, contagem de categorias confirmada intacta (109) depois.
 
+### "Excluir conexão" virou "Arquivar" (01/09)
+
+Luiz testou o `DELETE /brokers/:id` da entrega anterior e não conseguiu excluir nenhuma — a mensagem de proteção aparecia sempre. Investigando: **toda** corretora do sistema tem `PositionSnapshot` real, até as "nunca sincronizadas" (vieram da importação da planilha original) — de PHANTOM_ETH com 1 posição até BTG com 273. Ou seja, a proteção contra apagar dado real (certa em princípio) bloqueava 100% das tentativas, sempre — a feature nascia inútil na prática.
+
+Perguntei direto: como deveria funcionar, já que toda corretora tem histórico? Luiz escolheu **arquivar** em vez de excluir de verdade. Trocado:
+
+- `Broker.archivedAt DateTime?` (novo). `POST /brokers/:id/archive` / `POST /brokers/:id/unarchive` substituem o `DELETE` (removido — ficaria morto na prática, e "não quero sujeira" já é regra do projeto).
+- Corretora arquivada some de: `fetchAllSnapshots()` (por isso some de Patrimônio e do resumo mensal, filtro num ponto só, todo o resto herda), `GET /credit-cards` (fatura ao vivo), sync automático diário e o botão "Sincronizar" manual (recusa com 409 se tentar sincronizar arquivada).
+- **Nada é apagado** — só sai do filtro. Desarquivar traz de volta o histórico inteiro, sem "restaurar" nada (nunca saiu do banco).
+- Settings.tsx: lista virou 2 blocos — ativas (com Sincronizar/Reconectar/Atualizar por extrato/Arquivar) e "Arquivadas" (esmaecida, só com Desarquivar).
+- Testado ao vivo: arquivei o PICPAY de verdade → sumiu de `/positions` na hora → desarquivei → voltou a existir no `GET /brokers` com `archivedAt: null` (não reapareceu em `/positions` porque o snapshot mais recente dele é de 09/2022, fora da janela de "ativo hoje" de 2 meses — comportamento correto e anterior a essa mudança, não regressão).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

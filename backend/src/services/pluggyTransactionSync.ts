@@ -173,7 +173,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
  * (scheduler.ts). Erro num broker não trava os outros.
  */
 export async function syncAllBrokersCreditCardTransactions() {
-  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
+  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null }, archivedAt: null } });
 
   const perBroker: {
     broker: string;

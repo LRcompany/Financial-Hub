@@ -26,6 +26,7 @@ brokersRouter.get("/brokers", async (_req, res) => {
 brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+  if (broker.archivedAt) return res.status(409).json({ error: `${broker.name} está arquivada — desarquive antes de sincronizar.` });
 
   if (broker.dataSource === "pluggy" && broker.pluggyConnectorId) {
     try {
@@ -48,29 +49,27 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   res.status(400).json({ error: "Esse broker não está configurado para nenhum sync automático" });
 });
 
-// DELETE /api/brokers/:id — remove uma conexão que o Luiz não usa mais.
-// Nunca deleta em cascata: se o broker tem Transaction ou PositionSnapshot
-// reais gravados, recusa e devolve as contagens, pra ele decidir com dado na
-// mão em vez de perder histórico sem querer. Só apaga de fato quando não
-// sobrou nenhum registro real associado (conexão nunca usada, ou já vazia).
-brokersRouter.delete("/brokers/:id", async (req, res) => {
+// POST /api/brokers/:id/archive — "excluir" uma conexão que o Luiz não usa
+// mais, sem apagar histórico: toda corretora do sistema tem PositionSnapshot
+// real (até a herdada da planilha original), então um DELETE de verdade
+// sempre teria que escolher entre recusar tudo ou apagar dado — arquivar
+// tira a corretora das telas ativas (Patrimônio, fatura de cartão, sync
+// automático e manual) sem decidir isso por ele. Reversível a qualquer hora.
+brokersRouter.post("/brokers/:id/archive", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+  const updated = await prisma.broker.update({ where: { id: broker.id }, data: { archivedAt: new Date() } });
+  res.json(updated);
+});
 
-  const [transactionCount, positionCount] = await Promise.all([
-    prisma.transaction.count({ where: { brokerId: broker.id } }),
-    prisma.positionSnapshot.count({ where: { brokerId: broker.id } }),
-  ]);
-  if (transactionCount > 0 || positionCount > 0) {
-    return res.status(409).json({
-      error: `${broker.name} tem histórico real gravado (${transactionCount} transações, ${positionCount} posições) — deletar a conexão perderia esse dado.`,
-      transactionCount,
-      positionCount,
-    });
-  }
-
-  await prisma.broker.delete({ where: { id: broker.id } });
-  res.json({ deleted: true });
+// POST /api/brokers/:id/unarchive — traz a conexão de volta pras telas
+// ativas. Nada precisa ser "restaurado": os PositionSnapshot/Transaction
+// nunca saíram do banco, só ficaram fora do filtro enquanto arquivada.
+brokersRouter.post("/brokers/:id/unarchive", async (req, res) => {
+  const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
+  if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+  const updated = await prisma.broker.update({ where: { id: broker.id }, data: { archivedAt: null } });
+  res.json(updated);
 });
 
 // POST /api/brokers/:id/statement-preview — extrai texto do PDF (extrato
@@ -213,7 +212,7 @@ brokersRouter.get("/credit-cards", async (req, res) => {
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
   const monthStart = new Date(year, month - 1, 1);
 
-  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null } } });
+  const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null }, archivedAt: null } });
 
   const cards: {
     broker: string;

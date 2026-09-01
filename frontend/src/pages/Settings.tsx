@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PluggyConnect } from 'pluggy-connect-sdk'
-import { Plus, RefreshCw, Landmark, Target, FileUp, Trash2 } from 'lucide-react'
+import { Plus, RefreshCw, Landmark, Target, FileUp, Archive, ArchiveRestore } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
@@ -29,8 +29,7 @@ export function Settings() {
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [deleteErrorId, setDeleteErrorId] = useState<{ id: string; message: string } | null>(null)
+  const [archiveErrorId, setArchiveErrorId] = useState<{ id: string; message: string } | null>(null)
   const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
@@ -85,21 +84,18 @@ export function Settings() {
     }
   }
 
-  async function deleteBroker(broker: Broker) {
-    if (confirmDeleteId !== broker.id) {
-      setConfirmDeleteId(broker.id)
-      setDeleteErrorId(null)
-      return
-    }
+  async function toggleArchive(broker: Broker) {
     setBusyId(broker.id)
-    setDeleteErrorId(null)
+    setArchiveErrorId(null)
     try {
-      await api.deleteBroker(broker.id)
-      setConfirmDeleteId(null)
+      if (broker.archivedAt) {
+        await api.unarchiveBroker(broker.id)
+      } else {
+        await api.archiveBroker(broker.id)
+      }
       loadBrokers()
     } catch (err) {
-      setDeleteErrorId({ id: broker.id, message: (err as Error).message })
-      setConfirmDeleteId(null)
+      setArchiveErrorId({ id: broker.id, message: (err as Error).message })
     } finally {
       setBusyId(null)
     }
@@ -120,6 +116,8 @@ export function Settings() {
   }
 
   const currentGoal = dailyGoals[0] ?? null
+  const activeBrokers = brokers.filter((b) => !b.archivedAt)
+  const archivedBrokers = brokers.filter((b) => b.archivedAt)
 
   return (
     <div className={cards.page}>
@@ -189,15 +187,14 @@ export function Settings() {
 
         {error && <div className={styles.error}>{error}</div>}
 
-        {brokers.length === 0 && !error && (
+        {activeBrokers.length === 0 && !error && (
           <div className={cards.emptyState}>Nenhum banco conectado ainda — clique em "Conectar banco" pra começar.</div>
         )}
 
         <div className={styles.list}>
-          {brokers.map((broker) => {
+          {activeBrokers.map((broker) => {
             const canUploadStatement = broker.dataSource === 'manual_statement' && STATEMENT_UPLOAD_BROKERS.has(broker.name)
-            const isConfirming = confirmDeleteId === broker.id
-            const deleteError = deleteErrorId?.id === broker.id ? deleteErrorId.message : null
+            const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
             return (
               <div key={broker.id} className={styles.row}>
                 <div className={styles.rowIcon}>
@@ -206,7 +203,7 @@ export function Settings() {
                 <div className={styles.rowBody}>
                   <div className={styles.rowName}>{broker.name}</div>
                   <div className={styles.rowMeta}>{formatLastSync(broker.lastSyncedAt)}</div>
-                  {deleteError && <div className={styles.error} style={{ marginTop: 6 }}>{deleteError}</div>}
+                  {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
                 </div>
                 <div className={styles.rowActions}>
                   {broker.dataSource === 'pluggy' && (
@@ -232,19 +229,47 @@ export function Settings() {
                       Atualizar por extrato
                     </button>
                   )}
-                  <button
-                    className={isConfirming ? styles.deleteBtnConfirm : styles.deleteBtn}
-                    onClick={() => deleteBroker(broker)}
-                    disabled={busyId === broker.id}
-                  >
-                    <Trash2 size={13} strokeWidth={2} />
-                    {isConfirming ? 'Confirmar exclusão?' : 'Excluir'}
+                  <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
+                    <Archive size={13} strokeWidth={2} />
+                    Arquivar
                   </button>
                 </div>
               </div>
             )
           })}
         </div>
+
+        {archivedBrokers.length > 0 && (
+          <>
+            <h3 className={styles.subheading}>Arquivadas</h3>
+            <p className={styles.helperText}>
+              Fora do Patrimônio, da fatura de cartão e do sync automático — o histórico continua guardado, é só desarquivar pra voltar.
+            </p>
+            <div className={styles.list}>
+              {archivedBrokers.map((broker) => {
+                const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
+                return (
+                  <div key={broker.id} className={`${styles.row} ${styles.rowArchived}`}>
+                    <div className={styles.rowIcon}>
+                      <Landmark size={18} strokeWidth={2} />
+                    </div>
+                    <div className={styles.rowBody}>
+                      <div className={styles.rowName}>{broker.name}</div>
+                      <div className={styles.rowMeta}>arquivada {broker.archivedAt ? formatDate(broker.archivedAt) : ''}</div>
+                      {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
+                    </div>
+                    <div className={styles.rowActions}>
+                      <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
+                        <ArchiveRestore size={13} strokeWidth={2} />
+                        Desarquivar
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
       </section>
 
       {uploadTarget && (

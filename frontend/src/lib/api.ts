@@ -226,6 +226,7 @@ export interface Broker {
   pluggyConnectorId: string | null
   onchainAddress: string | null
   lastSyncedAt: string | null
+  archivedAt: string | null
 }
 
 export interface ParsedStatementPosition {
@@ -250,11 +251,17 @@ export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
   brokers: () => request<Broker[]>('/brokers'),
   syncBroker: (id: string) => request<{ synced: true; count: number }>(`/brokers/${id}/sync`, { method: 'POST' }),
-  deleteBroker: async (id: string) => {
-    const response = await fetch(`${API_URL}/brokers/${id}`, { method: 'DELETE' })
+  archiveBroker: async (id: string) => {
+    const response = await fetch(`${API_URL}/brokers/${id}/archive`, { method: 'POST' })
     const data = await response.json()
-    if (!response.ok) throw new Error(data.error ?? `Falha ao deletar a conexão (${response.status})`)
-    return data as { deleted: true }
+    if (!response.ok) throw new Error(data.error ?? `Falha ao arquivar a conexão (${response.status})`)
+    return data as Broker
+  },
+  unarchiveBroker: async (id: string) => {
+    const response = await fetch(`${API_URL}/brokers/${id}/unarchive`, { method: 'POST' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao desarquivar a conexão (${response.status})`)
+    return data as Broker
   },
   pluggyConnectToken: (itemId?: string) =>
     request<{ accessToken: string }>('/pluggy/connect-token', {

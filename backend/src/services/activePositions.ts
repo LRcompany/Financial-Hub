@@ -1,7 +1,11 @@
 import { prisma } from "../prisma.js";
 
 export async function fetchAllSnapshots() {
+  // Corretora arquivada some do Patrimônio/wealth overview (é o que "arquivar"
+  // quer dizer — não conta mais no total), mas o PositionSnapshot em si nunca
+  // é apagado: desarquivar traz o histórico de volta inteiro.
   return prisma.positionSnapshot.findMany({
+    where: { broker: { archivedAt: null } },
     include: { security: true, broker: true },
     orderBy: [{ year: "desc" }, { month: "desc" }],
   });
