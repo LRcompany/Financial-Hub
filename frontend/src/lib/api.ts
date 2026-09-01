@@ -46,6 +46,7 @@ export interface BudgetCategory {
 export interface BudgetReviewCategory {
   categoryId: string
   name: string
+  path: string
   kind: CategoryKind
   previousSpent: number
   currentTarget: number | null

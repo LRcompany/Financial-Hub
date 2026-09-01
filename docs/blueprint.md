@@ -588,6 +588,12 @@ Botão "Atualizar transações" em Orçamento → Cartões de crédito. `POST /a
 
 **3 possíveis duplicatas de confiança menor, não mexidas** — valor bem próximo (não exato) mas nome real não bate conceitualmente com o rótulo antigo, deixadas pro Luiz confirmar: "compras casa" (R$97,56) vs "AMAZON MARKETPLACE" (R$97,60); "passagens mae" (R$91,59) vs "DL*BOOKINGCOM" (R$91,61, é reserva de hotel, não passagem aérea); "luminarias"/"AMAZON MARKETPLACE" (R$60,97/61,01) vs "RDSAUDE ONLINE" (R$60,96, é serviço de saúde) — três valores parecidos demais pra decidir sozinho com segurança.
 
+### Moradia ganha "Seguro Residência" + bug no "Revisar orçamento" (31/08)
+
+Nova folha: Moradia > Seguro Residência (essencial). Aproveitei pra conferir se "Revisar orçamento" reflete a árvore nova — reflete (busca direto do banco, sem lista fixa), mas achei um bug real: a lista mostrava só o nome da folha ("Aluguel", "Assessoria", "Acessórios", "Administrativo"), sem o pai — e agora várias folhas têm o mesmo nome em pais diferentes DE PROPÓSITO (Aluguel existe em Moradia e em Transporte > Carro; Assessoria existe em Esportes > Corrida e em Esportes > Natação; Acessórios em Roupas & Calçados e em Transporte > Bicicleta). Sem o caminho completo, impossível saber qual é qual.
+
+Corrigido: `/budget-target/review` agora devolve `path` (ex: "Transporte > Carro > Aluguel" pros casos de 3 níveis), ordenado pelo caminho completo (não só pelo nome da folha, senão duplicata de nome ainda ficaria espalhada na lista). `BudgetReviewModal` mostra o caminho do pai em cinza pequeno acima do nome da categoria.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

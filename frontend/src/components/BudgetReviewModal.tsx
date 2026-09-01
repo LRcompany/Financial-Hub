@@ -77,9 +77,14 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                   </tr>
                 </thead>
                 <tbody>
-                  {categories.map((c) => (
+                  {categories.map((c) => {
+                    const parentTrail = c.path.split(' > ').slice(0, -1).join(' > ')
+                    return (
                     <tr key={c.categoryId}>
-                      <td>{c.name}</td>
+                      <td>
+                        {parentTrail && <div className={styles.parentTrail}>{parentTrail}</div>}
+                        {c.name}
+                      </td>
                       <td>
                         <span className={styles.kindTag}>{KIND_LABEL[c.kind]}</span>
                       </td>
@@ -94,7 +99,8 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                         />
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

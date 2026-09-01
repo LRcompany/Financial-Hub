@@ -358,7 +358,7 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
     // gráfico geral, meta real sempre é lançada na filha (folha).
     prisma.category.findMany({
       where: { type: "expense", kind: { not: "investment" }, children: { none: {} } },
-      orderBy: [{ kind: "asc" }, { name: "asc" }],
+      include: { parent: { include: { parent: true } } },
     }),
     prisma.budgetTarget.findMany({ where: { month, year } }),
   ]);
@@ -370,15 +370,26 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
         where: { categoryId: c.id, type: "expense", isTransfer: false, date: { gte: prevStart, lt: prevEnd } },
         _sum: { amount: true },
       });
+      // Caminho completo ("Moradia > Aluguel") — várias folhas repetem nome
+      // entre pais diferentes de propósito (Aluguel existe em Moradia E em
+      // Transporte > Carro), só o nome sozinho não dá pra distinguir.
+      const path = [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > ");
       return {
         categoryId: c.id,
         name: c.name,
+        path,
         kind: c.kind,
         previousSpent: agg._sum.amount ?? 0,
         currentTarget: targetByCategory.get(c.id) ?? null,
       };
     })
   );
+  // Ordena pelo caminho completo (não só pelo nome da folha) — assim as
+  // categorias do mesmo pai ficam juntas, mais fácil de escanear a lista.
+  result.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+    return a.path.localeCompare(b.path, "pt-BR");
+  });
 
   res.json({ categories: result });
 });
