@@ -5,6 +5,7 @@ import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
 import { StatementUploadModal } from '../components/StatementUploadModal'
+import { CategoryManager } from '../components/CategoryManager'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
@@ -168,6 +169,12 @@ export function Settings() {
             </>
           )}
         </div>
+      </section>
+
+      {/* ---------- Categorias ---------- */}
+      <section>
+        <h2 className={cards.sectionTitle}>Categorias</h2>
+        <CategoryManager />
       </section>
 
       {/* ---------- Conexões ---------- */}

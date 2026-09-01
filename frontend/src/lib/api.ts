@@ -277,6 +277,32 @@ export const api = {
   categorizeTransactionGroup: (ids: string[], categoryId: string) =>
     request<{ updated: number }>('/transactions/group', { method: 'PUT', body: JSON.stringify({ ids, categoryId }) }),
   categories: () => request<Category[]>('/categories'),
+  createCategory: async (input: { name: string; type?: 'income' | 'expense'; kind?: CategoryKind; parentId?: string }) => {
+    const response = await fetch(`${API_URL}/categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao criar categoria (${response.status})`)
+    return data as Category
+  },
+  updateCategory: async (id: string, input: { name?: string; kind?: CategoryKind }) => {
+    const response = await fetch(`${API_URL}/categories/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao atualizar categoria (${response.status})`)
+    return data as Category
+  },
+  deleteCategory: async (id: string) => {
+    const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao excluir categoria (${response.status})`)
+    return data as { deleted: true }
+  },
   budgetSummary: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<BudgetSummary>(`/budget-summary${query}`)

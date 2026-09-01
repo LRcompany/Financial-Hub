@@ -661,6 +661,17 @@ Luiz pediu 3 coisas na mesma seção de Conexões: (1) opção pra deletar conex
 - **Sincronizar Phantom**: o backend (`POST /brokers/:id/sync`) já tratava `dataSource: "onchain_query"` desde muito antes — só faltava o botão aparecer na tela pra esse tipo de broker (Settings.tsx só mostrava ação pra `dataSource === "pluggy"`). PHANTOM/PHANTOM_BASE/PHANTOM_BTC/PHANTOM_ETH (4 redes, mesma carteira) ganharam "Sincronizar".
 - **Upload de extrato pro Nomad e INCO**: `StatementUploadModal` já existia mas só era oferecido dentro de Patrimônio, e só pro Nomad (comentário explícito no código: "INCO também é standalone+manual, mas não tem PDF nesse formato; usaria o parser errado"). Botão "Atualizar por extrato" agora aparece em Configurações pros dois. **Ressalva real, não resolvida**: o parser (`parseNomadStatement`) é específico do formato Apex Clearing do extrato da Nomad — se o PDF do INCO vier num layout diferente, a prévia vai voltar vazia com aviso "PORTFOLIO não encontrada" em vez de inventar posição errada (a confirmação continua manual, então não corrompe dado), mas o parser em si só vai ficar certo pro INCO quando o Luiz de fato subir um extrato real de lá pra eu ajustar a regex pro layout dele.
 
+### Configurações: CRUD de categoria (01/09)
+
+Luiz pediu pra não depender mais de mim rodando SQL na mão quando surgir categoria nova — "já que temos as categorias já organizadas... adicionar uma sessão pra editar, remover e adicionar novas categorias".
+
+- **`GET /api/categories` corrigido**: só trazia 2 níveis (mãe + filho), escondendo o neto — a árvore real tem 3 (ex: Transporte > Carro > Aluguel). Agora inclui `children.children`.
+- **`POST /api/categories`**: cria mãe (`type` obrigatório) ou subcategoria (`parentId`, herda o `type` do pai — não dá pra misturar receita/despesa na mesma árvore). Trava em 3 níveis.
+- **`PUT /api/categories/:id`**: só nome e `kind` — mover categoria de lugar (reparent) ficou de fora de propósito, não foi pedido e é mais arriscado.
+- **`DELETE /api/categories/:id`**: recusa (409) se tiver subcategoria, ou se tiver `Transaction`/`BudgetTarget`/`UpcomingInstallment`/`CategorizationRule` reais gravados nela — mesmo padrão de proteção da corretora, nunca cascata silenciosa.
+- **Frontend**: `CategoryManager.tsx` — árvore com accordion (expandir/colapsar), + pra nova subcategoria (só até neto), lápis pra editar, lixeira com confirmação em 2 cliques, tudo dentro de Configurações.
+- **Bug pego em teste manual, antes de ir pro ar**: a checagem de profundidade original só olhava 1 nível acima do pai (`parent.parentId`) pra decidir se already é neto — isso trata filho (profundidade 2) e neto (profundidade 3) como a mesma coisa, e deixou criar um bisneto de verdade num teste direto (`POST` com `parentId` de "Detran", que já é neto). Corrigido pra subir 2 níveis (`parent.parent.parentId`) antes de decidir a profundidade; registro de teste apagado do banco, contagem de categorias confirmada intacta (109) depois.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
