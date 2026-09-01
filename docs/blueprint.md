@@ -652,6 +652,15 @@ Luiz achou o resumo "pobre" e pediu mais números e gráfico. Enriquecido:
 
 Luiz decidiu renomear — "é onde eu vou controlar minha vida", não é só finanças. Atualizado onde o nome aparece de verdade pro usuário: título da aba (`index.html`), nome/short_name do manifest do PWA (`vite.config.ts` — nome que aparece ao instalar o app na tela inicial), wordmark no sidebar (`AppLayout.tsx`), título do PDF do resumo mensal, log de boot do backend. **Não mexido de propósito**: nome de pasta do projeto (`~/Desktop/Work/CLAUDE/Financial-Hub`), nome dos pacotes npm (`financial-hub-backend`/`financial-hub-frontend`) e o histórico de decisões já registrado neste documento (narrativa de "o que aconteceu" fica como aconteceu, sob o nome de então) — só o nome do PRODUTO como o Luiz vê/usa mudou.
 
+### Configurações: excluir conexão + Phantom/Nomad/INCO consolidados (01/09)
+
+Luiz pediu 3 coisas na mesma seção de Conexões: (1) opção pra deletar conexão que não usa mais, (2) sincronizar o Phantom (que já tinha backend pronto, só faltava botão), (3) subir extrato PDF do Nomad e do INCO — tudo dentro de Configurações em vez de espalhado.
+
+- **`DELETE /api/brokers/:id`** (novo): antes de apagar, conta `Transaction`/`PositionSnapshot` reais ligados àquele broker — se tiver qualquer um dos dois, recusa (409) e devolve as contagens em vez de deletar; só remove de fato conexão que nunca teve dado sincronizado ou já está vazia. Testado ao vivo: tentativa de deletar o BTG (36 transações, 273 posições) foi recusada com a mensagem certa; broker seguiu existindo depois.
+- **Botão "Excluir"** em cada linha de Configurações, com confirmação em 2 cliques (primeiro clique só troca o texto pro "Confirmar exclusão?", nada é enviado ainda — testado que o primeiro clique não dispara nenhum request de rede).
+- **Sincronizar Phantom**: o backend (`POST /brokers/:id/sync`) já tratava `dataSource: "onchain_query"` desde muito antes — só faltava o botão aparecer na tela pra esse tipo de broker (Settings.tsx só mostrava ação pra `dataSource === "pluggy"`). PHANTOM/PHANTOM_BASE/PHANTOM_BTC/PHANTOM_ETH (4 redes, mesma carteira) ganharam "Sincronizar".
+- **Upload de extrato pro Nomad e INCO**: `StatementUploadModal` já existia mas só era oferecido dentro de Patrimônio, e só pro Nomad (comentário explícito no código: "INCO também é standalone+manual, mas não tem PDF nesse formato; usaria o parser errado"). Botão "Atualizar por extrato" agora aparece em Configurações pros dois. **Ressalva real, não resolvida**: o parser (`parseNomadStatement`) é específico do formato Apex Clearing do extrato da Nomad — se o PDF do INCO vier num layout diferente, a prévia vai voltar vazia com aviso "PORTFOLIO não encontrada" em vez de inventar posição errada (a confirmação continua manual, então não corrompe dado), mas o parser em si só vai ficar certo pro INCO quando o Luiz de fato subir um extrato real de lá pra eu ajustar a regex pro layout dele.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

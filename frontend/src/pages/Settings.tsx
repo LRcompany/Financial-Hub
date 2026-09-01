@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import { PluggyConnect } from 'pluggy-connect-sdk'
-import { Plus, RefreshCw, Landmark, Target } from 'lucide-react'
+import { Plus, RefreshCw, Landmark, Target, FileUp, Trash2 } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
+import { StatementUploadModal } from '../components/StatementUploadModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
+
+// Corretoras "manual_statement" que já têm um parser de extrato ligado
+// (formato Apex Clearing) — as outras (Binance, XP, Órama...) continuam sem
+// botão de upload até terem um parser próprio, pra não abrir um fluxo que
+// nunca extrai nada.
+const STATEMENT_UPLOAD_BROKERS = new Set(['NOMAD', 'INCO'])
 
 function formatLastSync(iso: string | null) {
   if (!iso) return 'nunca sincronizado'
@@ -21,6 +28,9 @@ export function Settings() {
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteErrorId, setDeleteErrorId] = useState<{ id: string; message: string } | null>(null)
+  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
   const [dailyGoalInput, setDailyGoalInput] = useState('')
@@ -69,6 +79,26 @@ export function Settings() {
       loadBrokers()
     } catch (err) {
       setError(`Falha ao sincronizar ${broker.name}: ${(err as Error).message}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deleteBroker(broker: Broker) {
+    if (confirmDeleteId !== broker.id) {
+      setConfirmDeleteId(broker.id)
+      setDeleteErrorId(null)
+      return
+    }
+    setBusyId(broker.id)
+    setDeleteErrorId(null)
+    try {
+      await api.deleteBroker(broker.id)
+      setConfirmDeleteId(null)
+      loadBrokers()
+    } catch (err) {
+      setDeleteErrorId({ id: broker.id, message: (err as Error).message })
+      setConfirmDeleteId(null)
     } finally {
       setBusyId(null)
     }
@@ -157,30 +187,70 @@ export function Settings() {
         )}
 
         <div className={styles.list}>
-          {brokers.map((broker) => (
-            <div key={broker.id} className={styles.row}>
-              <div className={styles.rowIcon}>
-                <Landmark size={18} strokeWidth={2} />
-              </div>
-              <div className={styles.rowBody}>
-                <div className={styles.rowName}>{broker.name}</div>
-                <div className={styles.rowMeta}>{formatLastSync(broker.lastSyncedAt)}</div>
-              </div>
-              {broker.dataSource === 'pluggy' && (
+          {brokers.map((broker) => {
+            const canUploadStatement = broker.dataSource === 'manual_statement' && STATEMENT_UPLOAD_BROKERS.has(broker.name)
+            const isConfirming = confirmDeleteId === broker.id
+            const deleteError = deleteErrorId?.id === broker.id ? deleteErrorId.message : null
+            return (
+              <div key={broker.id} className={styles.row}>
+                <div className={styles.rowIcon}>
+                  <Landmark size={18} strokeWidth={2} />
+                </div>
+                <div className={styles.rowBody}>
+                  <div className={styles.rowName}>{broker.name}</div>
+                  <div className={styles.rowMeta}>{formatLastSync(broker.lastSyncedAt)}</div>
+                  {deleteError && <div className={styles.error} style={{ marginTop: 6 }}>{deleteError}</div>}
+                </div>
                 <div className={styles.rowActions}>
-                  <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
-                    <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
-                    Sincronizar
-                  </button>
-                  <button className={styles.actionBtn} onClick={() => openWidget(broker.pluggyConnectorId ?? undefined)}>
-                    Reconectar
+                  {broker.dataSource === 'pluggy' && (
+                    <>
+                      <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
+                        <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
+                        Sincronizar
+                      </button>
+                      <button className={styles.actionBtn} onClick={() => openWidget(broker.pluggyConnectorId ?? undefined)}>
+                        Reconectar
+                      </button>
+                    </>
+                  )}
+                  {broker.dataSource === 'onchain_query' && (
+                    <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
+                      <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
+                      Sincronizar
+                    </button>
+                  )}
+                  {canUploadStatement && (
+                    <button className={styles.actionBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
+                      <FileUp size={13} strokeWidth={2} />
+                      Atualizar por extrato
+                    </button>
+                  )}
+                  <button
+                    className={isConfirming ? styles.deleteBtnConfirm : styles.deleteBtn}
+                    onClick={() => deleteBroker(broker)}
+                    disabled={busyId === broker.id}
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
+                    {isConfirming ? 'Confirmar exclusão?' : 'Excluir'}
                   </button>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       </section>
+
+      {uploadTarget && (
+        <StatementUploadModal
+          brokerId={uploadTarget.id}
+          brokerName={uploadTarget.name}
+          onClose={() => setUploadTarget(null)}
+          onSaved={() => {
+            setUploadTarget(null)
+            loadBrokers()
+          }}
+        />
+      )}
     </div>
   )
 }

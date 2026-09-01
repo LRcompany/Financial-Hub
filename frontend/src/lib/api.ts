@@ -250,6 +250,12 @@ export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
   brokers: () => request<Broker[]>('/brokers'),
   syncBroker: (id: string) => request<{ synced: true; count: number }>(`/brokers/${id}/sync`, { method: 'POST' }),
+  deleteBroker: async (id: string) => {
+    const response = await fetch(`${API_URL}/brokers/${id}`, { method: 'DELETE' })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ?? `Falha ao deletar a conexão (${response.status})`)
+    return data as { deleted: true }
+  },
   pluggyConnectToken: (itemId?: string) =>
     request<{ accessToken: string }>('/pluggy/connect-token', {
       method: 'POST',

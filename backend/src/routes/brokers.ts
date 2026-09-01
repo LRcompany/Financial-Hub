@@ -48,6 +48,31 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   res.status(400).json({ error: "Esse broker não está configurado para nenhum sync automático" });
 });
 
+// DELETE /api/brokers/:id — remove uma conexão que o Luiz não usa mais.
+// Nunca deleta em cascata: se o broker tem Transaction ou PositionSnapshot
+// reais gravados, recusa e devolve as contagens, pra ele decidir com dado na
+// mão em vez de perder histórico sem querer. Só apaga de fato quando não
+// sobrou nenhum registro real associado (conexão nunca usada, ou já vazia).
+brokersRouter.delete("/brokers/:id", async (req, res) => {
+  const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
+  if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
+
+  const [transactionCount, positionCount] = await Promise.all([
+    prisma.transaction.count({ where: { brokerId: broker.id } }),
+    prisma.positionSnapshot.count({ where: { brokerId: broker.id } }),
+  ]);
+  if (transactionCount > 0 || positionCount > 0) {
+    return res.status(409).json({
+      error: `${broker.name} tem histórico real gravado (${transactionCount} transações, ${positionCount} posições) — deletar a conexão perderia esse dado.`,
+      transactionCount,
+      positionCount,
+    });
+  }
+
+  await prisma.broker.delete({ where: { id: broker.id } });
+  res.json({ deleted: true });
+});
+
 // POST /api/brokers/:id/statement-preview — extrai texto do PDF (extrato
 // mensal, hoje só o formato Nomad/Apex Clearing) e devolve uma prévia
 // (posições, saldo FDIC, período) SEM gravar nada no banco. A confirmação é
