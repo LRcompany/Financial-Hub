@@ -95,7 +95,6 @@ model Category {
   // nunca deveria ter ficado misturada com Streaming/Cinema em "não
   // essencial" (era exatamente isso que a coluna essential=false fazia).
   kind     String  @default("non_essential")
-  usage    String? // pessoal | trabalho
 
   parentId String?
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
