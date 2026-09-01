@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
@@ -36,6 +36,13 @@ export function Orcamento() {
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
+  // Espelha month/year sincronamente — changeMonth lê daqui em vez do state
+  // (que só atualiza no próximo render), pra dois cliques em sequência
+  // rápida não computarem os dois a partir do mesmo mês antigo.
+  const periodRef = useRef({ month, year })
+  useEffect(() => {
+    periodRef.current = { month, year }
+  }, [month, year])
 
   const [budget, setBudget] = useState<BudgetSummary | null>(null)
   const [error, setError] = useState(false)
@@ -64,8 +71,8 @@ export function Orcamento() {
   useEffect(loadCardsAndUpcoming, [month, year])
 
   function changeMonth(delta: number) {
-    let m = month + delta
-    let y = year
+    let m = periodRef.current.month + delta
+    let y = periodRef.current.year
     if (m < 1) {
       m = 12
       y -= 1
@@ -73,11 +80,13 @@ export function Orcamento() {
       m = 1
       y += 1
     }
+    periodRef.current = { month: m, year: y }
     setMonth(m)
     setYear(y)
   }
 
   function goToToday() {
+    periodRef.current = { month: now.getMonth() + 1, year: now.getFullYear() }
     setMonth(now.getMonth() + 1)
     setYear(now.getFullYear())
   }
@@ -267,11 +276,21 @@ export function Orcamento() {
                   <div key={c.broker + c.name} className={styles.creditCardTile}>
                     <div className={styles.creditCardHeader}>
                       <span className={styles.creditCardName}>{c.broker}</span>
-                      {c.brand && <span className={styles.creditCardBrand}>{c.brand}</span>}
+                      <div className={styles.creditCardBadges}>
+                        {c.brand && <span className={styles.creditCardBrand}>{c.brand}</span>}
+                        {c.estimated && <span className={styles.estimatedTag}>estimado</span>}
+                      </div>
                     </div>
                     <div className={cards.heroValue} style={{ fontSize: '1.2rem' }}>
                       R$ {currency(c.usedAmount)}
                     </div>
+                    {c.estimated && (
+                      <p className={styles.estimatedNote}>
+                        Projeção a partir do usado de hoje e das parcelas dessa fatura que vencem até este mês — o
+                        banco não informa o "usado" de um mês diferente do atual, pode não bater exato quando o mês
+                        chegar.
+                      </p>
+                    )}
                     {hasLimit && (
                       <>
                         <div className={cards.chartMeta}>

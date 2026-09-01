@@ -311,12 +311,36 @@
   font-weight: 600;
 }
 
+.creditCardBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .creditCardBrand {
   font-size: 10px;
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.estimatedTag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estimatedNote {
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.4;
+  margin: var(--space-2) 0 0;
 }
 
 .creditCardFooter {

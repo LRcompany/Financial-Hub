@@ -710,6 +710,17 @@ Luiz pediu pra trocar o fluxo de extrato por um popup direto: ele abre o app de 
 - **`ManualPositionsModal.tsx`** (novo, substitui `StatementUploadModal`): tabela editável (nome, tipo, moeda, quantidade, valor unitário, valor de mercado) pré-preenchida com o último valor conhecido de cada ativo + "atualizado MM/AAAA" por linha, botão "+ Novo ativo", aviso explícito de que zerar o valor (não remover a linha) é como marcar um investimento encerrado. Botão "Atualizar posições" em Configurações pras 3 corretoras — Patrimônio.tsx perdeu o botão de upload que só existia pra Nomad (consolidado em Configurações, mesma decisão de antes).
 - Testado ao vivo: popup abriu com os 5 ativos reais da Nomad, valores corretos em USD (ex: título NVIDIA em $949,01, não o equivalente em BRL) — depois testado o salvamento via API direta com um ativo de teste descartável (criado, conferido que virou snapshot novo em 09/2026 sem tocar no histórico real de 07/2026, depois apagado do banco — `lastSyncedAt` do broker restaurado pro valor original, nada de real ficou alterado pelo teste).
 
+### Cartão BTG/C6 agora "anda" com o mês no Orçamento — estimativa, não live (01/09)
+
+Luiz reportou que o box de "usado" do BTG/C6 não muda ao navegar mês a mês em Orçamento — sempre o mesmo número. Raiz real: pra cartão Pluggy, `GET /credit-cards` ignorava totalmente `month`/`year` e sempre devolvia o "usado" AO VIVO de hoje, direto da Pluggy (só o cartão manual, Caixa, já era month-aware, via soma de `UpcomingInstallment`).
+
+O problema de fundo: o banco não tem endpoint de "usado em outubro" pro futuro nem histórico real pro passado — é sempre "agora". E já tínhamos confirmado antes (30/08) que o BTG nem trava o parcelamento inteiro nesse número (métricas diferentes por natureza). Perguntei direto como ele queria que o box se comportasse ao navegar; Luiz escolheu **estimativa, deixando claro que é estimativa**.
+
+- `GET /credit-cards`: pra mês diferente do atual, `usado(mês) = usado(hoje) − parcelas dessa corretora com vencimento entre hoje e o mês escolhido` (futuro) ou `usado(hoje) + parcelas entre o mês escolhido e hoje` (passado, "como teria sido antes das parcelas já pagas desde então"). Campo novo `estimated: boolean` avisa o frontend; nesse caso `minimumPayment`/`dueDate` (que só fazem sentido pra fatura de hoje) somem, pra não misturar dado ao vivo com projeção.
+- Orçamento.tsx: badge "ESTIMADO" + nota explicando a limitação, só aparece fora do mês atual.
+- **Bug lateral pego durante o teste** (não relacionado ao pedido, achado sem querer): `changeMonth` fechava sobre `month`/`year` do momento do clique — 2-3 cliques em sequência rápida no "›" (mais rápido que o React re-renderiza) computavam todos a partir do mesmo mês antigo, "perdendo" avanços. Corrigido com um `useRef` espelhando o período atual de forma síncrona. Confirmado ao vivo: 3 cliques rápidos em "Próximo mês" agora leva certinho de Set/2026 pra Dez/2026 (antes ia só até Out).
+- Testado ao vivo: Set/2026 (mês atual) mostra os valores reais sem badge; Dez/2026 mostra BTG caindo de R$53.859,40 pra R$42.317,71 e C6 de R$34.764,22 pra R$26.505,62, com o badge e a nota.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

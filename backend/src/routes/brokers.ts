@@ -245,11 +245,27 @@ const MANUAL_CARD_LIMITS: Record<string, number> = { Caixa: 58000 };
 // mesmos do mês que o Luiz está navegando no Orçamento — avançar mês faz o
 // "usado" do cartão manual cair (parcela que já passou some da conta), até
 // sumir da lista quando não sobrar nenhuma.
+//
+// Cartão Pluggy (BTG/C6/...) em mês diferente do atual (01/09): o "usado"
+// que a Pluggy devolve é sempre o valor AO VIVO de hoje, o banco não tem
+// endpoint de "usado em outubro" pro futuro (nem histórico real pro
+// passado). Luiz pediu que navegar mês a mês reflita as parcelas que vão
+// sendo pagas — decisão dele: mostrar uma ESTIMATIVA (marcada como tal, não
+// esconder que é cálculo nosso): usado(mês) = usado(hoje) − parcelas dessa
+// corretora com vencimento entre hoje e o mês pedido (futuro), ou usado(hoje)
+// + parcelas com vencimento entre o mês pedido e hoje (passado, "como teria
+// sido antes das parcelas já pagas desde então"). Isso é uma estimativa
+// grosseira de propósito — já confirmamos antes (30/08) que o BTG não trava
+// o parcelamento inteiro no limite, então a estimativa pode não bater exato
+// com o número real do banco quando o mês chegar; o campo `estimated` avisa
+// o frontend pra rotular isso.
 brokersRouter.get("/credit-cards", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
   const monthStart = new Date(year, month - 1, 1);
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const isDifferentMonth = monthStart.getTime() !== currentMonthStart.getTime();
 
   const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null }, archivedAt: null } });
 
@@ -262,6 +278,7 @@ brokersRouter.get("/credit-cards", async (req, res) => {
     minimumPayment: number | null;
     dueDate: string | null;
     brand: string | null;
+    estimated: boolean;
   }[] = [];
 
   for (const broker of brokers) {
@@ -279,17 +296,32 @@ brokersRouter.get("/credit-cards", async (req, res) => {
         // essa conta não muda nada onde já funcionava, só corrige o C6.
         const creditLimit = acc.creditData.creditLimit;
         const availableLimit = acc.creditData.availableCreditLimit;
-        const usedAmount = creditLimit != null && availableLimit != null ? creditLimit - availableLimit : acc.balance;
+        let usedAmount = creditLimit != null && availableLimit != null ? creditLimit - availableLimit : acc.balance;
+        let estimated = false;
+
+        if (isDifferentMonth) {
+          const [from, to] = monthStart > currentMonthStart ? [currentMonthStart, monthStart] : [monthStart, currentMonthStart];
+          const agg = await prisma.upcomingInstallment.aggregate({
+            where: { cardLabel: broker.name, dueDate: { gte: from, lt: to } },
+            _sum: { amount: true },
+          });
+          const delta = agg._sum.amount ?? 0;
+          usedAmount = monthStart > currentMonthStart ? Math.max(0, usedAmount - delta) : usedAmount + delta;
+          estimated = true;
+        }
+
+        const availableLimitAdjusted = creditLimit != null ? creditLimit - usedAmount : acc.creditData.availableCreditLimit ?? 0;
 
         cards.push({
           broker: broker.name,
           name: acc.name.trim(),
           usedAmount,
-          availableLimit: acc.creditData.availableCreditLimit ?? 0,
+          availableLimit: availableLimitAdjusted,
           creditLimit: acc.creditData.creditLimit ?? 0,
-          minimumPayment: acc.creditData.minimumPayment,
-          dueDate: acc.creditData.balanceDueDate,
+          minimumPayment: estimated ? null : acc.creditData.minimumPayment,
+          dueDate: estimated ? null : acc.creditData.balanceDueDate,
           brand: acc.creditData.brand,
+          estimated,
         });
       }
     } catch {
@@ -314,6 +346,7 @@ brokersRouter.get("/credit-cards", async (req, res) => {
       minimumPayment: null,
       dueDate: null,
       brand: null,
+      estimated: false,
     });
   }
 
