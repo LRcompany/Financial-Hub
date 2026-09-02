@@ -86,6 +86,29 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const totalPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
   const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
 
+  // Entradas do mês — Projetos virou o principal gerador de receita real
+  // (cada recebimento já cria uma Transaction de entrada), então o Orçamento
+  // (visão de dia a dia) precisa mostrar quanto entrou, não só quanto saiu.
+  // `incomeFromProjects` é o recorte específico (via projectReceiptId) só
+  // pra deixar claro de onde parte da entrada do mês está vindo.
+  const [incomeAgg, previousIncomeAgg, incomeFromProjectsAgg] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { type: "income", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { type: "income", isTransfer: false, date: { gte: prevMonthStart, lt: prevMonthEnd } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { type: "income", isTransfer: false, projectReceiptId: { not: null }, date: { gte: monthStart, lt: monthEnd } },
+      _sum: { amount: true },
+    }),
+  ]);
+  const totalIncome = incomeAgg._sum.amount ?? 0;
+  const previousTotalIncome = previousIncomeAgg._sum.amount ?? 0;
+  const incomeFromProjects = incomeFromProjectsAgg._sum.amount ?? 0;
+
   // Gasto de hoje e série dos últimos 14 dias — todas as despesas do período,
   // não só as categorizadas no orçamento (reflete o gasto real do dia a dia).
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -136,6 +159,9 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     last14Days,
     totalPlanned,
     totalSpent,
+    totalIncome,
+    previousTotalIncome,
+    incomeFromProjects,
     categories,
   });
 });

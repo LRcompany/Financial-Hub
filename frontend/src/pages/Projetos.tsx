@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
-  Briefcase,
   PieChart,
   TrendingDown,
   Activity,
@@ -12,6 +11,9 @@ import {
   Users,
   LineChart,
   X,
+  Pause,
+  Play,
+  Ban,
 } from 'lucide-react'
 import {
   api,
@@ -83,7 +85,7 @@ export function Projetos() {
         <h2 className={cards.sectionTitle}>Visão Geral</h2>
         <div className={cards.grid}>
           <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader icon={Briefcase} title="Total de entradas" />
+            <CardHeader icon={LineChart} title="Resumo" />
             <div className={cards.statGrid}>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Receita bruta</span>
@@ -103,6 +105,33 @@ export function Projetos() {
                 <span className={cards.statTileValue}>R$ {currency(summary.netRevenue)}</span>
               </div>
             </div>
+            <div className={cards.statGrid} style={{ marginTop: 'var(--space-3)' }}>
+              <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Média mensal (12m)</span>
+                <span className={cards.statTileValue}>R$ {currency(summary.avgMonthly12m)}</span>
+              </div>
+              <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Dias trabalhados</span>
+                <span className={cards.statTileValue}>{summary.totalDaysWorked}</span>
+              </div>
+              <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Projetos finalizados</span>
+                <span className={cards.statTileValue}>{summary.finalizedCount}</span>
+              </div>
+              <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Projetos em aberto</span>
+                <span className={cards.statTileValue}>{summary.openCount}</span>
+              </div>
+            </div>
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-3)' }}>
+              <span>Recebido por mês</span>
+            </div>
+            <SmoothLineChart
+              values={summary.monthlyReceived.map((m) => m.value)}
+              labels={summary.monthlyReceived.map((m) => m.label)}
+              gradientId="projetosMonthlyReceivedGradient"
+              className={cards.evolutionChart}
+            />
           </div>
 
           <div className={cards.card}>
@@ -135,37 +164,6 @@ export function Projetos() {
               <span className={cards.heroLabel}>Total a pagar (fornecedor)</span>
               <span className={cards.statValue}>R$ {currency(summary.supplierOutstanding)}</span>
             </div>
-          </div>
-
-          <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader icon={LineChart} title="Resumo" />
-            <div className={cards.statGrid}>
-              <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Média mensal (12m)</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.avgMonthly12m)}</span>
-              </div>
-              <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Dias trabalhados</span>
-                <span className={cards.statTileValue}>{summary.totalDaysWorked}</span>
-              </div>
-              <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Projetos finalizados</span>
-                <span className={cards.statTileValue}>{summary.finalizedCount}</span>
-              </div>
-              <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Projetos em aberto</span>
-                <span className={cards.statTileValue}>{summary.openCount}</span>
-              </div>
-            </div>
-            <div className={cards.chartMeta}>
-              <span>Recebido por mês</span>
-            </div>
-            <SmoothLineChart
-              values={summary.monthlyReceived.map((m) => m.value)}
-              labels={summary.monthlyReceived.map((m) => m.label)}
-              gradientId="projetosMonthlyReceivedGradient"
-              className={cards.evolutionChart}
-            />
           </div>
 
           <div className={`${cards.card} ${cards.fullWidth}`}>
@@ -320,7 +318,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
   return (
     <form className={`${cards.card} ${styles.form}`} onSubmit={handleSubmit}>
       <div className={styles.formRow}>
-        <Select value={clientChoice} onChange={(e) => setClientChoice(e.target.value)}>
+        <Select label="Cliente" value={clientChoice} onChange={(e) => setClientChoice(e.target.value)}>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -330,7 +328,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         </Select>
         {clientChoice === NEW_CLIENT && (
           <>
-            <Input placeholder="Nome do cliente" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} />
+            <Input label="Nome do cliente" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} />
             <label className={styles.checkboxLabel}>
               <input type="checkbox" checked={newClientForeign} onChange={(e) => setNewClientForeign(e.target.checked)} />
               Cliente estrangeiro (DAS variável)
@@ -339,13 +337,13 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         )}
       </div>
       <div className={styles.formRow}>
-        <Input placeholder="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} />
         <Input label="Início" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <Input label="Fim (opcional)" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
       </div>
       <div className={styles.formRow}>
-        <Input placeholder="Valor do projeto (R$)" type="number" step="0.01" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
-        <Input placeholder="Nº de parcelas" type="number" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
+        <Input label="Valor do projeto (R$)" type="number" step="0.01" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
+        <Input label="Nº de parcelas" type="number" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
         <label className={styles.checkboxLabel}>
           <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
           Com nota fiscal
@@ -403,6 +401,10 @@ function ProjectCard({
   const statusClass =
     project.status === 'finalizado' ? styles.statusFinalizado : project.status === 'cancelado' ? styles.statusCancelado : project.status === 'pausado' ? styles.statusPausado : styles.statusAndamento
 
+  // Ações de status ficam visíveis na lista (sem precisar expandir) — só faz
+  // sentido pra projeto ainda ativo (em andamento ou pausado).
+  const isActive = project.status === 'em_andamento' || project.status === 'pausado'
+
   return (
     <div className={`${cards.card} ${project.status === 'finalizado' ? styles.cardFinalizado : ''}`}>
       <div className={styles.projectHeaderRow} onClick={onToggle}>
@@ -411,19 +413,44 @@ function ProjectCard({
           <div className={styles.projectHeaderTop}>
             <span className={styles.projectName}>{project.client.name}</span>
             <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>
+            {isActive && (
+              <div className={styles.projectHeaderActions} onClick={(e) => e.stopPropagation()}>
+                {project.status === 'em_andamento' ? (
+                  <button className={styles.iconBtn} onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
+                    <Pause size={14} strokeWidth={2} />
+                  </button>
+                ) : (
+                  <button className={styles.iconBtn} onClick={() => changeStatus('em_andamento')} aria-label="Retomar projeto" title="Retomar projeto">
+                    <Play size={14} strokeWidth={2} />
+                  </button>
+                )}
+                <button
+                  className={styles.iconBtnDanger}
+                  onClick={() => {
+                    if (confirm(`Cancelar "${project.name}"? Isso não apaga recebimentos já lançados.`)) changeStatus('cancelado')
+                  }}
+                  aria-label="Cancelar projeto"
+                  title="Cancelar projeto"
+                >
+                  <Ban size={14} strokeWidth={2} />
+                </button>
+              </div>
+            )}
           </div>
-          <div className={styles.projectHeaderMeta}>
-            <span>{project.name}</span>
-            <span>
-              {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
-            </span>
+          <div className={styles.projectHeaderBottom}>
+            <div className={styles.projectHeaderMeta}>
+              <span>{project.name}</span>
+              <span>
+                {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
+              </span>
+            </div>
+            <div className={styles.projectHeaderValues}>
+              <span className={styles.projectValue}>R$ {currency(project.contractValue)}</span>
+              <span className={styles.projectSub}>
+                recebido R$ {currency(project.received)} · falta R$ {currency(project.remaining)}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className={styles.projectHeaderValues}>
-          <span className={styles.projectValue}>R$ {currency(project.contractValue)}</span>
-          <span className={styles.projectSub}>
-            recebido R$ {currency(project.received)} · falta R$ {currency(project.remaining)}
-          </span>
         </div>
       </div>
 
@@ -455,39 +482,29 @@ function ProjectCard({
             </div>
           </div>
 
-          {project.status !== 'finalizado' && (
-            <div className={styles.statusActions}>
-              {project.status !== 'pausado' && (
-                <button className={styles.smallBtn} onClick={() => changeStatus('pausado')}>
-                  Pausar
-                </button>
-              )}
-              {project.status === 'pausado' && (
-                <button className={styles.smallBtn} onClick={() => changeStatus('em_andamento')}>
-                  Retomar
-                </button>
-              )}
-              {project.status !== 'cancelado' && (
-                <button className={styles.smallBtnDanger} onClick={() => changeStatus('cancelado')}>
-                  Cancelar projeto
-                </button>
-              )}
-            </div>
-          )}
-
           {loadingDetail && <p className={styles.helperText}>Carregando...</p>}
 
           {detail && (
             <>
-              <h4 className={styles.detailSubheading}>
-                <Receipt size={13} strokeWidth={2} /> Recebimentos
-              </h4>
-              <ReceiptsList detail={detail} onChanged={() => { loadDetail(); onChanged() }} />
+              <div className={styles.detailSection}>
+                <div className={styles.detailSubheadingRow}>
+                  <h4 className={styles.detailSubheading}>
+                    <Receipt size={13} strokeWidth={2} /> Recebimentos
+                  </h4>
+                  <ReceiptsAddButton detail={detail} onChanged={() => { loadDetail(); onChanged() }} />
+                </div>
+                <ReceiptsList detail={detail} onChanged={() => { loadDetail(); onChanged() }} />
+              </div>
 
-              <h4 className={styles.detailSubheading}>
-                <Users size={13} strokeWidth={2} /> Fornecedores
-              </h4>
-              <SupplierCostsList detail={detail} suppliers={suppliers} onChanged={() => { loadDetail(); onChanged() }} />
+              <div className={styles.detailSection}>
+                <div className={styles.detailSubheadingRow}>
+                  <h4 className={styles.detailSubheading}>
+                    <Users size={13} strokeWidth={2} /> Fornecedores
+                  </h4>
+                  <SupplierAddButton detail={detail} suppliers={suppliers} onChanged={() => { loadDetail(); onChanged() }} />
+                </div>
+                <SupplierCostsList detail={detail} onChanged={() => { loadDetail(); onChanged() }} />
+              </div>
             </>
           )}
         </div>
@@ -497,16 +514,17 @@ function ProjectCard({
 }
 
 function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged: () => void }) {
-  const [showAdd, setShowAdd] = useState(false)
-
   async function handleDelete(id: string) {
     await api.deleteProjectReceipt(id)
     onChanged()
   }
 
+  if (detail.receipts.length === 0) {
+    return <p className={styles.helperText}>Nenhum recebimento ainda.</p>
+  }
+
   return (
     <div className={styles.subList}>
-      {detail.receipts.length === 0 && <p className={styles.helperText}>Nenhum recebimento ainda.</p>}
       {detail.receipts.map((r) => (
         <div key={r.id} className={styles.subRow}>
           <span>Parcela {r.installmentNumber}</span>
@@ -517,10 +535,17 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
           </button>
         </div>
       ))}
-      <button className={styles.smallBtn} onClick={() => setShowAdd(true)}>
+    </div>
+  )
+}
+
+function ReceiptsAddButton({ detail, onChanged }: { detail: ProjectDetail; onChanged: () => void }) {
+  const [showAdd, setShowAdd] = useState(false)
+  return (
+    <>
+      <button className={styles.addBtnSmall} onClick={() => setShowAdd(true)}>
         <Plus size={12} strokeWidth={2} /> Adicionar
       </button>
-
       {showAdd && (
         <AddReceiptModal
           detail={detail}
@@ -531,7 +556,7 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
           }}
         />
       )}
-    </div>
+    </>
   )
 }
 
@@ -565,7 +590,7 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
     <Modal title="Novo recebimento" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
-          <Input placeholder="Valor recebido (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Input label="Valor recebido (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
@@ -582,7 +607,20 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
   )
 }
 
-function SupplierCostsList({
+function SupplierCostsList({ detail, onChanged }: { detail: ProjectDetail; onChanged: () => void }) {
+  if (detail.supplierCosts.length === 0) {
+    return <p className={styles.helperText}>Nenhum fornecedor nesse projeto.</p>
+  }
+  return (
+    <div className={styles.subList}>
+      {detail.supplierCosts.map((c) => (
+        <SupplierCostRow key={c.id} cost={c} onChanged={onChanged} />
+      ))}
+    </div>
+  )
+}
+
+function SupplierAddButton({
   detail,
   suppliers,
   onChanged,
@@ -592,18 +630,11 @@ function SupplierCostsList({
   onChanged: () => void
 }) {
   const [showAddCost, setShowAddCost] = useState(false)
-
   return (
-    <div className={styles.subList}>
-      {detail.supplierCosts.length === 0 && <p className={styles.helperText}>Nenhum fornecedor nesse projeto.</p>}
-      {detail.supplierCosts.map((c) => (
-        <SupplierCostRow key={c.id} cost={c} onChanged={onChanged} />
-      ))}
-
-      <button className={styles.smallBtn} onClick={() => setShowAddCost(true)}>
-        <Plus size={12} strokeWidth={2} /> Adicionar fornecedor
+    <>
+      <button className={styles.addBtnSmall} onClick={() => setShowAddCost(true)}>
+        <Plus size={12} strokeWidth={2} /> Adicionar
       </button>
-
       {showAddCost && (
         <AddSupplierCostModal
           detail={detail}
@@ -615,7 +646,7 @@ function SupplierCostsList({
           }}
         />
       )}
-    </div>
+    </>
   )
 }
 
@@ -665,7 +696,7 @@ function AddSupplierCostModal({
     <Modal title="Novo fornecedor no projeto" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
-          <Select value={supplierChoice} onChange={(e) => setSupplierChoice(e.target.value)}>
+          <Select label="Fornecedor" value={supplierChoice} onChange={(e) => setSupplierChoice(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -674,9 +705,9 @@ function AddSupplierCostModal({
             <option value={NEW_SUPPLIER}>+ Novo fornecedor</option>
           </Select>
           {supplierChoice === NEW_SUPPLIER && (
-            <Input placeholder="Nome do fornecedor" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} />
+            <Input label="Nome do fornecedor" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} />
           )}
-          <Input placeholder="Valor acordado (R$)" type="number" step="0.01" value={agreedAmount} onChange={(e) => setAgreedAmount(e.target.value)} />
+          <Input label="Valor acordado (R$)" type="number" step="0.01" value={agreedAmount} onChange={(e) => setAgreedAmount(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
         <div className={styles.formActions}>
@@ -704,6 +735,9 @@ function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCos
         <span className={styles.subRowMeta}>
           pago R$ {currency(paid)} · falta R$ {currency(Math.max(0, cost.agreedAmount - paid))}
         </span>
+        <button className={styles.smallBtn} onClick={() => setShowAddPayment(true)}>
+          <Plus size={12} strokeWidth={2} /> Pagamento
+        </button>
       </div>
       {cost.payments.length > 0 && (
         <div className={styles.subList}>
@@ -716,9 +750,6 @@ function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCos
           ))}
         </div>
       )}
-      <button className={styles.smallBtn} onClick={() => setShowAddPayment(true)}>
-        <Plus size={12} strokeWidth={2} /> Pagamento
-      </button>
 
       {showAddPayment && (
         <AddSupplierPaymentModal
@@ -772,7 +803,7 @@ function AddSupplierPaymentModal({
     <Modal title={`Pagamento — ${cost.supplier.name}`} onClose={onClose}>
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
-          <Input placeholder="Valor pago (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Input label="Valor pago (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
@@ -863,7 +894,7 @@ function NewTaxPaymentForm({ onCancel, onSaved }: { onCancel: () => void; onSave
         </div>
       </div>
       <div className={styles.formRow}>
-        <Input placeholder="Valor pago no boleto (R$)" type="number" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
+        <Input label="Valor pago no boleto (R$)" type="number" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
         <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
       </div>
       {error && <p className={styles.error}>{error}</p>}

@@ -81,6 +81,9 @@ export interface BudgetSummary {
   last14Days: { date: string; amount: number; goal: number | null }[]
   totalPlanned: number
   totalSpent: number
+  totalIncome: number
+  previousTotalIncome: number
+  incomeFromProjects: number
   categories: BudgetCategory[]
 }
 

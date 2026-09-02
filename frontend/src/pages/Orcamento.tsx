@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp } from 'lucide-react'
 import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
@@ -171,6 +171,22 @@ export function Orcamento() {
       )}
 
       <div className={cards.grid}>
+        {/* ---------- entradas do mês (Salário + Projetos, etc.) ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <CardHeader icon={TrendingUp} title="Entradas do mês" />
+          <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
+            R$ {currency(budget.totalIncome)}
+          </div>
+          <div className={cards.chartMeta}>
+            <span>
+              {budget.incomeFromProjects > 0
+                ? `dos quais R$ ${currency(budget.incomeFromProjects)} vieram de Projetos`
+                : 'nenhum recebimento de Projetos esse mês'}
+            </span>
+            <MonthDelta current={budget.totalIncome} previous={budget.previousTotalIncome} />
+          </div>
+        </div>
+
         {/* ---------- total do mês: pizza de onde o dinheiro foi ---------- */}
         <div className={`${cards.card} ${cards.fullWidth}`}>
           <CardHeader
