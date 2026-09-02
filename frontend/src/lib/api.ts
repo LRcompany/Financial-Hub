@@ -169,6 +169,9 @@ export interface WealthOverview {
 }
 
 export interface ProjectsSummary {
+  grossRevenue: number
+  netRevenue: number
+  hasPendingTax: boolean
   receivedThisMonth: number
   receivedLastMonth: number
   receivedThisYear: number
@@ -176,8 +179,14 @@ export interface ProjectsSummary {
   taxPaidThisYear: number
   outstanding: number
   outstandingLastMonth: number
+  supplierPaid: number
+  supplierOutstanding: number
+  totalDaysWorked: number
+  finalizedCount: number
+  openCount: number
   monthlyReceived: { label: string; value: number }[]
   clientRevenue: { label: string; value: number }[]
+  clientContractValue: { label: string; value: number }[]
   activeProjects: {
     id: string
     name: string
@@ -187,6 +196,92 @@ export interface ProjectsSummary {
     received: number
   }[]
   bestProjectThisMonth: { name: string; received: number } | null
+}
+
+export interface Client {
+  id: string
+  name: string
+  isForeign: boolean
+}
+
+export interface Supplier {
+  id: string
+  name: string
+}
+
+export interface ProjectSupplierCostSummary {
+  id: string
+  supplierId: string
+  supplierName: string
+  agreedAmount: number
+  installmentCount: number
+  paid: number
+}
+
+export interface ProjectListItem {
+  id: string
+  client: { id: string; name: string; isForeign: boolean }
+  name: string
+  startDate: string
+  endDate: string | null
+  contractValue: number
+  hasInvoice: boolean
+  installmentCount: number
+  status: 'em_andamento' | 'pausado' | 'cancelado' | 'finalizado'
+  daysTotal: number | null
+  received: number
+  remaining: number
+  supplierCost: number
+  supplierPaid: number
+  taxAmount: number | null
+  net: number | null
+  yieldPerDay: number | null
+  suppliers: ProjectSupplierCostSummary[]
+}
+
+export interface ProjectReceipt {
+  id: string
+  installmentNumber: number
+  amount: number
+  paymentDate: string
+}
+
+export interface SupplierPayment {
+  id: string
+  installmentNumber: number
+  amount: number
+  paymentDate: string
+}
+
+export interface ProjectDetail {
+  id: string
+  clientId: string
+  client: Client
+  name: string
+  startDate: string
+  endDate: string | null
+  contractValue: number
+  hasInvoice: boolean
+  installmentCount: number
+  status: string
+  receipts: ProjectReceipt[]
+  supplierCosts: {
+    id: string
+    supplierId: string
+    supplier: Supplier
+    agreedAmount: number
+    installmentCount: number
+    payments: SupplierPayment[]
+  }[]
+}
+
+export interface TaxPayment {
+  id: string
+  competenceMonth: number
+  competenceYear: number
+  totalRevenue: number
+  amountPaid: number
+  paymentDate: string
 }
 
 export interface DailyGoalEntry {
@@ -266,9 +361,9 @@ export interface WebauthnCredentialInfo {
   createdAt: string
 }
 
-async function postForAuth<T>(path: string, body?: unknown): Promise<T> {
+async function sendJson<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -277,6 +372,10 @@ async function postForAuth<T>(path: string, body?: unknown): Promise<T> {
   if (!response.ok) throw new Error(data.error ?? `Falha (${response.status})`)
   return data as T
 }
+
+const postForAuth = <T>(path: string, body?: unknown) => sendJson<T>('POST', path, body)
+const postJson = <T>(path: string, body?: unknown) => sendJson<T>('POST', path, body)
+const putJson = <T>(path: string, body?: unknown) => sendJson<T>('PUT', path, body)
 
 export const api = {
   health: () => request<{ status: string; time: string }>('/health'),
@@ -417,6 +516,46 @@ export const api = {
     if (params?.year) parts.push(`year=${params.year}`)
     return request<ProjectsSummary>(`/projects-summary${parts.length ? `?${parts.join('&')}` : ''}`)
   },
+  clients: () => request<Client[]>('/clients'),
+  createClient: (input: { name: string; isForeign?: boolean }) => postJson<Client>('/clients', input),
+  updateClient: (id: string, input: { name?: string; isForeign?: boolean }) => putJson<Client>(`/clients/${id}`, input),
+  suppliers: () => request<Supplier[]>('/suppliers'),
+  createSupplier: (name: string) => postJson<Supplier>('/suppliers', { name }),
+  projects: () => request<ProjectListItem[]>('/projects'),
+  project: (id: string) => request<ProjectDetail>(`/projects/${id}`),
+  createProject: (input: {
+    clientId: string
+    name: string
+    startDate: string
+    endDate?: string | null
+    contractValue: number
+    hasInvoice: boolean
+    installmentCount?: number
+  }) => postJson<{ id: string }>('/projects', input),
+  updateProject: (
+    id: string,
+    input: Partial<{
+      name: string
+      startDate: string
+      endDate: string | null
+      contractValue: number
+      hasInvoice: boolean
+      installmentCount: number
+      status: 'em_andamento' | 'pausado' | 'cancelado'
+    }>
+  ) => putJson<{ id: string }>(`/projects/${id}`, input),
+  createProjectReceipt: (input: { projectId: string; installmentNumber?: number; amount: number; paymentDate: string }) =>
+    postJson<ProjectReceipt>('/project-receipts', input),
+  deleteProjectReceipt: (id: string) => request<{ deleted: true }>(`/project-receipts/${id}`, { method: 'DELETE' }),
+  createProjectSupplierCost: (input: { projectId: string; supplierId: string; agreedAmount: number; installmentCount?: number }) =>
+    postJson<{ id: string }>('/project-supplier-costs', input),
+  createSupplierPayment: (input: { projectSupplierCostId: string; installmentNumber?: number; amount: number; paymentDate: string }) =>
+    postJson<SupplierPayment>('/supplier-payments', input),
+  taxPayments: () => request<TaxPayment[]>('/tax-payments'),
+  taxPaymentPreview: (month: number, year: number) =>
+    request<{ totalRevenue: number; alreadyExists: boolean }>(`/tax-payments/preview?month=${month}&year=${year}`),
+  createTaxPayment: (input: { competenceMonth: number; competenceYear: number; totalRevenue?: number; amountPaid: number; paymentDate: string }) =>
+    postJson<TaxPayment>('/tax-payments', input),
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
   brokerPositions: (brokerId: string) =>

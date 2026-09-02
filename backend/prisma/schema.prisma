@@ -271,6 +271,15 @@ model CategorizationRule {
 model Client {
   id       String    @id @default(uuid())
   name     String    @unique
+  // Determina o tratamento de imposto do projeto (01/09, confirmado com o
+  // Luiz): cliente nacional paga DAS fixo 6% sobre o valor — dá pra mostrar
+  // na hora. Cliente estrangeiro tem DAS variável (ele só sabe o valor real
+  // quando chega o boleto, ex: 3,4% da última vez) — imposto fica "a
+  // definir" até existir um TaxPayment real pro mês de competência, e nesse
+  // caso o valor é rateado proporcionalmente entre os projetos daquele mês
+  // (nunca um chute, só o valor real do boleto dividido pela participação
+  // de cada projeto no faturamento do mês).
+  isForeign Boolean   @default(false)
   projects Project[]
 }
 

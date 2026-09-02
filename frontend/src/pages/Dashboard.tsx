@@ -469,6 +469,26 @@ export function Dashboard() {
                     <MonthDelta current={projects.outstanding} previous={projects.outstandingLastMonth} higherIsBetter={false} />
                   </div>
                 </div>
+                <div className={styles.statGrid} style={{ marginTop: 'var(--space-3)' }}>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Fornecedor pago</span>
+                    <span className={styles.statTileValue}>R$ {currency(projects.supplierPaid)}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Fornecedor a pagar</span>
+                    <span className={styles.statTileValue}>R$ {currency(projects.supplierOutstanding)}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Dias trabalhados</span>
+                    <span className={styles.statTileValue}>{projects.totalDaysWorked}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Finalizados / em aberto</span>
+                    <span className={styles.statTileValue}>
+                      {projects.finalizedCount} / {projects.openCount}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className={`${styles.card} ${styles.fullWidth}`}>
