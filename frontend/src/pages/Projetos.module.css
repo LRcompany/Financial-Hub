@@ -321,6 +321,67 @@
   margin: 0;
 }
 
+/* ---------- projeto finalizado (opaco, fica no fim da lista) ---------- */
+.cardFinalizado {
+  opacity: 0.55;
+}
+
+/* ---------- modal (recebimento / fornecedor / pagamento) ---------- */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .modalOverlay {
+    align-items: center;
+  }
+}
+
+.modalSheet {
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--space-5);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .modalSheet {
+    border-radius: var(--r-lg);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.modalTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.modalSubtitle {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
 /* ---------- tabela DAS ---------- */
 .tableWrap {
   overflow-x: auto;

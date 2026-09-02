@@ -90,33 +90,47 @@ projectsRouter.post("/suppliers", async (req, res) => {
 // Nacional: 6% fixo sobre o valor (quando tem NF), como sempre foi assumido.
 // Estrangeiro: DAS é variável e só existe de verdade quando chega o boleto
 // (TaxPayment) — o valor real daquele mês é rateado entre os projetos
-// conforme a participação de cada um no faturamento do mês. Sem o boleto
-// daquele mês, o imposto do projeto fica indeterminado (null = "a definir"),
-// nunca um chute.
+// conforme a participação de cada um no faturamento do mês. Pra mês/parcela
+// sem boleto real ainda (inclusive o que falta receber), usa 6% como base —
+// mesma estimativa do nacional — e marca `estimated: true`; assim que o DAS
+// real daquele mês entrar, o cálculo se atualiza sozinho pro valor real (Luiz
+// confirmou: "usa a base que temos, depois atualizamos" — nunca "a definir"
+// parado pra sempre).
 function computeProjectTax(
   project: { contractValue: number; hasInvoice: boolean },
   client: { isForeign: boolean },
   receipts: { amount: number; paymentDate: Date }[],
   taxPayments: { competenceMonth: number; competenceYear: number; totalRevenue: number; amountPaid: number }[]
-): number | null {
-  if (!project.hasInvoice) return 0;
-  if (!client.isForeign) return project.contractValue * 0.06;
+): { amount: number; estimated: boolean } {
+  if (!project.hasInvoice) return { amount: 0, estimated: false };
+  if (!client.isForeign) return { amount: project.contractValue * 0.06, estimated: false };
 
   const byMonth = new Map<string, number>();
   for (const r of receipts) {
     const key = `${r.paymentDate.getFullYear()}-${r.paymentDate.getMonth() + 1}`;
     byMonth.set(key, (byMonth.get(key) ?? 0) + r.amount);
   }
-  if (byMonth.size === 0) return null;
 
   let total = 0;
+  let estimated = false;
+  let receivedSoFar = 0;
   for (const [key, amountInMonth] of byMonth) {
+    receivedSoFar += amountInMonth;
     const [y, m] = key.split("-").map(Number);
     const tp = taxPayments.find((t) => t.competenceYear === y && t.competenceMonth === m);
-    if (!tp || tp.totalRevenue <= 0) return null; // pelo menos um mês ainda sem DAS real — não dá pra fechar a conta
-    total += (amountInMonth / tp.totalRevenue) * tp.amountPaid;
+    if (tp && tp.totalRevenue > 0) {
+      total += (amountInMonth / tp.totalRevenue) * tp.amountPaid;
+    } else {
+      total += amountInMonth * 0.06;
+      estimated = true;
+    }
   }
-  return total;
+  const notYetReceived = Math.max(0, project.contractValue - receivedSoFar);
+  if (notYetReceived > 0) {
+    total += notYetReceived * 0.06;
+    estimated = true;
+  }
+  return { amount: total, estimated };
 }
 
 // ---------- Projetos ----------
@@ -135,10 +149,10 @@ projectsRouter.get("/projects", async (_req, res) => {
     const remaining = Math.max(0, p.contractValue - received);
     const supplierCost = p.supplierCosts.reduce((s, c) => s + c.agreedAmount, 0);
     const supplierPaid = p.supplierCosts.reduce((s, c) => s + c.payments.reduce((ps, pay) => ps + pay.amount, 0), 0);
-    const taxAmount = computeProjectTax(p, p.client, p.receipts, taxPayments);
-    const net = taxAmount !== null ? p.contractValue - taxAmount - supplierCost : null;
+    const tax = computeProjectTax(p, p.client, p.receipts, taxPayments);
+    const net = p.contractValue - tax.amount - supplierCost;
     const daysTotal = p.endDate ? Math.round((p.endDate.getTime() - p.startDate.getTime()) / 86400000) : null;
-    const yieldPerDay = net !== null && daysTotal ? net / daysTotal : null;
+    const yieldPerDay = daysTotal ? net / daysTotal : null;
     const finalized = p.status !== "cancelado" && p.status !== "pausado" && received >= p.contractValue;
     const effectiveStatus = p.status === "cancelado" || p.status === "pausado" ? p.status : finalized ? "finalizado" : "em_andamento";
 
@@ -157,7 +171,8 @@ projectsRouter.get("/projects", async (_req, res) => {
       remaining,
       supplierCost,
       supplierPaid,
-      taxAmount,
+      taxAmount: tax.amount,
+      taxEstimated: tax.estimated,
       net,
       yieldPerDay,
       suppliers: p.supplierCosts.map((c) => ({
@@ -169,6 +184,15 @@ projectsRouter.get("/projects", async (_req, res) => {
         paid: c.payments.reduce((s, pay) => s + pay.amount, 0),
       })),
     };
+  });
+
+  // Finalizado vai pro fim da lista (opaco na UI) — dentro de cada grupo,
+  // mantém a ordem mais recente primeiro.
+  result.sort((a, b) => {
+    const rank = (s: string) => (s === "finalizado" ? 1 : 0);
+    const byStatus = rank(a.status) - rank(b.status);
+    if (byStatus !== 0) return byStatus;
+    return b.startDate.getTime() - a.startDate.getTime();
   });
 
   res.json(result);
@@ -408,13 +432,19 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   const notCancelled = projects.filter((p) => p.status !== "cancelado");
   const grossRevenue = notCancelled.reduce((sum, p) => sum + p.contractValue, 0);
   let netRevenue = 0;
-  let hasPendingTax = false;
+  let taxEstimatedTotal = 0;
+  let hasEstimatedTax = false;
   for (const p of notCancelled) {
     const supplierCost = p.supplierCosts.reduce((s, c) => s + c.agreedAmount, 0);
     const tax = computeProjectTax(p, p.client, p.receipts, taxPayments);
-    if (tax === null) hasPendingTax = true;
-    netRevenue += p.contractValue - (tax ?? 0) - supplierCost;
+    if (tax.estimated) hasEstimatedTax = true;
+    taxEstimatedTotal += tax.amount;
+    netRevenue += p.contractValue - tax.amount - supplierCost;
   }
+  // imposto pago de verdade (o que já virou Transaction real na categoria
+  // "Imposto" do Orçamento) — todo-tempo, não só o ano corrente, pra bater
+  // com "quanto eu paguei no final" independente de quando o boleto chegou.
+  const taxPaidTotal = taxPayments.reduce((sum, t) => sum + t.amountPaid, 0);
 
   // "Ganhos totais por cliente" — mesma base da Receita Bruta (valor
   // contratado, não recebido), é o que a pizza da Visão Geral mostra.
@@ -509,7 +539,9 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   res.json({
     grossRevenue,
     netRevenue,
-    hasPendingTax,
+    taxEstimatedTotal,
+    taxPaidTotal,
+    hasEstimatedTax,
     receivedThisMonth,
     receivedLastMonth: receivedLastMonthAgg._sum.amount ?? 0,
     receivedThisYear: receivedThisYearAgg._sum.amount ?? 0,

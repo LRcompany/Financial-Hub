@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Briefcase,
   PieChart,
@@ -10,7 +10,8 @@ import {
   Trash2,
   Receipt,
   Users,
-  MoreHorizontal,
+  LineChart,
+  X,
 } from 'lucide-react'
 import {
   api,
@@ -23,6 +24,7 @@ import {
 } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { ClientPieChart } from '../components/ClientPieChart'
+import { SmoothLineChart } from '../components/SmoothLineChart'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -88,9 +90,17 @@ export function Projetos() {
                 <span className={cards.statTileValue}>R$ {currency(summary.grossRevenue)}</span>
               </div>
               <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Imposto previsto</span>
+                <span className={cards.statTileValue}>R$ {currency(summary.taxEstimatedTotal)}</span>
+                {summary.hasEstimatedTax && <span className={styles.pendingNote}>inclui estimativa de 6% até o DAS real chegar</span>}
+              </div>
+              <div className={cards.statTile}>
+                <span className={cards.heroLabel}>Imposto pago</span>
+                <span className={cards.statTileValue}>R$ {currency(summary.taxPaidTotal)}</span>
+              </div>
+              <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Receita líquida</span>
                 <span className={cards.statTileValue}>R$ {currency(summary.netRevenue)}</span>
-                {summary.hasPendingTax && <span className={styles.pendingNote}>imposto de projeto estrangeiro a definir</span>}
               </div>
             </div>
           </div>
@@ -128,7 +138,7 @@ export function Projetos() {
           </div>
 
           <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader icon={MoreHorizontal} title="Outros" />
+            <CardHeader icon={LineChart} title="Resumo" />
             <div className={cards.statGrid}>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Média mensal (12m)</span>
@@ -147,6 +157,15 @@ export function Projetos() {
                 <span className={cards.statTileValue}>{summary.openCount}</span>
               </div>
             </div>
+            <div className={cards.chartMeta}>
+              <span>Recebido por mês</span>
+            </div>
+            <SmoothLineChart
+              values={summary.monthlyReceived.map((m) => m.value)}
+              labels={summary.monthlyReceived.map((m) => m.label)}
+              gradientId="projetosMonthlyReceivedGradient"
+              className={cards.evolutionChart}
+            />
           </div>
 
           <div className={`${cards.card} ${cards.fullWidth}`}>
@@ -385,16 +404,16 @@ function ProjectCard({
     project.status === 'finalizado' ? styles.statusFinalizado : project.status === 'cancelado' ? styles.statusCancelado : project.status === 'pausado' ? styles.statusPausado : styles.statusAndamento
 
   return (
-    <div className={cards.card}>
+    <div className={`${cards.card} ${project.status === 'finalizado' ? styles.cardFinalizado : ''}`}>
       <div className={styles.projectHeaderRow} onClick={onToggle}>
         {expanded ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
         <div className={styles.projectHeaderBody}>
           <div className={styles.projectHeaderTop}>
-            <span className={styles.projectName}>{project.name}</span>
+            <span className={styles.projectName}>{project.client.name}</span>
             <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>
           </div>
           <div className={styles.projectHeaderMeta}>
-            <span>{project.client.name}</span>
+            <span>{project.name}</span>
             <span>
               {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
             </span>
@@ -417,7 +436,10 @@ function ProjectCard({
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Imposto</span>
-              <span className={cards.statValue}>{project.taxAmount !== null ? `R$ ${currency(project.taxAmount)}` : 'a definir'}</span>
+              <span className={cards.statValue}>
+                R$ {currency(project.taxAmount)}
+                {project.taxEstimated && <span className={styles.pendingNote}> (estimativa 6%)</span>}
+              </span>
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Custo fornecedor</span>
@@ -425,7 +447,7 @@ function ProjectCard({
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Líquido</span>
-              <span className={cards.statValue}>{project.net !== null ? `R$ ${currency(project.net)}` : 'a definir'}</span>
+              <span className={cards.statValue}>R$ {currency(project.net)}</span>
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Rendimento/dia</span>
@@ -475,12 +497,51 @@ function ProjectCard({
 }
 
 function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged: () => void }) {
+  const [showAdd, setShowAdd] = useState(false)
+
+  async function handleDelete(id: string) {
+    await api.deleteProjectReceipt(id)
+    onChanged()
+  }
+
+  return (
+    <div className={styles.subList}>
+      {detail.receipts.length === 0 && <p className={styles.helperText}>Nenhum recebimento ainda.</p>}
+      {detail.receipts.map((r) => (
+        <div key={r.id} className={styles.subRow}>
+          <span>Parcela {r.installmentNumber}</span>
+          <span>R$ {currency(r.amount)}</span>
+          <span className={styles.subRowMeta}>{formatDate(r.paymentDate)}</span>
+          <button className={styles.iconBtn} onClick={() => handleDelete(r.id)} aria-label="Remover">
+            <Trash2 size={12} strokeWidth={2} />
+          </button>
+        </div>
+      ))}
+      <button className={styles.smallBtn} onClick={() => setShowAdd(true)}>
+        <Plus size={12} strokeWidth={2} /> Adicionar
+      </button>
+
+      {showAdd && (
+        <AddReceiptModal
+          detail={detail}
+          onClose={() => setShowAdd(false)}
+          onSaved={() => {
+            setShowAdd(false)
+            onChanged()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState('')
   const [paymentDate, setPaymentDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleAdd(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!amount || !paymentDate) return
     setSaving(true)
@@ -492,9 +553,7 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
         amount: Number(amount),
         paymentDate,
       })
-      setAmount('')
-      setPaymentDate('')
-      onChanged()
+      onSaved()
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -502,32 +561,24 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
     }
   }
 
-  async function handleDelete(id: string) {
-    await api.deleteProjectReceipt(id)
-    onChanged()
-  }
-
   return (
-    <div className={styles.subList}>
-      {detail.receipts.map((r) => (
-        <div key={r.id} className={styles.subRow}>
-          <span>Parcela {r.installmentNumber}</span>
-          <span>R$ {currency(r.amount)}</span>
-          <span className={styles.subRowMeta}>{formatDate(r.paymentDate)}</span>
-          <button className={styles.iconBtn} onClick={() => handleDelete(r.id)} aria-label="Remover">
-            <Trash2 size={12} strokeWidth={2} />
+    <Modal title="Novo recebimento" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.formRow}>
+          <Input placeholder="Valor recebido (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.formActions}>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
-      ))}
-      <form className={styles.inlineAddForm} onSubmit={handleAdd}>
-        <Input placeholder="Valor (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-        <button type="submit" className={styles.smallBtn} disabled={saving}>
-          <Plus size={12} strokeWidth={2} /> Adicionar
-        </button>
       </form>
-      {error && <p className={styles.error}>{error}</p>}
-    </div>
+    </Modal>
   )
 }
 
@@ -541,13 +592,51 @@ function SupplierCostsList({
   onChanged: () => void
 }) {
   const [showAddCost, setShowAddCost] = useState(false)
+
+  return (
+    <div className={styles.subList}>
+      {detail.supplierCosts.length === 0 && <p className={styles.helperText}>Nenhum fornecedor nesse projeto.</p>}
+      {detail.supplierCosts.map((c) => (
+        <SupplierCostRow key={c.id} cost={c} onChanged={onChanged} />
+      ))}
+
+      <button className={styles.smallBtn} onClick={() => setShowAddCost(true)}>
+        <Plus size={12} strokeWidth={2} /> Adicionar fornecedor
+      </button>
+
+      {showAddCost && (
+        <AddSupplierCostModal
+          detail={detail}
+          suppliers={suppliers}
+          onClose={() => setShowAddCost(false)}
+          onSaved={() => {
+            setShowAddCost(false)
+            onChanged()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddSupplierCostModal({
+  detail,
+  suppliers,
+  onClose,
+  onSaved,
+}: {
+  detail: ProjectDetail
+  suppliers: Supplier[]
+  onClose: () => void
+  onSaved: () => void
+}) {
   const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id ?? NEW_SUPPLIER)
   const [newSupplierName, setNewSupplierName] = useState('')
   const [agreedAmount, setAgreedAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleAddCost(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!agreedAmount) return
     setSaving(true)
@@ -564,10 +653,7 @@ function SupplierCostsList({
         supplierId = supplier.id
       }
       await api.createProjectSupplierCost({ projectId: detail.id, supplierId, agreedAmount: Number(agreedAmount) })
-      setAgreedAmount('')
-      setNewSupplierName('')
-      setShowAddCost(false)
-      onChanged()
+      onSaved()
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -576,14 +662,9 @@ function SupplierCostsList({
   }
 
   return (
-    <div className={styles.subList}>
-      {detail.supplierCosts.length === 0 && <p className={styles.helperText}>Nenhum fornecedor nesse projeto.</p>}
-      {detail.supplierCosts.map((c) => (
-        <SupplierCostRow key={c.id} cost={c} onChanged={onChanged} />
-      ))}
-
-      {showAddCost ? (
-        <form className={styles.inlineAddForm} onSubmit={handleAddCost}>
+    <Modal title="Novo fornecedor no projeto" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.formRow}>
           <Select value={supplierChoice} onChange={(e) => setSupplierChoice(e.target.value)}>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
@@ -596,47 +677,24 @@ function SupplierCostsList({
             <Input placeholder="Nome do fornecedor" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} />
           )}
           <Input placeholder="Valor acordado (R$)" type="number" step="0.01" value={agreedAmount} onChange={(e) => setAgreedAmount(e.target.value)} />
-          <button type="submit" className={styles.smallBtn} disabled={saving}>
-            Salvar
-          </button>
-          <button type="button" className={styles.cancelBtn} onClick={() => setShowAddCost(false)}>
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.formActions}>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
             Cancelar
           </button>
-        </form>
-      ) : (
-        <button className={styles.smallBtn} onClick={() => setShowAddCost(true)}>
-          <Plus size={12} strokeWidth={2} /> Adicionar fornecedor
-        </button>
-      )}
-      {error && <p className={styles.error}>{error}</p>}
-    </div>
+          <button type="submit" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
 function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCosts'][number]; onChanged: () => void }) {
-  const [amount, setAmount] = useState('')
-  const [paymentDate, setPaymentDate] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [showAddPayment, setShowAddPayment] = useState(false)
   const paid = cost.payments.reduce((s, p) => s + p.amount, 0)
-
-  async function handleAddPayment(e: FormEvent) {
-    e.preventDefault()
-    if (!amount || !paymentDate) return
-    setSaving(true)
-    try {
-      await api.createSupplierPayment({
-        projectSupplierCostId: cost.id,
-        installmentNumber: cost.payments.length + 1,
-        amount: Number(amount),
-        paymentDate,
-      })
-      setAmount('')
-      setPaymentDate('')
-      onChanged()
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div className={styles.supplierBlock}>
@@ -647,13 +705,107 @@ function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCos
           pago R$ {currency(paid)} · falta R$ {currency(Math.max(0, cost.agreedAmount - paid))}
         </span>
       </div>
-      <form className={styles.inlineAddForm} onSubmit={handleAddPayment}>
-        <Input placeholder="Valor pago (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-        <button type="submit" className={styles.smallBtn} disabled={saving}>
-          <Plus size={12} strokeWidth={2} /> Pagamento
-        </button>
+      {cost.payments.length > 0 && (
+        <div className={styles.subList}>
+          {cost.payments.map((p) => (
+            <div key={p.id} className={styles.subRow}>
+              <span>Parcela {p.installmentNumber}</span>
+              <span>R$ {currency(p.amount)}</span>
+              <span className={styles.subRowMeta}>{formatDate(p.paymentDate)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <button className={styles.smallBtn} onClick={() => setShowAddPayment(true)}>
+        <Plus size={12} strokeWidth={2} /> Pagamento
+      </button>
+
+      {showAddPayment && (
+        <AddSupplierPaymentModal
+          cost={cost}
+          onClose={() => setShowAddPayment(false)}
+          onSaved={() => {
+            setShowAddPayment(false)
+            onChanged()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddSupplierPaymentModal({
+  cost,
+  onClose,
+  onSaved,
+}: {
+  cost: ProjectDetail['supplierCosts'][number]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [paymentDate, setPaymentDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!amount || !paymentDate) return
+    setSaving(true)
+    setError(null)
+    try {
+      await api.createSupplierPayment({
+        projectSupplierCostId: cost.id,
+        installmentNumber: cost.payments.length + 1,
+        amount: Number(amount),
+        paymentDate,
+      })
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={`Pagamento — ${cost.supplier.name}`} onClose={onClose}>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.formRow}>
+          <Input placeholder="Valor pago (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.formActions}>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
       </form>
+    </Modal>
+  )
+}
+
+// ---------- Modal genérico (overlay + folha) ----------
+
+function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <div>
+            <h3 className={styles.modalTitle}>{title}</h3>
+            {subtitle && <p className={styles.modalSubtitle}>{subtitle}</p>}
+          </div>
+          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   )
 }

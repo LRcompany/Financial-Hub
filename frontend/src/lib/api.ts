@@ -171,7 +171,9 @@ export interface WealthOverview {
 export interface ProjectsSummary {
   grossRevenue: number
   netRevenue: number
-  hasPendingTax: boolean
+  taxEstimatedTotal: number
+  taxPaidTotal: number
+  hasEstimatedTax: boolean
   receivedThisMonth: number
   receivedLastMonth: number
   receivedThisYear: number
@@ -233,8 +235,9 @@ export interface ProjectListItem {
   remaining: number
   supplierCost: number
   supplierPaid: number
-  taxAmount: number | null
-  net: number | null
+  taxAmount: number
+  taxEstimated: boolean
+  net: number
   yieldPerDay: number | null
   suppliers: ProjectSupplierCostSummary[]
 }
