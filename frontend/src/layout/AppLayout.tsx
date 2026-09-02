@@ -11,11 +11,16 @@ const NAV_ITEMS = [
   { to: '/configuracoes', label: 'Configurações', icon: SlidersHorizontal },
 ]
 
+// Nome configurável no build (VITE_DISPLAY_NAME) — default "Luiz" pro app
+// real, sobrescrito na instância de demonstração (dado fake) via
+// .env.production próprio, sem precisar de outra branch/código.
+const DISPLAY_NAME = import.meta.env.VITE_DISPLAY_NAME ?? 'Luiz'
+
 function greeting(): string {
   const hour = new Date().getHours()
-  if (hour < 12) return 'Bom dia, Luiz'
-  if (hour < 18) return 'Boa tarde, Luiz'
-  return 'Boa noite, Luiz'
+  if (hour < 12) return `Bom dia, ${DISPLAY_NAME}`
+  if (hour < 18) return `Boa tarde, ${DISPLAY_NAME}`
+  return `Boa noite, ${DISPLAY_NAME}`
 }
 
 export function AppLayout() {
