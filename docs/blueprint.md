@@ -795,6 +795,14 @@ Luiz já tinha SSH nesse droplet pra outros projetos (`aberto-cms`/Strapi, `aber
 - **Deploy automático (`git push` → atualiza sozinho) ainda não configurado pro Financial Hub** — o webhook existente é hardcoded pro `aberto-cms`. Fica como próximo passo (não bloqueante) generalizar o webhook ou criar um separado.
 - **Branch em produção é `orcamento-real-import`, não `main`** — é onde está todo o trabalho recente (categorias, sync Pluggy, login, etc.); `main` está bem defasada. Mesclar via PR fica pra quando o Luiz quiser.
 
+### Base de dados real subida pra produção (02/09)
+
+Luiz já tinha aberto o app e configurado a senha real antes de eu subir os dados — não podia simplesmente copiar o `dev.db` por cima, ia apagar a senha dele.
+
+- **Confusão própria, resolvida sem perda de dado**: `DATABASE_URL="file:./prod.db"` resolve relativo à pasta do `schema.prisma` (`backend/prisma/`) quando é a APLICAÇÃO rodando que abre a conexão — então o banco real sempre esteve em `backend/prisma/prod.db`. Eu, verificando por fora, chequei `backend/prod.db` (sem a pasta `prisma/`) — um caminho que não existia, e o próprio `sqlite3` CLI criou um arquivo vazio ali só de tentar abrir. Pareceu que o banco tinha sumido; na real nunca existiu nesse caminho. Confirmado via `/proc/<pid>/fd/` (o processo rodando tinha o arquivo certo aberto o tempo todo) antes de mexer em qualquer coisa.
+- **Preservado o `AppAuth` real** ao subir os dados: parei o processo, fiz backup do `prod.db` real, copiei o `dev.db` local por cima, depois `ATTACH DATABASE` no backup pra reinserir só as tabelas `AppAuth`/`WebauthnCredential` de volta (a senha que o Luiz já tinha configurado) — nunca vi o hash da senha dele em texto explorável, só usei `ATTACH`+`INSERT SELECT` pra mover a linha inteira entre bancos.
+- Confirmado depois do restart: `hasPinConfigured: true` intacto, 419 transações e 111 categorias reais batendo com o local. Backup temporário apagado depois de confirmar.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
