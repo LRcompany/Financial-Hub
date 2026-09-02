@@ -826,16 +826,17 @@ Depois de usar a tela pela primeira vez, Luiz voltou com 8 pontos — a maioria 
 - **Box "Outros" renomeado pra "Resumo"**: Luiz achou o nome "Outros" sem sentido pro que aquele card mostrava (média mensal, dias trabalhados, finalizados/em aberto) — virou "Resumo" e ganhou o gráfico de linhas dentro dele.
 - **"Total de entradas" ganhou imposto previsto vs. pago real**: antes só mostrava receita bruta/líquida. Agora mostra também `taxEstimatedTotal` (soma do imposto de todos os projetos não cancelados, na mesma base estimada/real do item acima) e `taxPaidTotal` (soma de todo `TaxPayment.amountPaid` já lançado — é o mesmo número que vira `Transaction` na categoria "Imposto" do Orçamento, então bate com o que Luiz vê lá).
 - Todos os 8 itens testados ao vivo no navegador com dado descartável (recebimento, fornecedor e pagamento de teste no projeto MODAL) — removido do banco antes de terminar, 0 resíduo confirmado por SQL.
+- **Deploy em produção** (mesma sessão): `git pull` + `prisma migrate deploy` + `prisma generate` + `npm run build` (backend com Node 20, frontend com Node 22) + `rsync` do `dist` pra `/var/www/command.luizrodrigues.com` + `pm2 restart financial-hub` (só esse processo — os outros 3 do droplet mantiveram PID/uptime). Backup do `prod.db` feito antes da migração, apagado depois de confirmar 419 transações e o PIN (`AppAuth`) intactos.
 
-
+## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
 - [ ] Dividendos por posição (`PositionSnapshot.dividends`) não vêm no payload de `/investments` da Pluggy — precisa de uma chamada extra (`/investments/{id}/transactions`) pra popular; até lá, fica `null` (não é fake, é "ainda não coletado")
 - [x] `BudgetTarget` por categoria — seedado (25/08) a partir da aba "ORÇAMENTO" da mesma planilha "PLANEJAMENTO - PESSOAL" (é a mesma aba que dá nome à "ORÇAMENTO — PESSOAL - 2026", não uma planilha separada). 32 categorias (8 mães + subcategorias) e o orçamento de agosto/2026 (R$9.895,70, bate com o "CUSTOS" da planilha). De quebra, populou também `Debt`/`DebtInstallment` do empréstimo do Tio João (24 parcelas, 2 pagas) que estava documentado mas nunca tinha dado real.
 - [x] `Client`/`Project`/`ProjectReceipt` de Projetos — importado (02/09) da planilha real "PLANEJAMENTO - 2026": 8 clientes, 22 projetos, 21 recebimentos, 1 fornecedor. Ver "Módulo Projetos" acima.
-- [ ] DAS real de cada mês de competência dos clientes estrangeiros (HKEK/PICKLEBALL FORUM/SOILYTIX) — Luiz precisa lançar em Projetos conforme os boletos forem chegando; até lá, imposto desses meses fica "a definir"
-- [ ] Deploy do módulo Projetos em produção (migração + rebuild + dado real ou reentrada manual)
+- [ ] DAS real de cada mês de competência dos clientes estrangeiros (HKEK/PICKLEBALL FORUM/SOILYTIX) — Luiz precisa lançar em Projetos conforme os boletos forem chegando; até lá, imposto desses meses usa a estimativa de 6%
+- [x] Deploy do módulo Projetos em produção (02/09) — migração + rebuild aplicados; dado real (8 clientes/22 projetos/21 recebimentos) segue só local, ainda não subido pra produção
 - [ ] Webhook de deploy automático (`git push` → atualiza sozinho) ainda só funciona pro `aberto-cms` — generalizar ou criar um separado pro Financial Hub
 
 ## Decisões de navegação/IA
