@@ -858,6 +858,11 @@ Luiz perguntou "quando o sistema identifica uma nova compra no cartão, ele cate
 - **Corrigido**: `PUT /transactions/group` (revisão de transação real) e `PUT /upcoming-installments/group` (revisão de parcela futura) agora chamam `reinforceRule(descrição, categoryId)` antes de aplicar a categoria — usando a descrição crua (a mesma string que `suggestCategory` compara no sync). Confirmado o comportamento certo, com dado de teste descartável: categorizar uma transação nova cria a regra (confidence 0.5); categorizar de novo o mesmo comerciante reforça a mesma regra (confidence 0.5 → 0.55) em vez de duplicar. Dado de teste removido depois.
 - Vale ressaltar: isso só ajuda a partir de agora — a categorização aprendida de um comerciante não é retroativa pras transações antigas dele que já ficaram "sem categoria" (mesma regra do `CATEGORIZATION_TRACKING_START`, 01/09).
 
+### Projetos, 4ª rodada (03/09): modal de novo projeto + entradas visíveis
+
+- **"Novo projeto" virou modal** — era um formulário sempre visível abaixo do header da seção "Projetos" (`${cards.card} ${styles.form}` solto na página); agora abre no mesmo `Modal` genérico já usado em recebimento/fornecedor/pagamento. Mudança mecânica (só trocou o wrapper, mesma lógica/campos) — confirmado sem overflow horizontal no modal com 3 campos (Cliente novo: nome + estrangeiro).
+- **"Total de entradas" na Visão Geral**: só existia "Total de saídas" (imposto + fornecedor) — Luiz notou a falta do espelho do lado de entrada. Novo card ao lado mostra Recebido este mês (com seta de comparação vs. mês anterior, `MonthDelta`), Recebido no ano, Total a receber — esses dois últimos vieram do antigo card "Atual" (removido, o resto do seu conteúdo — fornecedor pago/a pagar — foi pra dentro de "Total de saídas", que ganhou "Total a pagar (fornecedor)" que também estava solto lá). Resultado: os dois cards ficaram espelhados (entradas de um lado, saídas do outro), sem card "Atual" ambíguo no meio.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

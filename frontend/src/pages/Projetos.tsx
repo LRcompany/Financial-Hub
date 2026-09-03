@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   PieChart,
   TrendingDown,
-  Activity,
+  TrendingUp,
   Plus,
   ChevronDown,
   ChevronRight,
@@ -27,6 +27,7 @@ import {
 import { CardHeader } from '../components/CardHeader'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { SmoothLineChart } from '../components/SmoothLineChart'
+import { MonthDelta } from '../components/MonthDelta'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { currency } from '../lib/format'
@@ -135,6 +136,25 @@ export function Projetos() {
           </div>
 
           <div className={cards.card}>
+            <CardHeader icon={TrendingUp} title="Total de entradas" />
+            <div className={styles.statRow}>
+              <span className={cards.heroLabel}>Recebido este mês</span>
+              <span className={styles.statValueWithDelta}>
+                <span className={cards.statValue}>R$ {currency(summary.receivedThisMonth)}</span>
+                <MonthDelta current={summary.receivedThisMonth} previous={summary.receivedLastMonth} />
+              </span>
+            </div>
+            <div className={styles.statRow}>
+              <span className={cards.heroLabel}>Recebido no ano</span>
+              <span className={cards.statValue}>R$ {currency(summary.receivedThisYear)}</span>
+            </div>
+            <div className={styles.statRow}>
+              <span className={cards.heroLabel}>Total a receber</span>
+              <span className={cards.statValue}>R$ {currency(summary.outstanding)}</span>
+            </div>
+          </div>
+
+          <div className={cards.card}>
             <CardHeader icon={TrendingDown} title="Total de saídas" />
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Imposto pago (ano)</span>
@@ -142,22 +162,6 @@ export function Projetos() {
             </div>
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Fornecedores pago</span>
-              <span className={cards.statValue}>R$ {currency(summary.supplierPaid)}</span>
-            </div>
-          </div>
-
-          <div className={cards.card}>
-            <CardHeader icon={Activity} title="Atual" />
-            <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Total recebido</span>
-              <span className={cards.statValue}>R$ {currency(summary.receivedThisYear)}</span>
-            </div>
-            <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Total a receber</span>
-              <span className={cards.statValue}>R$ {currency(summary.outstanding)}</span>
-            </div>
-            <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Total pago (fornecedor)</span>
               <span className={cards.statValue}>R$ {currency(summary.supplierPaid)}</span>
             </div>
             <div className={styles.statRow}>
@@ -316,49 +320,51 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
   }
 
   return (
-    <form className={`${cards.card} ${styles.form}`} onSubmit={handleSubmit}>
-      <div className={styles.formRow}>
-        <Select label="Cliente" value={clientChoice} onChange={(e) => setClientChoice(e.target.value)}>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-          <option value={NEW_CLIENT}>+ Novo cliente</option>
-        </Select>
-        {clientChoice === NEW_CLIENT && (
-          <>
-            <Input label="Nome do cliente" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} />
-            <label className={styles.checkboxLabel}>
-              <input type="checkbox" checked={newClientForeign} onChange={(e) => setNewClientForeign(e.target.checked)} />
-              Cliente estrangeiro (DAS variável)
-            </label>
-          </>
-        )}
-      </div>
-      <div className={styles.formRow}>
-        <Input label="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input label="Início" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <Input label="Fim (opcional)" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </div>
-      <div className={styles.formRow}>
-        <Input label="Valor do projeto (R$)" type="number" step="0.01" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
-        <Input label="Nº de parcelas" type="number" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
-        <label className={styles.checkboxLabel}>
-          <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
-          Com nota fiscal
-        </label>
-      </div>
-      {error && <p className={styles.error}>{error}</p>}
-      <div className={styles.formActions}>
-        <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
-          Cancelar
-        </button>
-        <button type="submit" className={cards.saveBtn} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar'}
-        </button>
-      </div>
-    </form>
+    <Modal title="Novo projeto" onClose={onCancel}>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.formRow}>
+          <Select label="Cliente" value={clientChoice} onChange={(e) => setClientChoice(e.target.value)}>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+            <option value={NEW_CLIENT}>+ Novo cliente</option>
+          </Select>
+          {clientChoice === NEW_CLIENT && (
+            <>
+              <Input label="Nome do cliente" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} />
+              <label className={styles.checkboxLabel}>
+                <input type="checkbox" checked={newClientForeign} onChange={(e) => setNewClientForeign(e.target.checked)} />
+                Cliente estrangeiro (DAS variável)
+              </label>
+            </>
+          )}
+        </div>
+        <div className={styles.formRow}>
+          <Input label="Nome do projeto" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Início" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <Input label="Fim (opcional)" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+        <div className={styles.formRow}>
+          <Input label="Valor do projeto (R$)" type="number" step="0.01" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
+          <Input label="Nº de parcelas" type="number" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
+          <label className={styles.checkboxLabel}>
+            <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
+            Com nota fiscal
+          </label>
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.formActions}>
+          <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
