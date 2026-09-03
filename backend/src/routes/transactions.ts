@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
+import { reinforceRule } from "../services/categorization.js";
 
 export const transactionsRouter = Router();
 
@@ -88,6 +89,13 @@ transactionsRouter.put("/transactions/group", async (req, res) => {
   if (category.children.length > 0) {
     return res.status(400).json({ error: "Essa categoria é uma categoria-mãe — escolha uma subcategoria (folha)" });
   }
+
+  // Reforça a regra de categorização ANTES de aplicar — assim a próxima
+  // compra desse mesmo comerciante (Uber, iFood, etc.) já chega categorizada
+  // sozinha no próximo sync, em vez de cair em "sem categoria" de novo.
+  const sample = await prisma.transaction.findUnique({ where: { id: ids[0] }, select: { description: true } });
+  if (sample) await reinforceRule(sample.description, categoryId);
+
   const result = await prisma.transaction.updateMany({ where: { id: { in: ids } }, data: { categoryId } });
   res.json({ updated: result.count });
 });

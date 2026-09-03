@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
+import { reinforceRule } from "../services/categorization.js";
 
 export const budgetRouter = Router();
 
@@ -347,6 +348,12 @@ budgetRouter.put("/upcoming-installments/group", async (req, res) => {
         return res.status(400).json({ error: "Essa categoria é uma categoria-mãe — escolha uma subcategoria (folha)" });
       }
       data.categoryId = categoryId;
+
+      // Mesmo reforço de regra do PUT /transactions/group — usa a descrição
+      // crua da compra (a que a Pluggy manda, tipo "AMAZONMKTPLC HEIMONLTD"),
+      // que é o mesmo texto usado em `suggestCategory` na hora do sync.
+      const sample = await prisma.upcomingInstallment.findUnique({ where: { id: ids[0] }, select: { description: true } });
+      if (sample) await reinforceRule(sample.description, categoryId);
     }
   }
   if (Object.keys(data).length === 0) {
