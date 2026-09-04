@@ -195,11 +195,14 @@ budgetRouter.delete("/daily-goal/:id", async (req, res) => {
 
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
 // que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
-// conhecido) NO MÊS informado (o mesmo que o Luiz está navegando no
-// Orçamento) — só esse mês, não acumulado com todo mês futuro (04/09,
-// pedido explícito: "quero ver só desse mês... em outubro, só outubro").
-// Avançar mês no Orçamento troca pra ver o compromisso daquele mês
-// específico, igual todo o resto da página já funciona.
+// conhecido). A lista/total/byCard são do MÊS informado (o mesmo que o Luiz
+// está navegando no Orçamento, por padrão) — só esse mês, não acumulado com
+// todo mês futuro (04/09: "quero ver só desse mês... em outubro, só
+// outubro"). `byMonth` já é diferente: cobre TODO mês futuro com parcela
+// pendente (sem filtro), pro carrossel "Por mês" no front deixar clicar em
+// outubro/novembro/... e ver o compromisso daquele mês sem precisar navegar
+// a página inteira (pedido explícito, 04/09: "deixa o carousel lá... se eu
+// clicar em outubro vou ver o que foi parcelado em outubro").
 budgetRouter.get("/upcoming-installments", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
@@ -207,11 +210,17 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const installments = await prisma.upcomingInstallment.findMany({
-    where: { dueDate: { gte: monthStart, lt: monthEnd } },
-    orderBy: { dueDate: "asc" },
-    include: { category: true },
-  });
+  const [installments, allFuture] = await Promise.all([
+    prisma.upcomingInstallment.findMany({
+      where: { dueDate: { gte: monthStart, lt: monthEnd } },
+      orderBy: { dueDate: "asc" },
+      include: { category: true },
+    }),
+    prisma.upcomingInstallment.findMany({
+      where: { dueDate: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
+      select: { dueDate: true, amount: true },
+    }),
+  ]);
   const total = installments.reduce((sum, i) => sum + i.amount, 0);
 
   const byCard = new Map<string, number>();
@@ -220,9 +229,20 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
     byCard.set(cardKey, (byCard.get(cardKey) ?? 0) + i.amount);
   }
 
+  const byMonthMap = new Map<string, { month: number; year: number; amount: number }>();
+  for (const i of allFuture) {
+    const d = new Date(i.dueDate);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    const existing = byMonthMap.get(key);
+    if (existing) existing.amount += i.amount;
+    else byMonthMap.set(key, { month: d.getMonth() + 1, year: d.getFullYear(), amount: i.amount });
+  }
+  const byMonth = [...byMonthMap.values()].sort((a, b) => a.year - b.year || a.month - b.month);
+
   res.json({
     total,
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
+    byMonth,
     installments: installments.map((i) => ({
       id: i.id,
       dueDate: i.dueDate,

@@ -112,6 +112,7 @@ export interface UpcomingInstallment {
 export interface UpcomingInstallmentsSummary {
   total: number
   byCard: { card: string; amount: number }[]
+  byMonth: { month: number; year: number; amount: number }[]
   installments: UpcomingInstallment[]
 }
 

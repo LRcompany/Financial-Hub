@@ -380,6 +380,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Chip do carrossel "Por mês" é um <button> (clicável) — reseta os estilos
+ * padrão de botão pra ficar igual ao chip <div> de "Por cartão". */
+button.upcomingMonthChip {
+  border: 1px solid transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  align-items: flex-start;
+}
+
+button.upcomingMonthChip:hover {
+  border-color: var(--accent-hover);
+}
+
+.upcomingMonthChipActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.upcomingMonthChipActive span {
+  color: var(--ink);
+}
+
 /* ---------- tabela ---------- */
 .tableWrap {
   overflow-x: auto;

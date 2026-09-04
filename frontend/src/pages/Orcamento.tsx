@@ -6,6 +6,7 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
+import { Carousel } from '../components/Carousel'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { currency } from '../lib/format'
@@ -27,6 +28,11 @@ function formatDayLabel(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
+/** "9, 2026" -> "set/26" — label curto pro chip do carrossel "Por mês". */
+function formatMonthLabel(month: number, year: number): string {
+  return `${MONTH_NAMES[month - 1]}/${String(year).slice(2)}`
+}
+
 export function Orcamento() {
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -43,6 +49,12 @@ export function Orcamento() {
   const [error, setError] = useState(false)
   const [cardsList, setCardsList] = useState<CreditCard[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
+  // Mês escolhido no carrossel "Por mês" do box de parcelas — independente
+  // do mês navegado na página (04/09: "se eu clicar em outubro vou ver o
+  // que foi parcelado em outubro, se eu clicar em novembro..."). null =
+  // segue o mês da página (comportamento padrão).
+  const [installmentMonth, setInstallmentMonth] = useState<{ month: number; year: number } | null>(null)
+  const [installmentDetail, setInstallmentDetail] = useState<UpcomingInstallmentsSummary | null>(null)
   const [showReview, setShowReview] = useState(false)
   const [showInstallmentReview, setShowInstallmentReview] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -63,7 +75,28 @@ export function Orcamento() {
   useEffect(load, [month, year])
   // Cartões e parcelas futuras acompanham o mês navegado — avançar mês faz o
   // que já venceu sumir da conta (não é fixo, filtrado no backend por mês).
-  useEffect(loadCardsAndUpcoming, [month, year])
+  // Também reseta a seleção do carrossel de parcelas pro mês da página.
+  useEffect(() => {
+    loadCardsAndUpcoming()
+    setInstallmentMonth(null)
+    setInstallmentDetail(null)
+  }, [month, year])
+
+  // Clicar num mês do carrossel "Por mês" busca só aquele mês, sem navegar
+  // o resto da página (Cartões, categorias, gráfico diário continuam no mês
+  // atual da página).
+  function selectInstallmentMonth(m: number, y: number) {
+    if (m === month && y === year) {
+      setInstallmentMonth(null)
+      setInstallmentDetail(null)
+      return
+    }
+    setInstallmentMonth({ month: m, year: y })
+    api.upcomingInstallments({ month: m, year: y }).then(setInstallmentDetail).catch(() => {})
+  }
+
+  const displayedInstallments = installmentDetail ?? upcoming
+  const selectedInstallmentPeriod = installmentMonth ?? { month, year }
 
   function changeMonth(delta: number) {
     let m = periodRef.current.month + delta
@@ -331,7 +364,7 @@ export function Orcamento() {
         )}
 
         {/* ---------- parcelas futuras (compromissos) ---------- */}
-        {upcoming && upcoming.installments.length > 0 && (
+        {upcoming && (upcoming.installments.length > 0 || upcoming.byMonth.length > 0) && displayedInstallments && (
           <div className={`${cards.card} ${cards.fullWidth}`}>
             <CardHeader
               icon={CalendarClock}
@@ -344,20 +377,50 @@ export function Orcamento() {
               }
             />
             <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-              R$ {currency(upcoming.total)}
+              R$ {currency(displayedInstallments.total)}
             </div>
             <div className={cards.chartMeta}>
-              <span>{upcoming.installments.length} parcelas a vencer, de compras já feitas</span>
+              <span>
+                {displayedInstallments.installments.length} parcela(s) a vencer em{' '}
+                {formatMonthLabel(selectedInstallmentPeriod.month, selectedInstallmentPeriod.year)}, de compras já
+                feitas
+              </span>
             </div>
             <p className={styles.upcomingDisclaimer}>
               Este total é independente do "usado" mostrado em Cartões de crédito — cada cartão trava limite de um
               jeito diferente pra parcelamento, não necessariamente o valor restante inteiro de uma vez.
             </p>
+            {upcoming.byMonth.length > 1 && (
+              <>
+                <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
+                  Por mês
+                </h4>
+                <Carousel
+                  items={upcoming.byMonth}
+                  perPage={6}
+                  keyExtractor={(m) => `${m.year}-${m.month}`}
+                  className={styles.upcomingByMonth}
+                  renderItem={(m) => {
+                    const active = m.month === selectedInstallmentPeriod.month && m.year === selectedInstallmentPeriod.year
+                    return (
+                      <button
+                        type="button"
+                        className={`${styles.upcomingMonthChip} ${active ? styles.upcomingMonthChipActive : ''}`}
+                        onClick={() => selectInstallmentMonth(m.month, m.year)}
+                      >
+                        <span>{formatMonthLabel(m.month, m.year)}</span>
+                        <strong>R$ {currency(m.amount)}</strong>
+                      </button>
+                    )
+                  }}
+                />
+              </>
+            )}
             <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
               Por cartão
             </h4>
             <div className={styles.upcomingByMonth}>
-              {upcoming.byCard.map((c) => (
+              {displayedInstallments.byCard.map((c) => (
                 <div key={c.card} className={styles.upcomingMonthChip}>
                   <span>{c.card}</span>
                   <strong>R$ {currency(c.amount)}</strong>
@@ -376,7 +439,7 @@ export function Orcamento() {
                   </tr>
                 </thead>
                 <tbody>
-                  {upcoming.installments.map((i) => (
+                  {displayedInstallments.installments.map((i) => (
                     <tr key={i.id}>
                       <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
                       <td>
