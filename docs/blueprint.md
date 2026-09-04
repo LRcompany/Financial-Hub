@@ -898,6 +898,14 @@ Luiz mandou print de como o ícone aparece na tela de início do iPhone — raio
 - **`apple-touch-icon` explícito** adicionado no `index.html` (apontando pro `icon-192.png` novo) — reforço pra iOS mais antigo que não lê o `icons` do manifest, só esse link específico.
 - Gerado via `<canvas>` no próprio navegador (sem precisar instalar rsvg-convert/ImageMagick/Pillow no ambiente) — servidor HTTP local descartável em `/tmp` só pra servir o SVG intermediário, tudo apagado depois.
 
+### Tarifa que sempre se anula + vencimento de parcela sempre errado (04/09)
+
+Dois ajustes pedidos juntos, os dois em `pluggyTransactionSync.ts`.
+
+- **"Tarifa Anuidade Diferenciada" (C6)**: cobrada e estornada todo mês (R$98 cada lado) por causa do investimento do Luiz no C6 — sempre se anula, nunca deveria contar como gasto. O ESTORNO já vinha certo (`isTransfer: true`, CREDIT); a COBRANÇA (DEBIT) não — contava como gasto real todo mês há 13 meses (desde set/2025). Adicionado `isSelfCancelingCharge()` — lista de descrição conhecida que força `isTransfer: true` mesmo sendo DEBIT (documentado como padrão extensível, pra outra tarifa igual que aparecer no futuro). Retroativo: as 13 cobranças já existentes viraram `isTransfer: true` direto em produção.
+- **Vencimento de parcela futura sempre no dia 1**: `futureDueDate()` sempre devolvia dia 1 do mês, não importa a compra — "Comprometido em parcelas futuras" mostrava toda parcela vencendo no mesmo dia, claramente errado (print do Luiz: Usina Solar, Academia, Amazon, tudo "01/09/2026"). Corrigido pra usar o dia real da parcela mais recente já cobrada como âncora (ex: Usina Solar sempre vence perto do dia 22, Academia Korpus/Amazon/77Tramo do C6 sempre por volta do dia 15 — confirmado com 4 compras reais diferentes, todas no C6, estabilizando no dia 15 depois do 1º/2º mês: é o dia de fechamento daquele cartão, não coincidência) — com `lastDayOfMonth()` clampando (dia 31 num mês de 30 não estoura pro mês seguinte).
+- **Retroativo, via API real da Pluggy (só leitura) pras 68 linhas de `UpcomingInstallment` sincronizadas via Pluggy** (as outras ~146 vêm do import manual antigo, fora do escopo desse fix): pra cada uma, buscou a parcela mais recente REAL daquela compra (por descrição, pegando a de data mais recente — não o `installmentNumber`, que no lote de backfill histórico pode vir sem relação com a ordem cronológica de verdade) e comparou o mês/ano da linha salva contra o mês/ano dessa parcela real. **26 linhas apagadas** (mês já coberto por uma `Transaction` real — ficariam contando dobrado se continuassem como "futura"), **42 linhas com a data corrigida** pro dia certo. Testado primeiro em modo simulação (nada alterado, só o relatório) antes de aplicar de verdade; backup feito e apagado depois de confirmar.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

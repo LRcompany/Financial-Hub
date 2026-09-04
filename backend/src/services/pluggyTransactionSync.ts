@@ -44,6 +44,21 @@ interface PluggyTransaction {
   } | null;
 }
 
+// Cobrança que SEMPRE vem acompanhada do estorno correspondente no mesmo
+// ciclo — confirmado com o Luiz (04/09): "Tarifa Anuidade Diferenciada" do
+// C6 é cobrada e estornada todo mês por causa do investimento dele lá, sempre
+// se anula. Mesmo sendo DEBIT (cobrança de verdade, não CREDIT/estorno), não
+// deve contar como gasto — mostra no histórico normalmente, só não entra em
+// nenhum cálculo (meta diária, orçamento por categoria). Comparação por
+// "contains" (case-insensitive), não igualdade exata, pra resistir a
+// pequena variação de sufixo que o banco às vezes manda.
+const ALWAYS_TRANSFER_DESCRIPTION_PATTERNS = ["tarifa anuidade diferenciada"];
+
+function isSelfCancelingCharge(description: string): boolean {
+  const normalized = description.toLowerCase();
+  return ALWAYS_TRANSFER_DESCRIPTION_PATTERNS.some((p) => normalized.includes(p));
+}
+
 // Mapeamento conservador: só categoria da Pluggy que a gente já viu de
 // verdade numa transação real e que bate SEM ambiguidade com uma folha
 // nossa. Categoria da Pluggy sem entrada aqui fica null (melhor sem
@@ -73,10 +88,24 @@ async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> 
   return suggested?.id ?? null;
 }
 
-/** dueDate do dia 1 do mês, N meses depois de billForecastDate ("YYYY-MM"). */
-function futureDueDate(billForecastDate: string, monthsAhead: number): Date {
+/** Último dia válido de um mês (28-31) — pra não estourar pro mês seguinte
+ * projetando "dia 31" num mês de 30 dias (ex: `new Date(y, 1, 31)` vira 3 de
+ * março, não fevereiro). */
+function lastDayOfMonth(year: number, monthIndex0: number): number {
+  return new Date(year, monthIndex0 + 1, 0).getDate();
+}
+
+/** dueDate N meses depois de billForecastDate ("YYYY-MM"), no MESMO dia do
+ * mês da parcela mais recente (`anchorDay`) — não sempre dia 1. Confirmado
+ * com dado real (04/09): a parcela da Usina Solar vence sempre por volta do
+ * dia 21-22, nunca no dia 1; "dia 1 sempre" foi o bug que fazia toda parcela
+ * futura de qualquer compra aparecer com o mesmo vencimento errado em
+ * "Comprometido em parcelas futuras". */
+function futureDueDate(billForecastDate: string, monthsAhead: number, anchorDay: number): Date {
   const [y, m] = billForecastDate.split("-").map(Number);
-  return new Date(y, m - 1 + monthsAhead, 1);
+  const monthIndex0 = m - 1 + monthsAhead;
+  const day = Math.min(anchorDay, lastDayOfMonth(y, monthIndex0));
+  return new Date(y, monthIndex0, day);
 }
 
 export async function syncBrokerCreditCardTransactions(brokerId: string, itemId: string) {
@@ -110,8 +139,10 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
       // CREDIT numa fatura de cartão é pagamento/estorno, não gasto — grava
       // como transferência (mesma lógica já usada pra fatura Caixa→C6), não
-      // soma em "quanto gastei".
-      const isTransfer = tx.type === "CREDIT";
+      // soma em "quanto gastei". Cobrança que sempre se anula com um estorno
+      // (ver isSelfCancelingCharge) também nunca é gasto real, mesmo sendo
+      // DEBIT.
+      const isTransfer = tx.type === "CREDIT" || isSelfCancelingCharge(tx.description);
 
       await prisma.transaction.create({
         data: {
@@ -153,9 +184,10 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       const current = meta.installmentNumber!;
       const forecast = meta.billForecastDate;
       if (!forecast || total <= current) continue;
+      const anchorDay = new Date(tx.date).getDate();
       for (let n = current + 1; n <= total; n++) {
         const installmentExternalId = `pluggy:${tx.id}:${n}`;
-        const dueDate = futureDueDate(forecast, n - current);
+        const dueDate = futureDueDate(forecast, n - current, anchorDay);
         await prisma.upcomingInstallment.upsert({
           where: { externalId: installmentExternalId },
           update: { dueDate, description: tx.description, amount: tx.amount, cardLabel: broker.name, categoryId },
