@@ -35,7 +35,15 @@ export function Carousel<T>({ items, perPage, keyExtractor, renderItem, classNam
             <ChevronLeft size={16} strokeWidth={2} />
           </button>
         )}
-        <div className={styles.items}>
+        {/* grid-template-columns fixo (repeat(perPage, ...)) em vez do
+         * `repeat(auto-fill, minmax(...))` do CSS module — auto-fill dentro
+         * de item flex tem bug conhecido do Chromium: a altura intrínseca é
+         * calculada como se só 1 coluna coubesse (empilhando os chips todos
+         * numa coluna só por baixo dos panos), e essa altura errada "vaza"
+         * pro .row inteiro mesmo o grid renderizando visualmente em várias
+         * colunas certinho. Com número fixo de colunas o cálculo de altura
+         * já sai correto (achado com o carrossel "Por mês" enorme, 04/09). */}
+        <div className={styles.items} style={{ gridTemplateColumns: `repeat(${perPage}, minmax(140px, 1fr))` }}>
           {visible.map((item) => (
             <div key={keyExtractor(item)}>{renderItem(item)}</div>
           ))}

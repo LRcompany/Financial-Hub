@@ -209,6 +209,33 @@ function parsePluggyInstallmentId(externalId: string | null): { purchaseId: stri
   return { purchaseId: match[1], n: Number(match[2]) };
 }
 
+/** Maior N visto por compra (`externalId` "pluggy:<txId>:<N>") entre TODA
+ * linha passada — é o total derivado automaticamente. `rows` precisa vir
+ * sem filtro de mês/data (parcela antiga já vencida conta pro cálculo). */
+function buildDerivedTotalsMap(rows: { externalId: string | null }[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const parsed = parsePluggyInstallmentId(row.externalId);
+    if (!parsed) continue;
+    const current = map.get(parsed.purchaseId) ?? 0;
+    if (parsed.n > current) map.set(parsed.purchaseId, parsed.n);
+  }
+  return map;
+}
+
+/** Total "de verdade" de uma parcela: prioriza o override manual
+ * (`totalInstallments` — Luiz corrigiu na modal "Revisar parcelas"), senão
+ * cai pro automático derivado do externalId. Null pra parcela de planilha
+ * sem override (sem externalId, sem como derivar nada sozinho). */
+function resolveTotalInstallments(
+  row: { externalId: string | null; totalInstallments: number | null },
+  derivedMap: Map<string, number>
+): number | null {
+  if (row.totalInstallments != null) return row.totalInstallments;
+  const parsed = parsePluggyInstallmentId(row.externalId);
+  return parsed ? derivedMap.get(parsed.purchaseId) ?? null : null;
+}
+
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
 // que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
 // conhecido). A lista/total/byCard são do MÊS informado (o mesmo que o Luiz
@@ -226,7 +253,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [installments, allFuture, allExternalIds] = await Promise.all([
+  const [installments, allFuture, allForDerivedTotals] = await Promise.all([
     prisma.upcomingInstallment.findMany({
       where: { dueDate: { gte: monthStart, lt: monthEnd } },
       orderBy: { dueDate: "asc" },
@@ -258,13 +285,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   }
   const byMonth = [...byMonthMap.values()].sort((a, b) => a.year - b.year || a.month - b.month);
 
-  const totalInstallmentsByPurchase = new Map<string, number>();
-  for (const row of allExternalIds) {
-    const parsed = parsePluggyInstallmentId(row.externalId);
-    if (!parsed) continue;
-    const current = totalInstallmentsByPurchase.get(parsed.purchaseId) ?? 0;
-    if (parsed.n > current) totalInstallmentsByPurchase.set(parsed.purchaseId, parsed.n);
-  }
+  const derivedTotals = buildDerivedTotalsMap(allForDerivedTotals);
 
   res.json({
     total,
@@ -281,7 +302,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
         category: i.category?.name ?? null,
         cardLabel: i.cardLabel,
         installmentNumber: parsed?.n ?? null,
-        totalInstallments: parsed ? totalInstallmentsByPurchase.get(parsed.purchaseId) ?? null : null,
+        totalInstallments: resolveTotalInstallments(i, derivedTotals),
       };
     }),
   });
@@ -308,15 +329,31 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
     include: { category: { include: { parent: { include: { parent: true } } } } },
   });
 
+  const derivedTotals = buildDerivedTotalsMap(installments);
+
   const groups = new Map<
     string,
-    { description: string; note: string | null; amount: number; cardLabel: string | null; categoryId: string | null; categoryPath: string | null; ids: string[]; dueDates: Date[] }
+    {
+      description: string;
+      note: string | null;
+      amount: number;
+      cardLabel: string | null;
+      categoryId: string | null;
+      categoryPath: string | null;
+      ids: string[];
+      dueDates: Date[];
+      totalInstallments: number | null;
+    }
   >();
   for (const i of installments) {
     const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
     const categoryPath = i.category
       ? [i.category.parent?.parent?.name, i.category.parent?.name, i.category.name].filter(Boolean).join(" > ")
       : null;
+    // Todas as linhas da mesma compra resolvem pro mesmo total (override
+    // manual é sempre aplicado em bloco pra compra inteira) — a 1ª linha já
+    // resolvida basta.
+    const totalInstallments = resolveTotalInstallments(i, derivedTotals);
     const existing = groups.get(key);
     if (existing) {
       existing.ids.push(i.id);
@@ -331,6 +368,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
         categoryPath,
         ids: [i.id],
         dueDates: [i.dueDate],
+        totalInstallments,
       });
     }
   }
@@ -346,6 +384,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
       count: g.ids.length,
       firstDueDate: g.dueDates.reduce((a, b) => (a < b ? a : b)),
       lastDueDate: g.dueDates.reduce((a, b) => (a > b ? a : b)),
+      totalInstallments: g.totalInstallments,
       ids: g.ids,
     }))
     // Sem categoria primeiro (é o que precisa de atenção), depois por descrição.
@@ -372,19 +411,31 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
   res.json({ groups: result, knownCards, categories });
 });
 
-// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount?, categoryId?, note? }.
+// PUT /api/upcoming-installments/group — body { ids, cardLabel?, amount?, categoryId?, note?, totalInstallments? }.
 // Aplica em TODAS as linhas da compra de uma vez (as parcelas restantes dela)
 // — é a correção "essa compra inteira é do C6" ou "essa compra é Farmácia",
-// não uma parcela isolada.
+// não uma parcela isolada. `totalInstallments` é o override manual (campo
+// "Parcela" da modal "Revisar parcelas") pra quando o cálculo automático
+// (deriva do externalId da Pluggy) erra ou não existe (parcela de planilha).
+// `null`/string vazia LIMPA o override e volta a usar o automático.
 budgetRouter.put("/upcoming-installments/group", async (req, res) => {
-  const { ids, cardLabel, amount, categoryId, note } = req.body ?? {};
+  const { ids, cardLabel, amount, categoryId, note, totalInstallments } = req.body ?? {};
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: "ids precisa ser uma lista não vazia" });
   }
-  const data: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null } = {};
+  const data: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null; totalInstallments?: number | null } = {};
   if (cardLabel !== undefined) data.cardLabel = cardLabel === "" ? null : cardLabel;
   if (typeof amount === "number" && amount >= 0) data.amount = amount;
   if (note !== undefined) data.note = note === "" ? null : note;
+  if (totalInstallments !== undefined) {
+    if (totalInstallments === null || totalInstallments === "") {
+      data.totalInstallments = null;
+    } else if (typeof totalInstallments === "number" && Number.isInteger(totalInstallments) && totalInstallments > 0) {
+      data.totalInstallments = totalInstallments;
+    } else {
+      return res.status(400).json({ error: "totalInstallments precisa ser um número inteiro positivo (ou null pra limpar)" });
+    }
+  }
   if (categoryId !== undefined) {
     if (categoryId === "" || categoryId === null) {
       data.categoryId = null;

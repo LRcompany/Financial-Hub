@@ -13,7 +13,12 @@
 .items {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  /* grid-template-columns real vem inline (Carousel.tsx, repeat(perPage,...))
+   * — repeat(auto-fill,...) direto aqui tem bug conhecido do Chromium
+   * dentro de item flex (calcula altura como se só 1 coluna coubesse).
+   * Isso aqui é só um fallback caso o inline não seja aplicado por algum
+   * motivo. */
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: var(--space-2);
   min-width: 0;
 }

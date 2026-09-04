@@ -82,6 +82,14 @@ model UpcomingInstallment {
   // da Pluggy — evita recriar a mesma parcela futura toda vez que o sync
   // roda de novo. Null pra parcela importada da planilha (sem esse conceito).
   externalId String? @unique
+  // Total de parcelas da compra (ex: 10 numa compra parcelada em 10x) —
+  // override MANUAL (Luiz corrige na modal "Revisar parcelas"). Pra parcela
+  // vinda do sync real da Pluggy, dá pra DERIVAR isso sem esse campo (maior
+  // N visto no externalId "pluggy:<txId>:<N>" entre as parcelas da mesma
+  // compra), então esse campo normalmente fica null e o cálculo automático
+  // já resolve. Só é preenchido quando o automático erra ou quando a parcela
+  // é da planilha antiga (sem externalId, sem como derivar nada sozinho).
+  totalInstallments Int?
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])

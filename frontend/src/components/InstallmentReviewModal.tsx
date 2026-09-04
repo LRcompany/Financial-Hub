@@ -23,7 +23,10 @@ function GroupRow({
   group: InstallmentGroup
   knownCards: string[]
   categories: LeafCategoryOption[]
-  onSaved: (ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null }) => void
+  onSaved: (
+    ids: string[],
+    changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null; totalInstallments: number | null }
+  ) => void
   onDeleted: (ids: string[]) => void
 }) {
   const [cardChoice, setCardChoice] = useState(group.cardLabel ?? '')
@@ -31,6 +34,7 @@ function GroupRow({
   const [categoryChoice, setCategoryChoice] = useState(group.categoryId ?? '')
   const [amount, setAmount] = useState(String(group.amount))
   const [note, setNote] = useState(group.note ?? '')
+  const [totalInstallments, setTotalInstallments] = useState(group.totalInstallments != null ? String(group.totalInstallments) : '')
   const [saving, setSaving] = useState(false)
 
   const isOther = cardChoice === OTHER
@@ -39,18 +43,28 @@ function GroupRow({
     Number(amount) !== group.amount ||
     categoryChoice !== (group.categoryId ?? '') ||
     note !== (group.note ?? '') ||
+    totalInstallments !== (group.totalInstallments != null ? String(group.totalInstallments) : '') ||
     (isOther && customCard.trim() !== '')
 
   async function save() {
     const cardLabel = isOther ? customCard.trim() || null : cardChoice || null
     const numericAmount = Number(amount)
     if (Number.isNaN(numericAmount) || numericAmount < 0) return
+    const trimmedTotal = totalInstallments.trim()
+    const numericTotal = trimmedTotal === '' ? null : Number(trimmedTotal)
+    if (numericTotal !== null && (Number.isNaN(numericTotal) || !Number.isInteger(numericTotal) || numericTotal <= 0)) return
     setSaving(true)
     try {
       const trimmedNote = note.trim() || null
-      await api.updateInstallmentGroup(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, note: trimmedNote })
+      await api.updateInstallmentGroup(group.ids, {
+        cardLabel,
+        amount: numericAmount,
+        categoryId: categoryChoice || null,
+        note: trimmedNote,
+        totalInstallments: numericTotal,
+      })
       const categoryPath = categories.find((c) => c.id === categoryChoice)?.path ?? null
-      onSaved(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, categoryPath, note: trimmedNote })
+      onSaved(group.ids, { cardLabel, amount: numericAmount, categoryId: categoryChoice || null, categoryPath, note: trimmedNote, totalInstallments: numericTotal })
     } finally {
       setSaving(false)
     }
@@ -79,7 +93,19 @@ function GroupRow({
           disabled={saving}
         />
       </td>
-      <td className={styles.numCell}>{group.count}x</td>
+      <td className={styles.numCell}>
+        <Input
+          type="number"
+          step="1"
+          min="1"
+          placeholder="?"
+          value={totalInstallments}
+          onChange={(e) => setTotalInstallments(e.target.value)}
+          className={styles.totalInput}
+          disabled={saving}
+        />
+        <span className={styles.remainingHint}>{group.count}x restante{group.count > 1 ? 's' : ''}</span>
+      </td>
       <td className={styles.numCell}>
         {formatDate(group.firstDueDate)}
         {group.count > 1 ? ` — ${formatDate(group.lastDueDate)}` : ''}
@@ -144,7 +170,10 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
 
   useEffect(load, [])
 
-  function handleSaved(ids: string[], changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null }) {
+  function handleSaved(
+    ids: string[],
+    changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null; totalInstallments: number | null }
+  ) {
     setGroups((prev) => prev?.map((g) => (g.ids === ids || sameIds(g.ids, ids) ? { ...g, ...changes } : g)) ?? null)
   }
 
@@ -186,7 +215,7 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
                 <tr>
                   <th>Compra</th>
                   <th>Descrição</th>
-                  <th>Parcelas</th>
+                  <th>Total parcelas</th>
                   <th>Período</th>
                   <th>Valor/parcela</th>
                   <th>Cartão</th>

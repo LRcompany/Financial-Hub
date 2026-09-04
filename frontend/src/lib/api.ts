@@ -130,6 +130,10 @@ export interface InstallmentGroup {
   count: number
   firstDueDate: string
   lastDueDate: string
+  // Total de parcelas da compra — automático (derivado) ou corrigido à mão
+  // na modal "Revisar parcelas". Null quando não dá pra saber (parcela de
+  // planilha sem correção manual ainda).
+  totalInstallments: number | null
   ids: string[]
 }
 
@@ -523,7 +527,10 @@ export const api = {
   },
   installmentGroups: () =>
     request<{ groups: InstallmentGroup[]; knownCards: string[]; categories: LeafCategoryOption[] }>('/upcoming-installments/groups'),
-  updateInstallmentGroup: (ids: string[], changes: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null }) =>
+  updateInstallmentGroup: (
+    ids: string[],
+    changes: { cardLabel?: string | null; amount?: number; categoryId?: string | null; note?: string | null; totalInstallments?: number | null }
+  ) =>
     request<{ updated: number }>('/upcoming-installments/group', { method: 'PUT', body: JSON.stringify({ ids, ...changes }) }),
   deleteInstallmentGroup: (ids: string[]) =>
     request<{ deleted: number }>('/upcoming-installments/group', { method: 'DELETE', body: JSON.stringify({ ids }) }),

@@ -935,6 +935,22 @@ Luiz pediu pra saber, em cada linha da tabela "Comprometido em parcelas futuras"
 - Verificado com 2 compras reais contra a Pluggy AO VIVO (não só contra o que já tava no nosso banco): "SolDistribuidoraMaringaBRA" (Usina Solar, BTG) — nosso cálculo deu total=21 batendo exatamente com `creditCardMetadata.totalInstallments: 21` da Pluggy; "DL\*BOOKINGCOM409" (C6) — total=7 batendo com `totalInstallments: 7` da Pluggy. Confirma que o dado já salvo no banco é suficiente, sem precisar reconsultar nada.
 - Frontend: nova coluna "Parcela" na tabela (entre Descrição e Cartão), mostra `N/total` ou "—" quando não tem essa info (parcela de planilha).
 
+### Carrossel "Por mês" gigante (bug do Chromium: grid `auto-fill` dentro de item flex) (04/09)
+
+Luiz mandou print: o carrossel "Por mês" (recém-devolvido) tava ocupando ~700px de altura, com os chips flutuando bem no meio de um espaço vazio enorme. Reproduzido isolado (página estática com as CSS reais do projeto, fora da Pluggy/auth) pra achar a causa sem depender de login em produção — e reproduziu exatamente o bug à primeira tentativa.
+
+- **Causa raiz**: `.items` (o grid dos chips dentro do carrossel) é filho de um flex container (`.row`) com `flex: 1` e usa `grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))`. Isso é um bug conhecido do Chromium — pra descobrir quantas colunas cabem, `auto-fill` precisa de uma largura definida; mas durante o cálculo do tamanho intrínseco de um item flex, o navegador testa com largura indefinida/zero, então `auto-fill` resolve pra **1 coluna só** (mínimo permitido pela spec) — empilhando as 6 chips em 6 LINHAS uma embaixo da outra (6 × 48,5px + 5 gaps de 8px = exatamente 331px, o número batido na investigação). Essa altura errada "vaza" pro `.row` inteiro, mesmo o grid depois renderizando visualmente em 6 colunas de verdade (com a largura final já resolvida) — o valor da altura já ficou congelado errado.
+- **Confirmado isolando variável por variável** (via `getComputedStyle`/`getBoundingClientRect` em página de teste): trocar só o `grid-template-columns` de `auto-fill` pra uma lista fixa de colunas (`repeat(6, minmax(140px,1fr))`) resolve sozinho — nada mais (align-items, flex-basis, wrapper extra) tinha efeito.
+- **Fix**: como o `Carousel` já sabe quantos itens mostrar por vez (`perPage`), `Carousel.tsx` agora passa `grid-template-columns: repeat(${perPage}, minmax(140px, 1fr))` **inline** (calculado em JS, não mais fixo no CSS module) — resolve pra qualquer carrossel futuro que reusar o componente, não só esse caso. O `auto-fill` que ficou no `.module.css` virou só um fallback (nunca deveria ser usado de verdade, já que o inline sempre aplica).
+
+### "Revisar parcelas" — campo de total de parcelas virou editável (04/09)
+
+Luiz pediu pra corrigir a modal "Revisar parcelas" e "deixar o campo de parcelas em aberto" pra ele mesmo corrigir o que falta — a coluna "Parcelas" ali só mostrava `{count}x` (quantas linhas restam, sempre correto, vem direto da contagem de linhas no banco) mas não dava pra editar o TOTAL da compra (a mesma informação nova que a "Comprometido em parcelas futuras" passou a mostrar como "N de Total"). Pra planilha antiga (sem `externalId` da Pluggy) ou pro raro caso do automático errar, não tinha como o Luiz corrigir esse total manualmente.
+
+- `UpcomingInstallment.totalInstallments Int?` novo (migração `20260904200000_installment_total_override`) — override MANUAL, null por padrão (usa o automático). Aplicado em bloco pra TODAS as parcelas restantes da mesma compra de uma vez (mesmo padrão de `cardLabel`/`categoryId`/`amount` já existentes no PUT de grupo) — nunca uma linha isolada.
+- Resolução em cascata (`resolveTotalInstallments`, `budget.ts`): override manual, se setado, sempre vence; senão cai pro automático (maior N do `externalId`, ver seção anterior). Vale tanto na tabela "Comprometido em parcelas futuras" quanto na própria modal "Revisar parcelas" — as duas mostram o mesmo número.
+- Modal: coluna "Parcelas" virou "Total parcelas" — campo numérico editável (mostra o valor atual, automático ou manual) + "Nx restante(s)" como texto de apoio embaixo (isso continua só leitura, é a contagem real de linhas, não faz sentido "corrigir" sem adicionar/remover parcela de verdade). Limpar o campo (deixar vazio) remove o override e volta a usar o cálculo automático.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
