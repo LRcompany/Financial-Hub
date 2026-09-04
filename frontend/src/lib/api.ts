@@ -76,6 +76,11 @@ export interface BudgetSummary {
   year: number
   dailyGoal: number | null
   todaySpent: number
+  // Último dia (dentro dos últimos 14) com gasto de verdade lançado — a
+  // Pluggy sincroniza com atraso, então "hoje" quase sempre aparece R$0
+  // sem ser gasto zero de verdade. Null só se não teve gasto nenhum nos
+  // últimos 14 dias.
+  lastDayWithSpend: { date: string; amount: number } | null
   monthlyAvgDailySpend: number
   previousMonthlyAvgDailySpend: number
   last14Days: { date: string; amount: number; goal: number | null }[]
@@ -168,6 +173,10 @@ export interface WealthOverview {
   evolution: { label: string; value: number }[]
   investedThisMonth?: number
   investedLastMonth?: number | null
+  // Histórico mês a mês de quanto entrou de aporte novo (não é o total
+  // investido acumulado, é a variação de cada mês) — alimenta o gráfico
+  // "Investido por mês" no Dashboard.
+  investedByMonth: { label: string; value: number }[]
   projectedDividends?: number | null
   projectedDividendsLastMonth?: number | null
   movers: { category: string; changePct: number }[]

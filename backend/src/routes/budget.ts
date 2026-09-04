@@ -150,11 +150,27 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const monthlyAvgDailySpend = last14Days.reduce((sum, d) => sum + d.amount, 0) / 14;
   const previousMonthlyAvgDailySpend = previous14Days.reduce((sum, v) => sum + v, 0) / 14;
 
+  // A Pluggy sincroniza com atraso — "hoje" (e às vezes ontem também) quase
+  // sempre aparece com R$0 só porque a transação de verdade ainda não
+  // chegou, não porque o dia foi de gasto zero de verdade. Pedido do Luiz
+  // (04/09): em vez de mostrar "gasto de hoje" (quase sempre R$0, engana),
+  // mostra o ÚLTIMO DIA que realmente tem gasto lançado — varre de trás pra
+  // frente dentro dos últimos 14 dias e para no primeiro com amount > 0.
+  // `null` só no caso raro de nenhum gasto nos últimos 14 dias inteiros.
+  let lastDayWithSpend: { date: string; amount: number } | null = null;
+  for (let i = last14Days.length - 1; i >= 0; i--) {
+    if (last14Days[i].amount > 0) {
+      lastDayWithSpend = { date: last14Days[i].date, amount: last14Days[i].amount };
+      break;
+    }
+  }
+
   res.json({
     month,
     year,
     dailyGoal: goalAt(dailyGoals, now),
     todaySpent: todayAgg._sum.amount ?? 0,
+    lastDayWithSpend,
     monthlyAvgDailySpend,
     previousMonthlyAvgDailySpend,
     last14Days,

@@ -153,8 +153,17 @@ export function Orcamento() {
   }
   if (!budget) return null
 
-  const today = budget.last14Days[budget.last14Days.length - 1]?.amount ?? 0
-  const diff = budget.dailyGoal != null ? budget.dailyGoal - today : null
+  // A Pluggy sincroniza com atraso — "gasto de hoje" quase sempre mostra
+  // R$0 só porque a transação de verdade ainda não chegou (não porque o
+  // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
+  // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
+  // "hoje" no dia em que o dado de hoje já chegou de verdade.
+  const todayBucket = budget.last14Days[budget.last14Days.length - 1]
+  const lastSpendDay = budget.lastDayWithSpend
+  const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
+  const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
+  const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
+  const diff = budget.dailyGoal != null ? budget.dailyGoal - displaySpend : null
 
   // Pizza mostra só onde o dinheiro REALMENTE foi esse mês — categoria sem
   // gasto nenhum não vira fatia (fatia de R$0 não ajuda a ver "onde estou
@@ -262,8 +271,8 @@ export function Orcamento() {
           />
           <div className={cards.dailyGoalTop}>
             <div>
-              <div className={cards.heroLabel}>Gasto de hoje</div>
-              <div className={cards.heroValue}>R$ {currency(today)}</div>
+              <div className={cards.heroLabel}>{dailySpendLabel}</div>
+              <div className={cards.heroValue}>R$ {currency(displaySpend)}</div>
             </div>
             <div className={cards.dailyGoalMeta}>
               <span className={cards.heroLabel}>Meta diária</span>
@@ -274,7 +283,7 @@ export function Orcamento() {
             <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
               <div
                 className={cards.progressFill}
-                style={{ width: `${Math.min((today / budget.dailyGoal) * 100, 100)}%`, background: 'var(--accent)' }}
+                style={{ width: `${Math.min((displaySpend / budget.dailyGoal) * 100, 100)}%`, background: 'var(--accent)' }}
               />
             </div>
           )}
@@ -283,8 +292,8 @@ export function Orcamento() {
               {diff === null
                 ? 'defina uma meta diária pra acompanhar'
                 : diff >= 0
-                  ? `R$ ${currency(diff)} abaixo da meta hoje`
-                  : `R$ ${currency(-diff)} acima da meta hoje`}
+                  ? `R$ ${currency(diff)} abaixo da meta${isShowingToday ? ' hoje' : ''}`
+                  : `R$ ${currency(-diff)} acima da meta${isShowingToday ? ' hoje' : ''}`}
             </span>
             <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
           </div>

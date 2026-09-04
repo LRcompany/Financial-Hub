@@ -18,6 +18,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
       hasData: false,
       wealthGoal,
       evolution: [],
+      investedByMonth: [],
       allocation: [],
       movers: [],
       avgMonthlyReturnPct: null,
@@ -69,6 +70,23 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     });
   }
   const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals);
+
+  // ---- investido por mês (histórico) — pro gráfico "Investido por mês" ----
+  // Mesma ideia de `investedDelta` abaixo, mas mês a mês pra todo o período
+  // visível (não só o mês atual x anterior). Precisa de 1 mês a mais de
+  // baseline (nowYm-12) só pra conseguir calcular a variação do PRIMEIRO mês
+  // visível também — senão o gráfico começaria faltando o primeiro ponto.
+  const baselineSnaps = activeSnapshotsAsOf(all, nowYm - 12);
+  const baselineInvested = baselineSnaps.length > 0 ? baselineSnaps.reduce((sum, s) => sum + s.investedAmount, 0) : null;
+  const investedByMonth: { label: string; value: number }[] = [];
+  let prevInvested = baselineInvested;
+  for (let idx = 0; idx < monthlyTotals.length; idx++) {
+    const current = monthlyTotals[idx].investedAmount;
+    if (prevInvested !== null) {
+      investedByMonth.push({ label: evolution[idx].label, value: current - prevInvested });
+    }
+    prevInvested = current;
+  }
 
   // ---- aportes do mês: variação do total investido (não posição por posição) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
@@ -140,6 +158,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     evolution,
     investedThisMonth,
     investedLastMonth,
+    investedByMonth,
     projectedDividends,
     projectedDividendsLastMonth,
     movers,

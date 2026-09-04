@@ -83,10 +83,12 @@ export function Dashboard() {
   useEffect(() => {
     // Sem filtro de mês — "últimas compras" de verdade, não "compras deste
     // mês" (viraria vazio nos primeiros dias, quando as compras reais mais
-    // recentes ainda são do mês anterior no cartão).
+    // recentes ainda são do mês anterior no cartão). Guarda a lista inteira
+    // (sem cortar aqui) — quantas aparecem na tela depende do box vizinho
+    // "Orçamento do mês" (ver `visibleTransactionCount`), calculado no render.
     api
       .transactions()
-      .then((data) => setTransactions(data.slice(0, 5)))
+      .then(setTransactions)
       .catch(() => setTransactionsError(true))
 
     api.budgetSummary().then(setBudget).catch(() => setBudgetError(true))
@@ -95,8 +97,24 @@ export function Dashboard() {
     loadUncategorizedCount()
   }, [])
 
-  const today = budget?.last14Days[budget.last14Days.length - 1]?.amount ?? 0
-  const diff = budget?.dailyGoal != null ? budget.dailyGoal - today : null
+  // "Últimas transações" mostra o mesmo tanto de linhas que "Orçamento do
+  // mês" (o box vizinho, à esquerda) tem de categoria-mãe — pedido do Luiz
+  // pra os dois boxes ficarem com altura parecida. 5 é só o fallback antes
+  // do orçamento carregar (ou se não tiver nenhuma categoria com meta).
+  const budgetGroupCount = budget ? groupByParent(budget.categories).length : 0
+  const visibleTransactionCount = budgetGroupCount > 0 ? budgetGroupCount : 5
+
+  // A Pluggy sincroniza com atraso — "gasto de hoje" quase sempre mostra
+  // R$0 só porque a transação de verdade ainda não chegou (não porque o
+  // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
+  // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
+  // "hoje" no dia em que o dado de hoje já chegou de verdade.
+  const todayBucket = budget?.last14Days[budget.last14Days.length - 1]
+  const lastSpendDay = budget?.lastDayWithSpend ?? null
+  const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
+  const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
+  const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
+  const diff = budget?.dailyGoal != null ? budget.dailyGoal - displaySpend : null
 
   const wealthGoal = wealth?.wealthGoal ?? null
   const wealthTotal = wealth?.total ?? 0
@@ -160,8 +178,8 @@ export function Dashboard() {
               <>
                 <div className={styles.dailyGoalTop}>
                   <div>
-                    <div className={styles.heroLabel}>Gasto de hoje</div>
-                    <div className={styles.heroValue}>R$ {currency(today)}</div>
+                    <div className={styles.heroLabel}>{dailySpendLabel}</div>
+                    <div className={styles.heroValue}>R$ {currency(displaySpend)}</div>
                   </div>
                   <div className={styles.dailyGoalMeta}>
                     <span className={styles.heroLabel}>Meta diária</span>
@@ -175,7 +193,7 @@ export function Dashboard() {
                     <div
                       className={styles.progressFill}
                       style={{
-                        width: `${Math.min((today / budget.dailyGoal) * 100, 100)}%`,
+                        width: `${Math.min((displaySpend / budget.dailyGoal) * 100, 100)}%`,
                         background: 'var(--accent)',
                       }}
                     />
@@ -186,8 +204,8 @@ export function Dashboard() {
                     {diff === null
                       ? 'defina uma meta diária pra acompanhar'
                       : diff >= 0
-                        ? `R$ ${currency(diff)} abaixo da meta hoje`
-                        : `R$ ${currency(-diff)} acima da meta hoje`}
+                        ? `R$ ${currency(diff)} abaixo da meta${isShowingToday ? ' hoje' : ''}`
+                        : `R$ ${currency(-diff)} acima da meta${isShowingToday ? ' hoje' : ''}`}
                   </span>
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
@@ -272,7 +290,7 @@ export function Dashboard() {
             )}
 
             {!transactionsError &&
-              transactions?.map((t) => (
+              transactions?.slice(0, visibleTransactionCount).map((t) => (
                 <div key={t.id} className={styles.listRow}>
                   <div className={styles.listIcon}>💳</div>
                   <div className={styles.listBody}>
@@ -319,30 +337,86 @@ export function Dashboard() {
           {!wealthError && wealth?.hasData && (
             <>
               <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={Coins} title="Aportes e proventos do mês" />
-                <div className={styles.statGrid3}>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Investido este mês</span>
-                    <span className={styles.statTileValue}>R$ {currency(wealth.investedThisMonth ?? 0)}</span>
-                    {wealth.investedLastMonth != null && (
-                      <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
-                    )}
-                  </div>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Proventos previstos (mês)</span>
-                    <span className={styles.statTileValue}>
-                      {wealth.projectedDividends != null ? `R$ ${currency(wealth.projectedDividends)}` : '—'}
-                    </span>
-                    {wealth.projectedDividends != null && wealth.projectedDividendsLastMonth != null && (
-                      <MonthDelta current={wealth.projectedDividends} previous={wealth.projectedDividendsLastMonth} />
-                    )}
-                  </div>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Patrimônio total</span>
-                    <span className={styles.statTileValue}>R$ {currency(wealthTotal)}</span>
-                    <MonthDelta current={wealthTotal} previous={wealth.previousTotal ?? wealthTotal} />
-                  </div>
+                <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
+                <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
+                  R$ {currency(wealthTotal)}
                 </div>
+                <div className={styles.chartMeta}>
+                  <span>Patrimônio total</span>
+                  <MonthDelta current={wealthTotal} previous={wealth.previousTotal ?? wealthTotal} />
+                </div>
+                {wealth.evolution.length >= 2 ? (
+                  <SmoothLineChart
+                    values={wealth.evolution.map((e) => e.value)}
+                    labels={wealth.evolution.map((e) => e.label)}
+                    gradientId="wealthGradient"
+                    className={styles.evolutionChart}
+                  />
+                ) : (
+                  <div className={styles.emptyState}>Ainda sem histórico suficiente pra montar a evolução.</div>
+                )}
+                <div className={styles.chartMeta}>
+                  <span>últimos 12 meses com dado</span>
+                </div>
+              </div>
+
+              {/* Só "investido por mês" agora — "proventos previstos" saiu
+               * (dado que não conseguimos coletar de verdade da Pluggy ainda,
+               * ver docs/blueprint.md) e virou gráfico em vez de um número só,
+               * pra dar pra ver o ritmo de aporte mês a mês, não só o mês
+               * atual isolado (pedido do Luiz, 04/09). */}
+              <div className={`${styles.card} ${styles.fullWidth}`}>
+                <CardHeader icon={Coins} title="Investido por mês" href="/patrimonio" />
+                <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
+                  R$ {currency(wealth.investedThisMonth ?? 0)}
+                </div>
+                <div className={styles.chartMeta}>
+                  <span>Investido este mês</span>
+                  {wealth.investedLastMonth != null && (
+                    <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
+                  )}
+                </div>
+                {wealth.investedByMonth.length >= 2 ? (
+                  <SmoothLineChart
+                    values={wealth.investedByMonth.map((e) => e.value)}
+                    labels={wealth.investedByMonth.map((e) => e.label)}
+                    gradientId="investedByMonthGradient"
+                    className={styles.evolutionChart}
+                  />
+                ) : (
+                  <div className={styles.emptyState}>Ainda sem histórico suficiente pra montar o gráfico.</div>
+                )}
+                <div className={styles.chartMeta}>
+                  <span>últimos meses com dado</span>
+                </div>
+              </div>
+
+              <div className={styles.card}>
+                <CardHeader icon={PieChart} title="Alocação de investimentos" href="/patrimonio" />
+                {wealth.allocation.length > 0 ? (
+                  <ClientPieChart data={wealth.allocation} />
+                ) : (
+                  <div className={styles.emptyState}>Sem posições pra mostrar alocação ainda.</div>
+                )}
+              </div>
+
+              <div className={styles.card}>
+                <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
+                {wealth.movers.length === 0 && <div className={styles.emptyState}>Sem histórico suficiente pra comparar.</div>}
+                {wealth.movers.map((m, i) => (
+                  <div key={`${m.category}-${i}`} className={styles.moverRow}>
+                    <span className={styles.moverTicker}>{m.category}</span>
+                    <span className={styles.moverChange}>
+                      {m.changePct >= 0 ? (
+                        <TrendingUp size={14} className={styles.dirIn} />
+                      ) : (
+                        <TrendingDown size={14} className={styles.dirOut} />
+                      )}
+                      {m.changePct >= 0 ? '+' : ''}
+                      {m.changePct.toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <div className={`${styles.card} ${styles.fullWidth}`}>
@@ -383,58 +457,6 @@ export function Dashboard() {
                     </div>
                   </>
                 )}
-              </div>
-
-              <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
-                <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
-                  R$ {currency(wealthTotal)}
-                </div>
-                <div className={styles.chartMeta}>
-                  <span>Patrimônio total</span>
-                  <MonthDelta current={wealthTotal} previous={wealth.previousTotal ?? wealthTotal} />
-                </div>
-                {wealth.evolution.length >= 2 ? (
-                  <SmoothLineChart
-                    values={wealth.evolution.map((e) => e.value)}
-                    labels={wealth.evolution.map((e) => e.label)}
-                    gradientId="wealthGradient"
-                    className={styles.evolutionChart}
-                  />
-                ) : (
-                  <div className={styles.emptyState}>Ainda sem histórico suficiente pra montar a evolução.</div>
-                )}
-                <div className={styles.chartMeta}>
-                  <span>últimos 12 meses com dado</span>
-                </div>
-              </div>
-
-              <div className={styles.card}>
-                <CardHeader icon={PieChart} title="Alocação de investimentos" href="/patrimonio" />
-                {wealth.allocation.length > 0 ? (
-                  <ClientPieChart data={wealth.allocation} />
-                ) : (
-                  <div className={styles.emptyState}>Sem posições pra mostrar alocação ainda.</div>
-                )}
-              </div>
-
-              <div className={styles.card}>
-                <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
-                {wealth.movers.length === 0 && <div className={styles.emptyState}>Sem histórico suficiente pra comparar.</div>}
-                {wealth.movers.map((m, i) => (
-                  <div key={`${m.category}-${i}`} className={styles.moverRow}>
-                    <span className={styles.moverTicker}>{m.category}</span>
-                    <span className={styles.moverChange}>
-                      {m.changePct >= 0 ? (
-                        <TrendingUp size={14} className={styles.dirIn} />
-                      ) : (
-                        <TrendingDown size={14} className={styles.dirOut} />
-                      )}
-                      {m.changePct >= 0 ? '+' : ''}
-                      {m.changePct.toFixed(1)}%
-                    </span>
-                  </div>
-                ))}
               </div>
             </>
           )}
