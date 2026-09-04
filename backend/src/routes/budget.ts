@@ -223,17 +223,64 @@ function buildDerivedTotalsMap(rows: { externalId: string | null }[]): Map<strin
   return map;
 }
 
-/** Total "de verdade" de uma parcela: prioriza o override manual
- * (`totalInstallments` — Luiz corrigiu na modal "Revisar parcelas"), senão
- * cai pro automático derivado do externalId. Null pra parcela de planilha
- * sem override (sem externalId, sem como derivar nada sozinho). */
-function resolveTotalInstallments(
-  row: { externalId: string | null; totalInstallments: number | null },
-  derivedMap: Map<string, number>
-): number | null {
-  if (row.totalInstallments != null) return row.totalInstallments;
-  const parsed = parsePluggyInstallmentId(row.externalId);
-  return parsed ? derivedMap.get(parsed.purchaseId) ?? null : null;
+type InstallmentPositionRow = {
+  id: string;
+  dueDate: Date;
+  description: string;
+  amount: number;
+  externalId: string | null;
+  totalInstallments: number | null;
+};
+
+/** Calcula "parcela N de Total" pra CADA linha, de um jeito que funciona
+ * pra qualquer origem (Pluggy OU Caixa/planilha manual) — não só quando tem
+ * `externalId`. A ideia: dentro da mesma compra (mesma `purchaseBase` +
+ * valor — mesma chave de agrupamento do endpoint `/groups`), as parcelas
+ * restantes são sempre meses CONSECUTIVOS até a última (nunca pula mês no
+ * meio), então dá pra contar de trás pra frente a partir do TOTAL: a linha
+ * de vencimento mais distante = parcela `total`, a anterior = `total - 1`,
+ * e assim por diante. Só precisa saber o TOTAL de algum jeito — manual
+ * (`totalInstallments`, corrigido na modal "Revisar parcelas", vale pra
+ * QUALQUER cartão) ou automático (maior N do `externalId` "pluggy:<txId>:
+ * <N>", só existe pra parcela vinda do sync real da Pluggy). Sem total
+ * conhecido (Caixa/planilha sem correção manual ainda), fica tudo null —
+ * não dá pra saber a posição sem pelo menos o total. */
+function buildInstallmentPositions(rows: InstallmentPositionRow[]): Map<string, { installmentNumber: number | null; totalInstallments: number | null }> {
+  const derivedTotals = buildDerivedTotalsMap(rows);
+
+  const groups = new Map<string, InstallmentPositionRow[]>();
+  for (const row of rows) {
+    const key = `${purchaseBase(row.description)}|${row.amount.toFixed(2)}`;
+    const list = groups.get(key);
+    if (list) list.push(row);
+    else groups.set(key, [row]);
+  }
+
+  const result = new Map<string, { installmentNumber: number | null; totalInstallments: number | null }>();
+  for (const groupRows of groups.values()) {
+    const sorted = [...groupRows].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+    // Total: override manual (em qualquer linha do grupo — aplicado em bloco
+    // pela modal) sempre vence; senão cai pro automático via externalId.
+    let total = sorted.find((r) => r.totalInstallments != null)?.totalInstallments ?? null;
+    if (total == null) {
+      for (const r of sorted) {
+        const parsed = parsePluggyInstallmentId(r.externalId);
+        const derived = parsed ? derivedTotals.get(parsed.purchaseId) : undefined;
+        if (derived != null) {
+          total = derived;
+          break;
+        }
+      }
+    }
+
+    const count = sorted.length;
+    sorted.forEach((row, index) => {
+      const installmentNumber = total != null ? total - count + 1 + index : null;
+      result.set(row.id, { installmentNumber, totalInstallments: total });
+    });
+  }
+  return result;
 }
 
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
@@ -253,7 +300,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [installments, allFuture, allForDerivedTotals] = await Promise.all([
+  const [installments, allFuture, allForPositions] = await Promise.all([
     prisma.upcomingInstallment.findMany({
       where: { dueDate: { gte: monthStart, lt: monthEnd } },
       orderBy: { dueDate: "asc" },
@@ -264,8 +311,10 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
       select: { dueDate: true, amount: true },
     }),
     // Sem filtro de mês — precisa de TODA parcela já criada da mesma compra
-    // (passada ou futura) pra achar o N máximo = total real.
-    prisma.upcomingInstallment.findMany({ select: { externalId: true } }),
+    // (passada ou futura) pra saber o total e a posição de cada uma certos.
+    prisma.upcomingInstallment.findMany({
+      select: { id: true, dueDate: true, description: true, amount: true, externalId: true, totalInstallments: true },
+    }),
   ]);
   const total = installments.reduce((sum, i) => sum + i.amount, 0);
 
@@ -285,14 +334,14 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   }
   const byMonth = [...byMonthMap.values()].sort((a, b) => a.year - b.year || a.month - b.month);
 
-  const derivedTotals = buildDerivedTotalsMap(allForDerivedTotals);
+  const positions = buildInstallmentPositions(allForPositions);
 
   res.json({
     total,
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     byMonth,
     installments: installments.map((i) => {
-      const parsed = parsePluggyInstallmentId(i.externalId);
+      const position = positions.get(i.id);
       return {
         id: i.id,
         dueDate: i.dueDate,
@@ -301,8 +350,8 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
         amount: i.amount,
         category: i.category?.name ?? null,
         cardLabel: i.cardLabel,
-        installmentNumber: parsed?.n ?? null,
-        totalInstallments: resolveTotalInstallments(i, derivedTotals),
+        installmentNumber: position?.installmentNumber ?? null,
+        totalInstallments: position?.totalInstallments ?? null,
       };
     }),
   });
@@ -329,7 +378,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
     include: { category: { include: { parent: { include: { parent: true } } } } },
   });
 
-  const derivedTotals = buildDerivedTotalsMap(installments);
+  const positions = buildInstallmentPositions(installments);
 
   const groups = new Map<
     string,
@@ -353,7 +402,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
     // Todas as linhas da mesma compra resolvem pro mesmo total (override
     // manual é sempre aplicado em bloco pra compra inteira) — a 1ª linha já
     // resolvida basta.
-    const totalInstallments = resolveTotalInstallments(i, derivedTotals);
+    const totalInstallments = positions.get(i.id)?.totalInstallments ?? null;
     const existing = groups.get(key);
     if (existing) {
       existing.ids.push(i.id);
