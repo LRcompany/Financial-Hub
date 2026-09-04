@@ -215,10 +215,19 @@ export function Orcamento() {
             R$ {currency(budget.totalIncome)}
           </div>
           <div className={cards.chartMeta}>
+            {/* Hoje toda entrada vem de Projetos (não existe outro fluxo de
+             * receita ainda) — dizer "dos quais R$X vieram de Projetos"
+             * quando X é o total inteiro não informa nada (04/09, pedido do
+             * Luiz). Só mostra a quebra quando ela é PARCIAL — sinal de que
+             * vai fazer sentido de novo se um dia existir renda de outro
+             * lugar além de Projetos. Span sempre presente (mesmo vazio) só
+             * pra manter o layout de 2 colunas (space-between) com o delta. */}
             <span>
-              {budget.incomeFromProjects > 0
+              {budget.incomeFromProjects > 0 && budget.incomeFromProjects < budget.totalIncome
                 ? `dos quais R$ ${currency(budget.incomeFromProjects)} vieram de Projetos`
-                : 'nenhum recebimento de Projetos esse mês'}
+                : budget.incomeFromProjects === 0 && budget.totalIncome > 0
+                  ? 'nenhum recebimento de Projetos esse mês'
+                  : ''}
             </span>
             <MonthDelta current={budget.totalIncome} previous={budget.previousTotalIncome} />
           </div>

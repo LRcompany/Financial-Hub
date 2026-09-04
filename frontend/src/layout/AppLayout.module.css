@@ -12,15 +12,29 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  /* Mobile: logo em cima, saudação+ações embaixo (ver .headerTop) — no
+   * desktop volta a ser 1 linha só (a sidebar já tem o logo, ver media
+   * query abaixo). */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-4) var(--space-4);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--border);
+}
+
+.headerLogo {
+  display: block;
+  border-radius: var(--r-sm);
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 .greeting {
@@ -116,6 +130,21 @@
 @media (min-width: 900px) {
   .shell {
     flex-direction: row;
+  }
+
+  /* Desktop volta pro header de 1 linha só — o logo já mora na sidebar, não
+   * precisa duplicar aqui. */
+  .header {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .headerLogo {
+    display: none;
+  }
+
+  .headerTop {
+    flex: 1;
   }
 
   .sidebar {

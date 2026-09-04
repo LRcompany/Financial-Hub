@@ -61,19 +61,24 @@ export function AppLayout() {
 
       <div className={styles.main}>
         <header className={styles.header}>
-          <div className={styles.greeting}>
-            <span className={styles.hello}>{greeting()}</span>
-          </div>
-          <div className={styles.headerActions}>
-            <button className={styles.iconBtn} onClick={refreshAll} disabled={refreshing} aria-label="Atualizar dados">
-              <RefreshCw size={14} strokeWidth={2} className={refreshing ? styles.spinning : ''} />
-            </button>
-            <button className={styles.iconBtn} aria-label="Buscar transação">
-              <Search size={14} strokeWidth={2} />
-            </button>
-            <button className={styles.iconBtn} aria-label="Notificações">
-              <Bell size={14} strokeWidth={2} />
-            </button>
+          {/* Só aparece no mobile (a sidebar já tem o logo no desktop) — no
+           * topo do header, acima da saudação (pedido do Luiz, 04/09). */}
+          <img src="/favicon.svg" alt="Command OS" width={22} height={22} className={styles.headerLogo} />
+          <div className={styles.headerTop}>
+            <div className={styles.greeting}>
+              <span className={styles.hello}>{greeting()}</span>
+            </div>
+            <div className={styles.headerActions}>
+              <button className={styles.iconBtn} onClick={refreshAll} disabled={refreshing} aria-label="Atualizar dados">
+                <RefreshCw size={14} strokeWidth={2} className={refreshing ? styles.spinning : ''} />
+              </button>
+              <button className={styles.iconBtn} aria-label="Buscar transação">
+                <Search size={14} strokeWidth={2} />
+              </button>
+              <button className={styles.iconBtn} aria-label="Notificações">
+                <Bell size={14} strokeWidth={2} />
+              </button>
+            </div>
           </div>
         </header>
 

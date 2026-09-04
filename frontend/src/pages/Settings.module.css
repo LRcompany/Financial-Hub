@@ -151,6 +151,23 @@
   cursor: default;
 }
 
+/* No mobile, 2-3 botões de ação (Sincronizar/Reconectar/Arquivar) não cabem
+ * ao lado do nome+status do banco — sem isso, eles vazavam pra fora do card
+ * e o texto "sincronizado ..." quebrava linha por baixo dos botões,
+ * sobrepondo tudo (04/09, print do Luiz mostrando esse encavalamento).
+ * Empurra as ações pra uma linha própria embaixo, com espaço de sobra. */
+@media (max-width: 480px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .rowActions {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    margin-top: var(--space-1);
+  }
+}
+
 .rowArchived {
   opacity: 0.6;
 }
