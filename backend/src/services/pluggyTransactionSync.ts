@@ -116,6 +116,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   let transactionsSynced = 0;
   let transactionsSkipped = 0;
+  let transactionsReconciled = 0;
   let installmentsCreated = 0;
   let categorizedCount = 0;
 
@@ -130,7 +131,35 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       const externalId = `pluggy:${tx.id}`;
       const existing = await prisma.transaction.findUnique({ where: { externalId } });
       if (existing) {
-        transactionsSkipped++;
+        // Transação "PENDING" entra com dado provisório (compra
+        // internacional costuma chegar como "MASTERCARD INTERNACIONAL"
+        // genérico até o banco confirmar o lojista real). Só revisita
+        // enquanto ainda estava marcada pendente da última vez — uma já
+        // confirmada (`pluggyPending: false`) nunca é tocada de novo, pra
+        // não sobrescrever categoria que o usuário já corrigiu à mão.
+        if (existing.pluggyPending && tx.status === "POSTED") {
+          const isTransfer = tx.type === "CREDIT" || isSelfCancelingCharge(tx.description);
+          // NUNCA sobrescreve uma categoria já definida — "sem categoria"
+          // enquanto pendente pode já ter sido corrigida à mão nesse meio
+          // tempo (ex: Luiz categoriza toda "MASTERCARD INTERNACIONAL" antes
+          // do sync seguinte confirmar o nome real); só resolve categoria
+          // nova se ainda estiver null.
+          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
+          await prisma.transaction.update({
+            where: { id: existing.id },
+            data: {
+              date: new Date(tx.date),
+              description: tx.description,
+              amount: tx.amount,
+              isTransfer,
+              categoryId,
+              pluggyPending: false,
+            },
+          });
+          transactionsReconciled++;
+        } else {
+          transactionsSkipped++;
+        }
         continue;
       }
 
@@ -155,6 +184,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           isTransfer,
           categoryId,
           brokerId: broker.id,
+          pluggyPending: tx.status === "PENDING",
         },
       });
       transactionsSynced++;
@@ -207,7 +237,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
 
-  return { transactionsSynced, transactionsSkipped, installmentsCreated, categorizedCount };
+  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount };
 }
 
 /**
@@ -222,6 +252,7 @@ export async function syncAllBrokersCreditCardTransactions() {
     broker: string;
     transactionsSynced: number;
     transactionsSkipped: number;
+    transactionsReconciled: number;
     installmentsCreated: number;
     categorizedCount: number;
     error?: string;
@@ -236,6 +267,7 @@ export async function syncAllBrokersCreditCardTransactions() {
         broker: broker.name,
         transactionsSynced: 0,
         transactionsSkipped: 0,
+        transactionsReconciled: 0,
         installmentsCreated: 0,
         categorizedCount: 0,
         error: (err as Error).message,
@@ -247,10 +279,11 @@ export async function syncAllBrokersCreditCardTransactions() {
     (acc, r) => ({
       transactionsSynced: acc.transactionsSynced + r.transactionsSynced,
       transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
+      transactionsReconciled: acc.transactionsReconciled + r.transactionsReconciled,
       installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
       categorizedCount: acc.categorizedCount + r.categorizedCount,
     }),
-    { transactionsSynced: 0, transactionsSkipped: 0, installmentsCreated: 0, categorizedCount: 0 }
+    { transactionsSynced: 0, transactionsSkipped: 0, transactionsReconciled: 0, installmentsCreated: 0, categorizedCount: 0 }
   );
 
   return { ...totals, perBroker };

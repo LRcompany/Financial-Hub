@@ -23,6 +23,14 @@ model Transaction {
   source      String   @default("manual") // manual | pluggy | ofx_import
   externalId  String?  @unique // id da transação na Pluggy/OFX, evita duplicar import (upsert)
   isTransfer  Boolean  @default(false) // true = não conta como gasto/receita real
+  // true = a Pluggy reportou como "PENDING" (comum em compra internacional —
+  // entra com descrição genérica tipo "MASTERCARD INTERNACIONAL" antes do
+  // banco confirmar o lojista real). Enquanto true, o próximo sync confere
+  // se já virou "POSTED" e atualiza descrição/valor/categoria pro dado real
+  // — sem isso, uma transação pendente ficava presa com o nome genérico pra
+  // sempre (nosso sync nunca revisita uma já sincronizada). Nunca mexe numa
+  // transação já `false` (poderia sobrescrever categoria corrigida à mão).
+  pluggyPending Boolean @default(false)
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])

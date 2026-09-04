@@ -500,9 +500,18 @@ export const api = {
     request<{
       transactionsSynced: number
       transactionsSkipped: number
+      transactionsReconciled: number
       installmentsCreated: number
       categorizedCount: number
-      perBroker: { broker: string; transactionsSynced: number; transactionsSkipped: number; installmentsCreated: number; categorizedCount: number; error?: string }[]
+      perBroker: {
+        broker: string
+        transactionsSynced: number
+        transactionsSkipped: number
+        transactionsReconciled: number
+        installmentsCreated: number
+        categorizedCount: number
+        error?: string
+      }[]
     }>('/credit-cards/sync-transactions', { method: 'POST' }),
   upcomingInstallments: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''

@@ -24,6 +24,7 @@ async function runSync() {
     const result = await syncAllBrokersCreditCardTransactions();
     console.log(
       `[scheduler] sync de transação de cartão em ${startedAt}: ${result.transactionsSynced} nova(s), ` +
+        `${result.transactionsReconciled} reconciliada(s) (pendente virou confirmada), ` +
         `${result.installmentsCreated} parcela(s) futura(s), ${result.categorizedCount} categorizada(s) sozinha(s).`
     );
   } catch (err) {
