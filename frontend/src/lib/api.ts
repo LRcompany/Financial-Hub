@@ -107,6 +107,10 @@ export interface UpcomingInstallment {
   amount: number
   category: string | null
   cardLabel: string | null
+  // "parcela 6 de 10" — null pra parcela importada da planilha (sem esse
+  // detalhe de origem), sempre presente pra parcela vinda do sync da Pluggy.
+  installmentNumber: number | null
+  totalInstallments: number | null
 }
 
 export interface UpcomingInstallmentsSummary {

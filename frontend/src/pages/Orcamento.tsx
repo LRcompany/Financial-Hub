@@ -433,6 +433,7 @@ export function Orcamento() {
                   <tr>
                     <th>Vencimento</th>
                     <th>Descrição</th>
+                    <th>Parcela</th>
                     <th>Cartão</th>
                     <th>Categoria</th>
                     <th>Valor</th>
@@ -452,6 +453,7 @@ export function Orcamento() {
                           i.description
                         )}
                       </td>
+                      <td>{i.installmentNumber && i.totalInstallments ? `${i.installmentNumber}/${i.totalInstallments}` : '—'}</td>
                       <td>{i.cardLabel ?? '—'}</td>
                       <td>{i.category ?? '—'}</td>
                       <td>R$ {currency(i.amount)}</td>

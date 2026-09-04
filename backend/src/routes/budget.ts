@@ -193,6 +193,22 @@ budgetRouter.delete("/daily-goal/:id", async (req, res) => {
   res.status(204).end();
 });
 
+// `externalId` de parcela vinda do sync real da Pluggy já carrega a própria
+// posição no formato "pluggy:<id da transação original>:<parcela N>" (ver
+// pluggyTransactionSync.ts). Isso dá "parcela N" de graça, sem precisar de
+// coluna nova — e o TOTAL de parcelas também dá pra descobrir sem nada novo:
+// o sync sempre cria uma linha pra CADA parcela restante até a última (nunca
+// para no meio), então o maior N já visto pra aquela transação-mãe É o
+// total (mesmo que parcelas antigas já vencidas continuem no banco — elas
+// nunca são apagadas, só as futuras somem da lista por causa do filtro de
+// mês). Null pra parcela importada da planilha (sem esse formato de id).
+function parsePluggyInstallmentId(externalId: string | null): { purchaseId: string; n: number } | null {
+  if (!externalId) return null;
+  const match = /^pluggy:(.+):(\d+)$/.exec(externalId);
+  if (!match) return null;
+  return { purchaseId: match[1], n: Number(match[2]) };
+}
+
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
 // que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
 // conhecido). A lista/total/byCard são do MÊS informado (o mesmo que o Luiz
@@ -210,7 +226,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [installments, allFuture] = await Promise.all([
+  const [installments, allFuture, allExternalIds] = await Promise.all([
     prisma.upcomingInstallment.findMany({
       where: { dueDate: { gte: monthStart, lt: monthEnd } },
       orderBy: { dueDate: "asc" },
@@ -220,6 +236,9 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
       where: { dueDate: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
       select: { dueDate: true, amount: true },
     }),
+    // Sem filtro de mês — precisa de TODA parcela já criada da mesma compra
+    // (passada ou futura) pra achar o N máximo = total real.
+    prisma.upcomingInstallment.findMany({ select: { externalId: true } }),
   ]);
   const total = installments.reduce((sum, i) => sum + i.amount, 0);
 
@@ -239,19 +258,32 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   }
   const byMonth = [...byMonthMap.values()].sort((a, b) => a.year - b.year || a.month - b.month);
 
+  const totalInstallmentsByPurchase = new Map<string, number>();
+  for (const row of allExternalIds) {
+    const parsed = parsePluggyInstallmentId(row.externalId);
+    if (!parsed) continue;
+    const current = totalInstallmentsByPurchase.get(parsed.purchaseId) ?? 0;
+    if (parsed.n > current) totalInstallmentsByPurchase.set(parsed.purchaseId, parsed.n);
+  }
+
   res.json({
     total,
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     byMonth,
-    installments: installments.map((i) => ({
-      id: i.id,
-      dueDate: i.dueDate,
-      description: i.description,
-      note: i.note,
-      amount: i.amount,
-      category: i.category?.name ?? null,
-      cardLabel: i.cardLabel,
-    })),
+    installments: installments.map((i) => {
+      const parsed = parsePluggyInstallmentId(i.externalId);
+      return {
+        id: i.id,
+        dueDate: i.dueDate,
+        description: i.description,
+        note: i.note,
+        amount: i.amount,
+        category: i.category?.name ?? null,
+        cardLabel: i.cardLabel,
+        installmentNumber: parsed?.n ?? null,
+        totalInstallments: parsed ? totalInstallmentsByPurchase.get(parsed.purchaseId) ?? null : null,
+      };
+    }),
   });
 });
 
