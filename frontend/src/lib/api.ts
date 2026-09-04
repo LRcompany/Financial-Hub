@@ -111,7 +111,6 @@ export interface UpcomingInstallment {
 
 export interface UpcomingInstallmentsSummary {
   total: number
-  byMonth: { month: string; amount: number }[]
   byCard: { card: string; amount: number }[]
   installments: UpcomingInstallment[]
 }

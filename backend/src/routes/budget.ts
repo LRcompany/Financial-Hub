@@ -195,36 +195,33 @@ budgetRouter.delete("/daily-goal/:id", async (req, res) => {
 
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
 // que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
-// conhecido). Responde "quanto ainda tenho comprometido no cartão/parcelado"
-// a PARTIR do mês informado (o mesmo que o Luiz está navegando no Orçamento)
-// — sem esse filtro a lista nunca diminuiria: parcela de mês já passado
-// ficaria contando pra sempre. Avançar mês no Orçamento naturalmente esvazia
-// esse card conforme os parcelamentos vão terminando.
+// conhecido) NO MÊS informado (o mesmo que o Luiz está navegando no
+// Orçamento) — só esse mês, não acumulado com todo mês futuro (04/09,
+// pedido explícito: "quero ver só desse mês... em outubro, só outubro").
+// Avançar mês no Orçamento troca pra ver o compromisso daquele mês
+// específico, igual todo o resto da página já funciona.
 budgetRouter.get("/upcoming-installments", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
   const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
 
   const installments = await prisma.upcomingInstallment.findMany({
-    where: { dueDate: { gte: monthStart } },
+    where: { dueDate: { gte: monthStart, lt: monthEnd } },
     orderBy: { dueDate: "asc" },
     include: { category: true },
   });
   const total = installments.reduce((sum, i) => sum + i.amount, 0);
 
-  const byMonth = new Map<string, number>();
   const byCard = new Map<string, number>();
   for (const i of installments) {
-    const key = `${i.dueDate.getFullYear()}-${String(i.dueDate.getMonth() + 1).padStart(2, "0")}`;
-    byMonth.set(key, (byMonth.get(key) ?? 0) + i.amount);
     const cardKey = i.cardLabel ?? "Outros (sem cartão identificado)";
     byCard.set(cardKey, (byCard.get(cardKey) ?? 0) + i.amount);
   }
 
   res.json({
     total,
-    byMonth: [...byMonth.entries()].map(([month, amount]) => ({ month, amount })),
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     installments: installments.map((i) => ({
       id: i.id,

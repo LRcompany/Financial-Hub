@@ -918,9 +918,13 @@ Como já eram 3 ocorrências da mesma classe de bug, dessa vez construímos a co
 - Retroativo: as 2 transações de 01/09 já achadas (R$7 e R$1,34) corrigidas direto em produção antes desse fix de código existir.
 - `transactionsReconciled` novo no retorno do sync — aparece no alerta de "Atualizar transações" (Orçamento) e no log do scheduler automático.
 
-### "Comprometido em parcelas futuras" cortava a lista em 20 (04/09)
+### "Comprometido em parcelas futuras" acumulava mês futuro junto (04/09)
 
-Luiz notou que a tabela detalhada (Vencimento/Descrição/Cartão/Categoria/Valor) parava de mostrar parcela no meio do próprio mês — não é bug de data (isso já tinha sido corrigido), era um `.slice(0, 20)` na renderização que cortava a lista sempre nas primeiras 20 linhas, mesmo sobrando parcela do mesmo mês pra trás. Removido — a tabela mostra a lista completa agora (confirmado localmente: 181 linhas renderizadas, sem limite).
+Luiz notou que a tabela detalhada (Vencimento/Descrição/Cartão/Categoria/Valor) parava de mostrar parcela no meio do próprio mês. Primeira tentativa (errada): achei que era o `.slice(0, 20)` que cortava a renderização e removi — só que aí Luiz explicou o que realmente queria: **o card inteiro deveria mostrar só o mês navegado** (setembro só setembro, outubro só outubro), não a lista acumulada de todo mês futuro junto — é assim que todo o resto do Orçamento já funciona (categorias, "Total do mês", etc.), só esse card que era "a partir de", não "só esse mês".
+
+- **Fix de verdade**: `GET /upcoming-installments` mudou o filtro de `dueDate: { gte: monthStart }` (acumulativo, pra sempre crescendo) pra `dueDate: { gte: monthStart, lt: monthEnd }` (só o mês exato navegado).
+- **Efeito colateral limpo**: com tudo escopado num mês só, o `byMonth`/carrossel "Por mês" virou redundante (sempre 1 item só, repetindo o que já tá no total) — removido o carrossel, o cálculo de `byMonth` no backend, e o campo do tipo no frontend (nada usava mais). "Por cartão" continua (ainda faz sentido dentro de 1 mês) e o `.slice(0,20)` que eu tinha removido por engano não fazia mais diferença nenhuma (lista de 1 mês já é bem menor).
+- Testado localmente: setembro mostrou 55 parcelas (R$11.703,67), outubro (navegando) mostrou 39 parcelas (R$9.888,39) — os dois valores batendo exatamente com o que já aparecia antes no extinto carrossel "Por mês", confirmando que só a forma de exibir mudou, não o dado.
 
 ## Pendências (não travadas ainda)
 

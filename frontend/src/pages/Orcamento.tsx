@@ -8,7 +8,6 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
-import { Carousel } from '../components/Carousel'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -26,11 +25,6 @@ const KIND_SECTIONS: { kind: BudgetCategory['kind']; title: string }[] = [
 function formatDayLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-}
-
-function formatMonthLabel(ym: string): string {
-  const [y, m] = ym.split('-').map(Number)
-  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
 }
 
 export function Orcamento() {
@@ -370,20 +364,6 @@ export function Orcamento() {
                 </div>
               ))}
             </div>
-            <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
-              Por mês
-            </h4>
-            <Carousel
-              items={upcoming.byMonth}
-              perPage={5}
-              keyExtractor={(m) => m.month}
-              renderItem={(m) => (
-                <div className={styles.upcomingMonthChip}>
-                  <span>{formatMonthLabel(m.month)}</span>
-                  <strong>R$ {currency(m.amount)}</strong>
-                </div>
-              )}
-            />
             <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
               <table className={styles.table}>
                 <thead>
