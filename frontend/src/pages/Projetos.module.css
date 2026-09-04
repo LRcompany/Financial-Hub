@@ -4,6 +4,12 @@
   margin: 0 0 var(--space-5);
 }
 
+@media (max-width: 480px) {
+  .pageTitle {
+    font-size: 1.15rem;
+  }
+}
+
 .sectionHeaderRow {
   display: flex;
   align-items: center;
@@ -108,6 +114,14 @@
 .projectName {
   font-size: 14.5px;
   font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.projectNameSep {
+  color: var(--ink-faint);
+  font-weight: 400;
+  margin: 0 1px;
 }
 
 /* linha 2 do header: nome do projeto + datas à esquerda, valor à direita —
@@ -143,7 +157,8 @@
 .projectHeaderActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
+  flex-shrink: 0;
   margin-left: auto;
 }
 
@@ -222,10 +237,16 @@
 /* seção Recebimentos/Fornecedores dentro do detalhe expandido — bloco
    próprio (não só um <h4> solto) pra abrir espaço real entre as duas e dar
    lugar certo pro botão de adicionar, do lado do título */
+/* Box cinza claro pra cada subseção (Recebimentos, Fornecedores) — sem isso
+   as duas listas se misturavam visualmente, parecendo uma coisa só. O gap
+   entre os dois `.detailSection` vem do `.projectDetail` (var(--space-5)). */
 .detailSection {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  background: var(--fill-muted);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
 }
 
 .detailSubheadingRow {
@@ -267,8 +288,12 @@
   font-size: 11.5px;
 }
 
+/* Fundo var(--surface) (não fill-muted) de propósito — o container
+   .detailSection já é cinza claro; cada fornecedor precisa contrastar com
+   esse fundo, não se misturar nele. */
 .supplierBlock {
-  background: var(--fill-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: var(--space-3);
   display: flex;

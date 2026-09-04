@@ -179,7 +179,7 @@
   gap: var(--space-3);
   background: none;
   border: none;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 500;
@@ -211,7 +211,10 @@
 }
 
 .accordionBody {
-  padding: 0 var(--space-3) var(--space-3) calc(22px + var(--space-3) + var(--space-3));
+  /* indent alinha embaixo do nome da categoria-mãe: espaço à esquerda do
+     header (var(--space-4)) + largura do círculo do toggle (22px) + gap
+     até o nome (var(--space-3)) */
+  padding: 0 var(--space-4) var(--space-3) calc(22px + var(--space-4) + var(--space-3));
 }
 
 .categoryColumns {

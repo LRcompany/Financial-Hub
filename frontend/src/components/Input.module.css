@@ -1,7 +1,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   min-width: 160px;
 }
@@ -18,7 +18,11 @@
   height: 38px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 0 var(--space-3);
+  /* var(--space-4), não var(--space-3) — respiro igual ao dos botões
+     pill (.saveBtn/.addBtn usam var(--space-4)); com var(--space-3) o
+     texto do campo ficava mais colado na borda do que o texto de um
+     botão do lado, dando a sensação de "esmagado". */
+  padding: 0 var(--space-4);
   font-size: 13.5px;
   font-family: inherit;
   color: var(--ink);

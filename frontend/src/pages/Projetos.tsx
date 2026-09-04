@@ -13,7 +13,6 @@ import {
   X,
   Pause,
   Play,
-  Ban,
 } from 'lucide-react'
 import {
   api,
@@ -417,39 +416,40 @@ function ProjectCard({
         {expanded ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
         <div className={styles.projectHeaderBody}>
           <div className={styles.projectHeaderTop}>
-            <span className={styles.projectName}>{project.client.name}</span>
-            <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>
-            {isActive && (
-              <div className={styles.projectHeaderActions} onClick={(e) => e.stopPropagation()}>
-                {project.status === 'em_andamento' ? (
-                  <button className={styles.iconBtn} onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
-                    <Pause size={14} strokeWidth={2} />
+            <span className={styles.projectName}>
+              {project.client.name} <span className={styles.projectNameSep}>•</span> {project.name}
+            </span>
+            <div className={styles.projectHeaderActions} onClick={(e) => e.stopPropagation()}>
+              <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>
+              {isActive && (
+                <>
+                  {project.status === 'em_andamento' ? (
+                    <button className={styles.iconBtn} onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
+                      <Pause size={14} strokeWidth={2} />
+                    </button>
+                  ) : (
+                    <button className={styles.iconBtn} onClick={() => changeStatus('em_andamento')} aria-label="Retomar projeto" title="Retomar projeto">
+                      <Play size={14} strokeWidth={2} />
+                    </button>
+                  )}
+                  <button
+                    className={styles.iconBtnDanger}
+                    onClick={() => {
+                      if (confirm(`Cancelar "${project.name}"? Isso não apaga recebimentos já lançados.`)) changeStatus('cancelado')
+                    }}
+                    aria-label="Cancelar projeto"
+                    title="Cancelar projeto"
+                  >
+                    <Trash2 size={14} strokeWidth={2} />
                   </button>
-                ) : (
-                  <button className={styles.iconBtn} onClick={() => changeStatus('em_andamento')} aria-label="Retomar projeto" title="Retomar projeto">
-                    <Play size={14} strokeWidth={2} />
-                  </button>
-                )}
-                <button
-                  className={styles.iconBtnDanger}
-                  onClick={() => {
-                    if (confirm(`Cancelar "${project.name}"? Isso não apaga recebimentos já lançados.`)) changeStatus('cancelado')
-                  }}
-                  aria-label="Cancelar projeto"
-                  title="Cancelar projeto"
-                >
-                  <Ban size={14} strokeWidth={2} />
-                </button>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
           <div className={styles.projectHeaderBottom}>
-            <div className={styles.projectHeaderMeta}>
-              <span>{project.name}</span>
-              <span>
-                {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
-              </span>
-            </div>
+            <span className={styles.projectHeaderMeta}>
+              {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
+            </span>
             <div className={styles.projectHeaderValues}>
               <span className={styles.projectValue}>R$ {currency(project.contractValue)}</span>
               <span className={styles.projectSub}>

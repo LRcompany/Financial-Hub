@@ -34,6 +34,15 @@
   border-radius: var(--r-lg);
   padding: var(--space-5);
   box-shadow: var(--shadow-sm);
+  /* Item de grid tem "tamanho mínimo automático" = maior min-content de
+     tudo lá dentro por padrão — uma tabela com th de white-space:nowrap
+     vários níveis abaixo (dentro de um .tableWrap com overflow-x:auto
+     próprio) ainda empurra a coluna do grid inteira pra largura dela, MESMO
+     a tabela tendo seu próprio scroll interno — porque overflow:auto num
+     descendente não conta, só overflow no item de grid direto conta. Sem
+     isso, a página inteira ganha scroll horizontal no mobile por causa de
+     UMA tabela larga em UM card. */
+  min-width: 0;
 }
 
 .cardTitle {
@@ -52,7 +61,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-4);
+}
+
+/* Título + ação (ex: "Copiar mês anterior" + "Revisar orçamento") não cabem
+   lado a lado numa tela de celular — sem isso, o header força a largura do
+   card inteiro e estoura em scroll horizontal na página toda (grid track
+   herda o min-content do item mais largo). Quebra pra 2 linhas embaixo de
+   640px em vez de estourar. */
+@media (max-width: 640px) {
+  .cardHeader {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
 }
 
 .cardHeaderLeft {
@@ -77,6 +99,21 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .heroValue {
+    font-size: 1.5rem;
+  }
+  .statTileValue {
+    font-size: 0.95rem;
+  }
+  .totalLabel span:last-child {
+    font-size: 1.1rem;
+  }
+  .sectionTitle {
+    font-size: 0.58rem;
+  }
 }
 
 /* ---------- daily goal ---------- */

@@ -33,9 +33,11 @@ import styles from '../styles/cards.module.css'
 
 const MONTH_NAMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
-/** "2026-08-21" -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por UTC). */
+/** "2026-08-21" (ou um datetime ISO completo, tipo o `date` de Transaction)
+ * -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por
+ * UTC) — o slice(0,10) normaliza os dois formatos pro mesmo caminho. */
 function formatDayLabel(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
@@ -276,7 +278,7 @@ export function Dashboard() {
                   <div className={styles.listBody}>
                     <div className={styles.listTitle}>{t.description}</div>
                     <div className={styles.listSub}>
-                      {t.category?.name ?? 'Sem categoria'}
+                      {formatDayLabel(t.date)} · {t.category?.name ?? 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
                     </div>
                   </div>
