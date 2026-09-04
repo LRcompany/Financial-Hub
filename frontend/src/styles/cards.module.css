@@ -196,7 +196,10 @@
   gap: 4px;
   background: var(--fill-muted);
   border-radius: var(--r-sm);
-  padding: var(--space-3);
+  /* Padding padrão de "tile" (label + valor) — mesmo valor usado no chip do
+   * carrossel "Por mês" e em .kindSummary (Orçamento.module.css), pra ficar
+   * consistente em toda a interface (pedido do Luiz, 04/09). */
+  padding: var(--space-4);
 }
 
 .statTileValue {

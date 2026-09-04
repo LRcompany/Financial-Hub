@@ -115,6 +115,13 @@ export function Dashboard() {
   const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
   const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
   const diff = budget?.dailyGoal != null ? budget.dailyGoal - displaySpend : null
+  // Posição do "último dia com gasto" dentro de last14Days — pra desenhar a
+  // bolinha fixa no gráfico marcando "a gente se encontra ali" (pedido do
+  // Luiz, 04/09). undefined quando é literalmente hoje (a bolinha do último
+  // ponto já cobre esse caso, não precisa duplicar).
+  const lastSpendDayIndex =
+    !isShowingToday && lastSpendDay ? budget?.last14Days.findIndex((d) => d.date === lastSpendDay.date) : undefined
+  const markedDayIndex = lastSpendDayIndex != null && lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
 
   const wealthGoal = wealth?.wealthGoal ?? null
   const wealthTotal = wealth?.total ?? 0
@@ -215,6 +222,7 @@ export function Dashboard() {
                   threshold={budget.dailyGoal ?? undefined}
                   gradientId="dailySpendGradient"
                   className={styles.evolutionChart}
+                  markedIndex={markedDayIndex}
                 />
                 <div className={styles.chartMeta}>
                   <span>últimos 14 dias</span>

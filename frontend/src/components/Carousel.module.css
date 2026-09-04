@@ -46,6 +46,9 @@
   display: flex;
   justify-content: center;
   gap: 6px;
+  /* Espaço antes do que vem depois do carrossel (ex: o próximo título de
+   * seção) — sem isso ficava tudo grudado (pedido do Luiz, 04/09). */
+  margin-bottom: var(--space-3);
 }
 
 .dot {
