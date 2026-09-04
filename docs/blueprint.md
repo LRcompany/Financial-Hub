@@ -918,6 +918,10 @@ Como já eram 3 ocorrências da mesma classe de bug, dessa vez construímos a co
 - Retroativo: as 2 transações de 01/09 já achadas (R$7 e R$1,34) corrigidas direto em produção antes desse fix de código existir.
 - `transactionsReconciled` novo no retorno do sync — aparece no alerta de "Atualizar transações" (Orçamento) e no log do scheduler automático.
 
+### "Comprometido em parcelas futuras" cortava a lista em 20 (04/09)
+
+Luiz notou que a tabela detalhada (Vencimento/Descrição/Cartão/Categoria/Valor) parava de mostrar parcela no meio do próprio mês — não é bug de data (isso já tinha sido corrigido), era um `.slice(0, 20)` na renderização que cortava a lista sempre nas primeiras 20 linhas, mesmo sobrando parcela do mesmo mês pra trás. Removido — a tabela mostra a lista completa agora (confirmado localmente: 181 linhas renderizadas, sem limite).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

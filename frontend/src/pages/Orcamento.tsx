@@ -396,7 +396,7 @@ export function Orcamento() {
                   </tr>
                 </thead>
                 <tbody>
-                  {upcoming.installments.slice(0, 20).map((i) => (
+                  {upcoming.installments.map((i) => (
                     <tr key={i.id}>
                       <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
                       <td>
