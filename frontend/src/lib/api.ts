@@ -89,6 +89,9 @@ export interface BudgetSummary {
   totalIncome: number
   previousTotalIncome: number
   incomeFromProjects: number
+  // Últimos 12 meses de entrada (terminando no mês navegado) — gráfico "Por
+  // mês" dentro do box "Entradas do mês".
+  incomeByMonth: { label: string; value: number }[]
   categories: BudgetCategory[]
 }
 
@@ -158,6 +161,9 @@ export interface YearBreakdown {
   startBalance: number
   contribution: number
   endBalance: number
+  // Aportado REAL no ano até agora — só vem preenchido na linha do ano
+  // corrente (nos anos futuros da projeção não existe "real" ainda).
+  realContribution: number | null
 }
 
 export interface Projection {

@@ -39,6 +39,11 @@ export interface YearBreakdown {
   startBalance: number;
   contribution: number;
   endBalance: number;
+  // Quanto REALMENTE entrou de aporte novo nesse ano até agora — só
+  // preenchido na linha do ano CORRENTE (nas linhas futuras não existe "real"
+  // ainda, ficam null). Pedido do Luiz (04/09): comparar o planejado
+  // (`contribution`) com o que ele de fato conseguiu aportar.
+  realContribution: number | null;
 }
 
 export interface Projection {
@@ -55,13 +60,18 @@ export function projectFirstMillion(
   currentTotal: number,
   targetAmount: number | null,
   monthlyContribution: number,
-  avgMonthlyReturnPct: number | null
+  avgMonthlyReturnPct: number | null,
+  // Aportado REAL no ano corrente até agora (calculado em wealth.ts a partir
+  // do histórico de PositionSnapshot) — só entra na linha do ano corrente do
+  // breakdown, pra comparar com o planejado (pedido do Luiz, 04/09).
+  realContributionThisYear: number | null = null
 ): { projection: Projection | null; yearlyBreakdown: YearBreakdown[] } {
   if (!targetAmount) {
     return { projection: null, yearlyBreakdown: [] };
   }
 
   const now = new Date();
+  const currentCalendarYear = now.getFullYear();
   if (currentTotal >= targetAmount) {
     return { projection: { monthsToGoal: 0, projectedDate: now.toISOString() }, yearlyBreakdown: [] };
   }
@@ -84,7 +94,13 @@ export function projectFirstMillion(
     month++;
 
     if (month > 11) {
-      breakdown.push({ year: curYear, startBalance: yearStartBalance, contribution: yearContribution, endBalance: balance });
+      breakdown.push({
+        year: curYear,
+        startBalance: yearStartBalance,
+        contribution: yearContribution,
+        endBalance: balance,
+        realContribution: curYear === currentCalendarYear ? realContributionThisYear : null,
+      });
       month = 0;
       year++;
       curYear = year;
@@ -94,7 +110,13 @@ export function projectFirstMillion(
   }
 
   if (yearContribution > 0) {
-    breakdown.push({ year: curYear, startBalance: yearStartBalance, contribution: yearContribution, endBalance: balance });
+    breakdown.push({
+      year: curYear,
+      startBalance: yearStartBalance,
+      contribution: yearContribution,
+      endBalance: balance,
+      realContribution: curYear === currentCalendarYear ? realContributionThisYear : null,
+    });
   }
 
   if (monthsElapsed >= MAX_MONTHS) {

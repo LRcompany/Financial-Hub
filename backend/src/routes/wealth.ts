@@ -54,6 +54,11 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   // valorização de mercado de dinheiro novo que entrou).
   const evolution: { label: string; value: number }[] = [];
   const monthlyTotals: { marketValue: number; investedAmount: number }[] = [];
+  // Ano-calendário de cada entrada de `evolution`/`monthlyTotals`, na mesma
+  // ordem/índice (o loop pula mês sem snapshot, então não dá pra recalcular
+  // isso de fora depois — precisa guardar junto). Usado logo abaixo pra somar
+  // só os meses do ano corrente (aportado real no ano).
+  const monthMetaYear: number[] = [];
   for (let i = 11; i >= 0; i--) {
     const ym = nowYm - i;
     const year = Math.floor((ym - 1) / 12);
@@ -68,6 +73,7 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
       marketValue: snaps.reduce((sum, s) => sum + s.marketValue, 0),
       investedAmount: snaps.reduce((sum, s) => sum + s.investedAmount, 0),
     });
+    monthMetaYear.push(year);
   }
   const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals);
 
@@ -78,15 +84,32 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   // visível também — senão o gráfico começaria faltando o primeiro ponto.
   const baselineSnaps = activeSnapshotsAsOf(all, nowYm - 12);
   const baselineInvested = baselineSnaps.length > 0 ? baselineSnaps.reduce((sum, s) => sum + s.investedAmount, 0) : null;
-  const investedByMonth: { label: string; value: number }[] = [];
+  // Guarda o ano-calendário junto de cada delta — sem baseline (12 meses
+  // atrás sem snapshot nenhum), o primeiro mês de `monthlyTotals` fica de
+  // fora do `investedByMonth` (não dá pra calcular delta sem "antes"), então
+  // os índices dos dois arrays NÃO alinham 1:1 nesse caso — não dá pra
+  // recuperar o ano depois só pelo índice, precisa vir junto aqui.
+  const investedByMonthWithYear: { label: string; value: number; year: number }[] = [];
   let prevInvested = baselineInvested;
   for (let idx = 0; idx < monthlyTotals.length; idx++) {
     const current = monthlyTotals[idx].investedAmount;
     if (prevInvested !== null) {
-      investedByMonth.push({ label: evolution[idx].label, value: current - prevInvested });
+      investedByMonthWithYear.push({ label: evolution[idx].label, value: current - prevInvested, year: monthMetaYear[idx] });
     }
     prevInvested = current;
   }
+  const investedByMonth = investedByMonthWithYear.map(({ label, value }) => ({ label, value }));
+
+  // ---- aportado REAL no ano corrente até agora — comparação com a coluna
+  // "contribution" (planejada) do yearlyBreakdown da "Primeira Milhão"
+  // (pedido do Luiz, 04/09: "em 2026 tá escrito que eu devia aportar 30k,
+  // mas eu fiz isso?"). Soma só as entradas cujo mês cai no ano corrente —
+  // sempre um subconjunto dos últimos 12 meses (jan a dezembro nunca passa
+  // de 12 meses atrás de "agora").
+  const currentCalendarYear = new Date().getFullYear();
+  const realContributionThisYear = investedByMonthWithYear
+    .filter((e) => e.year === currentCalendarYear)
+    .reduce((sum, e) => sum + e.value, 0);
 
   // ---- aportes do mês: variação do total investido (não posição por posição) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
@@ -147,7 +170,8 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     total,
     wealthGoal?.targetAmount ?? null,
     wealthGoal?.monthlyContribution ?? 0,
-    avgMonthlyReturnPct
+    avgMonthlyReturnPct,
+    realContributionThisYear
   );
 
   res.json({

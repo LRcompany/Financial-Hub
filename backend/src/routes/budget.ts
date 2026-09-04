@@ -110,6 +110,25 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const previousTotalIncome = previousIncomeAgg._sum.amount ?? 0;
   const incomeFromProjects = incomeFromProjectsAgg._sum.amount ?? 0;
 
+  // Histórico de entrada por mês (últimos 12, terminando no mês navegado) —
+  // pro gráfico "Por mês" dentro do próprio box "Entradas do mês" (pedido do
+  // Luiz, 04/09: "quero visualizar isso"). Busca tudo de uma vez (mesmo
+  // padrão do last14Days abaixo) e agrupa em memória, em vez de 12 queries.
+  const twelveMonthsAgoStart = new Date(year, month - 12, 1);
+  const incomeHistoryTransactions = await prisma.transaction.findMany({
+    where: { type: "income", isTransfer: false, date: { gte: twelveMonthsAgoStart, lt: monthEnd } },
+    select: { date: true, amount: true },
+  });
+  const incomeByMonth: { label: string; value: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const bucketStart = new Date(year, month - 1 - i, 1);
+    const bucketEnd = new Date(year, month - i, 1);
+    const value = incomeHistoryTransactions
+      .filter((t) => t.date >= bucketStart && t.date < bucketEnd)
+      .reduce((sum, t) => sum + t.amount, 0);
+    incomeByMonth.push({ label: bucketStart.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), value });
+  }
+
   // Gasto de hoje e série dos últimos 14 dias — todas as despesas do período,
   // não só as categorizadas no orçamento (reflete o gasto real do dia a dia).
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -179,6 +198,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     totalIncome,
     previousTotalIncome,
     incomeFromProjects,
+    incomeByMonth,
     categories,
   });
 });

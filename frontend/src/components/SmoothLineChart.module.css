@@ -1,6 +1,14 @@
 .wrap {
-  position: relative;
   width: 100%;
+}
+
+/* Altura FIXA própria (definida inline via `style={{height}}`) — as bolinhas
+ * e o tooltip usam `top: X%` relativo a ESSE container, não ao `.wrap`
+ * inteiro (que também tem o rodapé de datas embaixo). Se dividissem o mesmo
+ * container, a altura do rodapé entraria na conta do "X%" e desalinharia a
+ * bolinha da linha (bug real, 04/09). */
+.chartArea {
+  position: relative;
 }
 
 .svg {

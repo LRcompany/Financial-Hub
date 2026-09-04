@@ -237,6 +237,15 @@ export function Patrimonio() {
   const total = wealth.total ?? 0
   const goalProgress = wealth.wealthGoal ? Math.min((total / wealth.wealthGoal.targetAmount) * 100, 100) : 0
 
+  // Quanto JÁ deveria ter sido aportado desde janeiro até agora (não o ano
+  // inteiro) — é a base de comparação correta pro `realContribution` da
+  // linha do ano corrente. O `contribution` daquela mesma linha na tabela é
+  // outra coisa (quanto ainda falta aportar dali até dezembro, pra projeção
+  // futura) — comparar `realContribution` com ELE seria comparar períodos
+  // diferentes (jan-agora vs. agora-dezembro), por isso a base separada aqui.
+  const monthsElapsedThisYear = new Date().getMonth() + 1
+  const plannedContributionSoFarThisYear = wealth.wealthGoal ? wealth.wealthGoal.monthlyContribution * monthsElapsedThisYear : null
+
   // Mesma regra das boxes abaixo: corretora única vira o nome dela em vez do
   // tipo genérico ("Moeda" não é onde eu invisto, é só classificação do ativo).
   const allocationData = positions.map((group) => {
@@ -543,7 +552,8 @@ export function Patrimonio() {
                       <tr>
                         <th>Ano</th>
                         <th>Saldo inicial</th>
-                        <th>Aporte no ano</th>
+                        <th>Aporte planejado</th>
+                        <th>Aportado real</th>
                         <th>Saldo final</th>
                       </tr>
                     </thead>
@@ -553,12 +563,41 @@ export function Patrimonio() {
                           <td>{row.year}</td>
                           <td>R$ {currency(row.startBalance)}</td>
                           <td>R$ {currency(row.contribution)}</td>
+                          {/* Só o ano corrente tem "real" (histórico ainda
+                           * não existe pros anos futuros da projeção). Base de
+                           * comparação é "planejado de janeiro até agora"
+                           * (`plannedContributionSoFarThisYear`), NÃO a coluna
+                           * "Aporte planejado" ao lado — aquela é o restante
+                           * do ano (agora até dezembro), período diferente do
+                           * "real" (janeiro até agora); comparar os dois seria
+                           * comparar janelas de tempo que não se sobrepõem
+                           * (pedido do Luiz, 04/09: "eu fiz isso?"). */}
+                          <td>
+                            {row.realContribution != null ? (
+                              <>
+                                R$ {currency(row.realContribution)}
+                                {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                                  <span className={styles.realContributionPct}>
+                                    {' '}
+                                    ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}% da meta até agora)
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                           <td>R$ {currency(row.endBalance)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                <p className={styles.helperText}>
+                  "Aporte planejado" do ano corrente é só o que falta aportar dele pra frente (base da projeção) — "Aportado
+                  real" é o que já entrou desde janeiro. São dois períodos diferentes do mesmo ano, não o mesmo valor visto
+                  de duas formas.
+                </p>
               </>
             )}
           </div>

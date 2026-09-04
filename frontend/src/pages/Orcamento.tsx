@@ -235,10 +235,25 @@ export function Orcamento() {
             </span>
             <MonthDelta current={budget.totalIncome} previous={budget.previousTotalIncome} />
           </div>
+          {/* Histórico de entrada por mês — Luiz pediu pra visualizar o
+           * ritmo mês a mês, não só o total do mês navegado isolado (04/09). */}
+          {budget.incomeByMonth.length >= 2 && (
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <h4 className={styles.chartLabel}>Por mês</h4>
+              <SmoothLineChart
+                values={budget.incomeByMonth.map((m) => m.value)}
+                labels={budget.incomeByMonth.map((m) => m.label)}
+                gradientId="incomeByMonthGradient"
+                className={cards.evolutionChart}
+              />
+            </div>
+          )}
         </div>
 
         {/* ---------- total do mês: pizza de onde o dinheiro foi ---------- */}
-        <div className={`${cards.card} ${cards.fullWidth}`}>
+        {/* Lado a lado com "Gasto diário" (esquerda, coluna 1.3fr) — pedido
+         * do Luiz, 04/09. */}
+        <div className={cards.card}>
           <CardHeader
             icon={PieChart}
             title="Onde meu dinheiro foi este mês"
@@ -271,7 +286,8 @@ export function Orcamento() {
         </div>
 
         {/* ---------- gasto diário ---------- */}
-        <div className={`${cards.card} ${cards.fullWidth}`}>
+        {/* Lado a lado com "Onde meu dinheiro foi" (direita, coluna 1fr). */}
+        <div className={cards.card}>
           <CardHeader
             icon={Target}
             title="Gasto diário"

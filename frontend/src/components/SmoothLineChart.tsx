@@ -11,11 +11,14 @@ const GRADIENT_STOPS = [
 ]
 
 /** Índices dos pontos que ganham uma linha vertical de referência sempre
- * visível (não só no hover) — demarcação mínima pra dar uma noção de escala
- * de primeira, sem precisar passar o mouse. Com poucos pontos, marca todos;
- * com muitos (ex: 24 meses), limita a um número razoável pra não virar um
- * "código de barras" — sempre inclui o primeiro e o último. */
-function pickTickIndices(count: number, max = 8): number[] {
+ * visível (não só no hover) e uma data no rodapé — demarcação pra dar uma
+ * noção de escala de primeira, sem precisar passar o mouse. `max=14` cobre
+ * os dois casos reais de hoje sem pular nenhum (14 dias, 12 meses) — 04/09,
+ * o Luiz reparou que tava pulando dia/mês sem motivo aparente com o max=8
+ * antigo. Só reduz de verdade se algum gráfico futuro passar de 14 pontos
+ * (ex: 24 meses), pra não virar um "código de barras" — sempre inclui o
+ * primeiro e o último nesse caso. */
+function pickTickIndices(count: number, max = 14): number[] {
   if (count <= max) return Array.from({ length: count }, (_, i) => i)
   const step = (count - 1) / (max - 1)
   const indices = new Set<number>()
@@ -104,14 +107,23 @@ export function SmoothLineChart({
   const hover = hoverIndex !== null ? points[hoverIndex] : null
 
   return (
-    <div
-      ref={wrapRef}
-      className={`${styles.wrap} ${className ?? ''}`}
-      onMouseMove={(e) => updateHoverFromClientX(e.clientX)}
-      onMouseLeave={() => setHoverIndex(null)}
-      onTouchMove={(e) => updateHoverFromClientX(e.touches[0].clientX)}
-      onTouchEnd={() => setHoverIndex(null)}
-    >
+    <div className={`${styles.wrap} ${className ?? ''}`}>
+      {/* Área do gráfico isolada numa altura FIXA própria — as bolinhas e o
+       * tooltip abaixo se posicionam com `top: X%` relativo a esse container.
+       * Precisa ser um container separado do rodapé de datas: se datas e
+       * bolinhas dividissem o mesmo `.wrap`, a altura do rodapé entraria no
+       * cálculo de "X%" e as bolinhas ficariam desalinhadas da linha (bug
+       * real, 04/09 — print do Luiz mostrando a bolinha flutuando abaixo do
+       * fim da linha, exatamente esse desalinhamento). */}
+      <div
+        ref={wrapRef}
+        className={styles.chartArea}
+        style={{ height }}
+        onMouseMove={(e) => updateHoverFromClientX(e.clientX)}
+        onMouseLeave={() => setHoverIndex(null)}
+        onTouchMove={(e) => updateHoverFromClientX(e.touches[0].clientX)}
+        onTouchEnd={() => setHoverIndex(null)}
+      >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={styles.svg} style={{ height }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
@@ -185,6 +197,7 @@ export function SmoothLineChart({
           </div>
         </div>
       )}
+      </div>
 
       {/* Datas pequenas sempre visíveis no rodapé, alinhadas com as mesmas
        * tick lines de cima — as linhas verticais sozinhas "pulavam" sem dar

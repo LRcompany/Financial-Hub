@@ -68,6 +68,12 @@
   border-bottom: none;
 }
 
+.realContributionPct {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
 .iconBtn {
   width: 28px;
   height: 28px;
