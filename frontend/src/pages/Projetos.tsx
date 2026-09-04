@@ -416,8 +416,10 @@ function ProjectCard({
         {expanded ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
         <div className={styles.projectHeaderBody}>
           <div className={styles.projectHeaderTop}>
-            <span className={styles.projectName}>
-              {project.client.name} <span className={styles.projectNameSep}>•</span> {project.name}
+            <span className={styles.projectHeaderTitle}>
+              <span className={styles.projectName}>{project.client.name}</span>
+              <span className={styles.projectNameSep}>•</span>
+              <span className={styles.projectNameSecondary}>{project.name}</span>
             </span>
             <div className={styles.projectHeaderActions} onClick={(e) => e.stopPropagation()}>
               <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>

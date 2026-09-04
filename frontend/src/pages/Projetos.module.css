@@ -111,17 +111,38 @@
   gap: var(--space-2);
 }
 
+/* "Cliente • Projeto" — o wrapper (não o .projectName sozinho) que ocupa o
+   espaço flexível, pra caber os 3 pedaços (cliente/separador/projeto) e
+   ainda truncar o nome do projeto se precisar, sem afetar o cliente. */
+.projectHeaderTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
 .projectName {
   font-size: 14.5px;
   font-weight: 600;
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .projectNameSep {
   color: var(--ink-faint);
   font-weight: 400;
-  margin: 0 1px;
+}
+
+/* Nome do projeto — secundário ao cliente: fonte menor, cinza, trunca com
+   "..." se não couber (o cliente é o que precisa ficar sempre legível). */
+.projectNameSecondary {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* linha 2 do header: nome do projeto + datas à esquerda, valor à direita —

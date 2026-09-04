@@ -283,10 +283,17 @@
 /* Separada visualmente do resto da lista (fundo próprio, texto maior) —
    pra bater o olho e ver a diferença entre o total e as categorias sem
    precisar ler número por número. */
+/* Radius menor que o do .card (--r-sm, não --r-lg) — --r-lg (28px) numa
+   caixa compacta como essa (label + valor + barrinha, ~80px de altura)
+   ficava desproporcional, quase uma pílula. Padding generoso (--space-5,
+   igual ao .card) em vez de --space-4 — era isso que dava a sensação de
+   "esmagado". Esse é o padrão pra qualquer caixa desse tipo (destaque de
+   valor único, não um card inteiro nem um tile pequeno de grid) — repita
+   --r-sm + --space-5 em vez de inventar um radius/padding novo cada vez. */
 .totalRow {
   background: var(--fill-muted);
-  border-radius: var(--r-lg);
-  padding: var(--space-4);
+  border-radius: var(--r-sm);
+  padding: var(--space-5);
 }
 
 .totalLabel {

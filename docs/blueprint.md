@@ -875,6 +875,11 @@ Luiz mandou prints do app no celular apontando 5 problemas. O mais sério ("scro
 - **Recebimentos e Fornecedores em boxes cinza separados**: as duas listas dividiam o mesmo fundo branco do card, sem nenhuma fronteira visual — pareciam uma coisa só. Cada `.detailSection` agora tem fundo `var(--fill-muted)` (cinza claro) + padding próprio, com o gap de `var(--space-5)` entre as duas (já existente) criando a margem pedida. Dentro de Fornecedores, cada `.supplierBlock` (que também usava fill-muted) mudou pra `var(--surface)` (branco) + borda, pra contrastar com o novo fundo cinza do container em vez de se misturar nele.
 - Testado ao vivo em viewport mobile real (375×812): `scrollWidth` medido em Dashboard/Orçamento/Patrimônio/Projetos (colapsado, expandido, com modal aberto) — todos ≤ 358px, sem scroll horizontal em lugar nenhum. Console sem erro. PIN de teste removido do banco ao final.
 
+### 2 ajustes de acabamento (04/09): hierarquia "Cliente • Projeto" + padrão de caixa compacta
+
+- **"Cliente • Projeto" ganhou hierarquia visual**: os dois vinham no mesmo tamanho/cor (`.projectName` pra tudo) — Luiz pediu pra deixar o nome do projeto menor e cinza, só o cliente em destaque. Virou 3 `<span>`s (`.projectName` pro cliente, `.projectNameSep` pro "•", `.projectNameSecondary` novo — 12,5px, `var(--ink-soft)`) dentro de um `.projectHeaderTitle` que é quem agora carrega o `flex:1;min-width:0`; o nome do projeto trunca com "..." se não couber, o cliente nunca trunca.
+- **Padrão de caixa compacta definido**: `.totalRow` ("Total do mês" no Dashboard) tinha padding `var(--space-4)` (16px) e `border-radius: var(--r-lg)` (28px) — 28px de raio numa caixa de ~80px de altura ficava desproporcional (quase uma pílula), e o padding apertado dava a sensação de espremido. Novo padrão pra esse TIPO de elemento (destaque de valor único dentro de um card — diferente de tile de grid pequeno tipo `.statTile`, e diferente do `.card` em si): `border-radius: var(--r-sm)` (12px) + `padding: var(--space-5)` (24px, igual ao `.card`). Registrado aqui pra próxima caixa desse tipo replicar em vez de inventar um radius/padding novo.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
