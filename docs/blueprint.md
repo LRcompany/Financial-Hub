@@ -889,6 +889,15 @@ Luiz perguntou por que o pagamento da fatura BTG (R$3.769,98) não apareceu no g
 - **Auditoria completa, não só esse caso**: cruzei as 427 transações Pluggy reais (BTG 37 + C6 390) contra produção — **0 faltando no banco, 0 valor divergente, só essa 1 data divergente**. Caso isolado, não sistêmico; C6 (uso diário, 390 transações) 100% limpo.
 - **Corrigido**: `UPDATE` direto em produção só nessa 1 linha (`date` de 03/02 pra 22/08), backup feito antes e apagado depois de confirmar. Nenhuma mudança de código — Luiz optou por corrigir só o caso pontual por enquanto, não mudar a lógica do sync pra auto-atualizar (ficaria como possível melhoria futura se o padrão se repetir).
 
+### Ícone da tela de início do iPhone (04/09): raio grande demais + fundo preto
+
+Luiz mandou print de como o ícone aparece na tela de início do iPhone — raio ocupando quase o ícone inteiro, fundo preto (devia ser branco). Causa: `icon-192.png`/`icon-512.png` (usados pelo manifest da PWA) tinham o raio ocupando quase 100% do canvas E com canal alfa (fundo transparente, não branco de verdade) — iOS preenche área transparente de ícone de tela de início com preto (comportamento conhecido do Safari/PWA no iOS, não é bug do nosso lado, mas dava pra evitar).
+
+- **Recriado a partir do vetor original** (`favicon.svg`, com todos os gradientes/blur originais preservados): raio escalado pra ~44% do canvas (era quase 100%) e centralizado num fundo branco sólido.
+- **Canal alfa removido de propósito** (não só pintado de branco por trás) — testado com `sips --getProperty hasAlpha`: o PNG exportado do `<canvas>` do navegador SEMPRE volta com alfa (`toDataURL('image/png')` não respeita `{alpha:false}` do contexto, confirmado tentando) — resolvido com um round-trip PNG→JPEG(qualidade 100)→PNG só pra achatar o canal alfa de vez, sem risco nenhum de o iOS voltar a preencher de preto por trás.
+- **`apple-touch-icon` explícito** adicionado no `index.html` (apontando pro `icon-192.png` novo) — reforço pra iOS mais antigo que não lê o `icons` do manifest, só esse link específico.
+- Gerado via `<canvas>` no próprio navegador (sem precisar instalar rsvg-convert/ImageMagick/Pillow no ambiente) — servidor HTTP local descartável em `/tmp` só pra servir o SVG intermediário, tudo apagado depois.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
