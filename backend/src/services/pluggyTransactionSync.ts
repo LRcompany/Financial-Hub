@@ -31,7 +31,17 @@ interface PluggyAccountRaw {
 interface PluggyTransaction {
   id: string;
   description: string;
+  // `amount` é no valor ORIGINAL da transação — pra compra internacional
+  // (Google Workspace, Claude, qualquer assinatura em dólar) isso é o valor
+  // em USD, NÃO o que realmente saiu do cartão em reais. `currencyCode`
+  // avisa a moeda; `amountInAccountCurrency` é o valor JÁ convertido pra
+  // reais (04/09: achado com dado real — Google Workspace guardava US$7,00
+  // quando o valor real cobrado era R$38,17; acontecia com TODA transação
+  // em moeda estrangeira, 13 meses seguidos, nunca só uma). Pra gravar
+  // gasto de verdade usa sempre `realAmount()`, nunca `tx.amount` puro.
   amount: number;
+  currencyCode?: string | null;
+  amountInAccountCurrency?: number | null;
   date: string;
   type: string; // DEBIT | CREDIT
   status: string; // PENDING | POSTED
@@ -42,6 +52,12 @@ interface PluggyTransaction {
     installmentNumber?: number | null;
     billForecastDate?: string | null; // "YYYY-MM"
   } | null;
+}
+
+/** Valor real gasto em reais — usa a conversão da Pluggy quando ela existe
+ * (transação em moeda estrangeira), senão cai pro `amount` puro (já é BRL). */
+function realAmount(tx: PluggyTransaction): number {
+  return tx.amountInAccountCurrency ?? tx.amount;
 }
 
 // Cobrança que SEMPRE vem acompanhada do estorno correspondente no mesmo
@@ -150,7 +166,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
             data: {
               date: new Date(tx.date),
               description: tx.description,
-              amount: tx.amount,
+              amount: realAmount(tx),
               isTransfer,
               categoryId,
               pluggyPending: false,
@@ -178,7 +194,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           date: new Date(tx.date),
           type: "expense",
           description: tx.description,
-          amount: tx.amount,
+          amount: realAmount(tx),
           source: "pluggy",
           externalId,
           isTransfer,
@@ -215,17 +231,21 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       const forecast = meta.billForecastDate;
       if (!forecast || total <= current) continue;
       const anchorDay = new Date(tx.date).getDate();
+      // Projeção usa o valor REAL (convertido) da parcela mais recente como
+      // estimativa das próximas — é a mesma aproximação que já existia,
+      // só que agora com o valor certo em reais (não o valor em dólar).
+      const projectedAmount = realAmount(tx);
       for (let n = current + 1; n <= total; n++) {
         const installmentExternalId = `pluggy:${tx.id}:${n}`;
         const dueDate = futureDueDate(forecast, n - current, anchorDay);
         await prisma.upcomingInstallment.upsert({
           where: { externalId: installmentExternalId },
-          update: { dueDate, description: tx.description, amount: tx.amount, cardLabel: broker.name, categoryId },
+          update: { dueDate, description: tx.description, amount: projectedAmount, cardLabel: broker.name, categoryId },
           create: {
             externalId: installmentExternalId,
             dueDate,
             description: tx.description,
-            amount: tx.amount,
+            amount: projectedAmount,
             cardLabel: broker.name,
             categoryId,
           },
