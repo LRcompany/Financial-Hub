@@ -6,7 +6,6 @@ import {
   Flag,
   TrendingUp,
   TrendingDown,
-  Trash2,
   Layers,
   Plus,
   X,
@@ -14,16 +13,14 @@ import {
   Building2,
   Bitcoin,
   DollarSign,
-  FileUp,
 } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType, type Position, type Broker } from '../lib/api'
+import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
-import { StatementUploadModal } from '../components/StatementUploadModal'
 import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
@@ -144,8 +141,6 @@ export function Patrimonio() {
   const [positions, setPositions] = useState<PositionsByType[]>([])
   const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
-  const [brokers, setBrokers] = useState<Broker[]>([])
-  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -159,14 +154,8 @@ export function Patrimonio() {
   const [savingPosition, setSavingPosition] = useState(false)
 
   const [targetInput, setTargetInput] = useState('')
-  const [savingTarget, setSavingTarget] = useState(false)
-
-  const [yearForm, setYearForm] = useState({
-    year: String(new Date().getFullYear()),
-    savingsTarget: '',
-    annualReturnAssumptionPct: '',
-  })
-  const [savingYear, setSavingYear] = useState(false)
+  const [contributionInput, setContributionInput] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
 
   function load() {
     api
@@ -174,6 +163,7 @@ export function Patrimonio() {
       .then((w) => {
         setWealth(w)
         setTargetInput(w.wealthGoal ? String(w.wealthGoal.targetAmount) : '')
+        setContributionInput(w.wealthGoal ? String(w.wealthGoal.monthlyContribution) : '')
       })
       .catch(() => setError(true))
     api
@@ -195,10 +185,6 @@ export function Patrimonio() {
     api
       .fxRate()
       .then((r) => setUsdToBrl(r.usdToBrl))
-      .catch(() => {})
-    api
-      .brokers()
-      .then(setBrokers)
       .catch(() => {})
   }
 
@@ -227,38 +213,18 @@ export function Patrimonio() {
     }
   }
 
-  async function saveTarget(e: React.FormEvent) {
+  async function saveGoal(e: React.FormEvent) {
     e.preventDefault()
-    const value = Number(targetInput)
-    if (!value || value <= 0) return
-    setSavingTarget(true)
+    const targetAmount = Number(targetInput)
+    const monthlyContribution = Number(contributionInput)
+    if (!targetAmount || targetAmount <= 0) return
+    setSavingGoal(true)
     try {
-      await api.setWealthGoalTarget(value)
+      await api.setWealthGoal({ targetAmount, monthlyContribution: monthlyContribution || 0 })
       load()
     } finally {
-      setSavingTarget(false)
+      setSavingGoal(false)
     }
-  }
-
-  async function saveYear(e: React.FormEvent) {
-    e.preventDefault()
-    const year = Number(yearForm.year)
-    const savingsTarget = Number(yearForm.savingsTarget)
-    const annualReturnAssumptionPct = Number(yearForm.annualReturnAssumptionPct)
-    if (!year || !savingsTarget || !annualReturnAssumptionPct) return
-    setSavingYear(true)
-    try {
-      await api.setWealthGoalYearly(year, savingsTarget, annualReturnAssumptionPct)
-      setYearForm({ year: String(year + 1), savingsTarget: '', annualReturnAssumptionPct: '' })
-      load()
-    } finally {
-      setSavingYear(false)
-    }
-  }
-
-  async function removeYear(year: number) {
-    await api.deleteWealthGoalYearly(year)
-    load()
   }
 
   if (error) {
@@ -328,8 +294,8 @@ export function Patrimonio() {
               <CardHeader icon={Activity} title="Destaques do mês" />
               {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
               {wealth.movers.map((m, i) => (
-                <div key={`${m.ticker}-${i}`} className={cards.moverRow}>
-                  <span className={cards.moverTicker}>{m.ticker}</span>
+                <div key={`${m.category}-${i}`} className={cards.moverRow}>
+                  <span className={cards.moverTicker}>{m.category}</span>
                   <span className={cards.moverChange}>
                     {m.changePct >= 0 ? (
                       <TrendingUp size={14} className={cards.dirIn} />
@@ -370,27 +336,10 @@ export function Patrimonio() {
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
               const usdTotal = groupUsdTotal(group, usdToBrl)
-              // Upload de extrato é específico do formato Nomad/Apex Clearing
-              // (parseNomadStatement) — não é genérico pra qualquer corretora
-              // manual_statement (INCO também é standalone+manual, mas não
-              // tem PDF nesse formato; usaria o parser errado).
-              const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
-              const supportsStatementUpload = broker?.name === 'NOMAD'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader
-                    icon={Icon}
-                    title={title}
-                    action={
-                      supportsStatementUpload && broker ? (
-                        <button className={styles.uploadBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
-                          <FileUp size={13} strokeWidth={2} />
-                          Atualizar por extrato
-                        </button>
-                      ) : undefined
-                    }
-                  />
+                  <CardHeader icon={Icon} title={title} />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
@@ -505,8 +454,12 @@ export function Patrimonio() {
         {/* ---------- Primeira Milhão ---------- */}
           <div className={`${cards.card} ${cards.fullWidth}`}>
             <CardHeader icon={Flag} title="Primeira Milhão" />
+            <p className={styles.helperText}>
+              Meta simples: quanto falta, e em quanto tempo eu chego lá se continuar do jeito que estou. O retorno usado
+              na conta é a média real da minha carteira nos últimos meses — não um chute.
+            </p>
 
-            <form className={styles.targetForm} onSubmit={saveTarget}>
+            <form className={styles.targetForm} onSubmit={saveGoal}>
               <Input
                 label="Meta geral (R$)"
                 type="number"
@@ -515,8 +468,16 @@ export function Patrimonio() {
                 value={targetInput}
                 onChange={(e) => setTargetInput(e.target.value)}
               />
-              <button className={cards.saveBtn} type="submit" disabled={savingTarget}>
-                Salvar meta
+              <Input
+                label="Quanto pretendo investir por mês (R$)"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={contributionInput}
+                onChange={(e) => setContributionInput(e.target.value)}
+              />
+              <button className={cards.saveBtn} type="submit" disabled={savingGoal}>
+                Salvar
               </button>
             </form>
 
@@ -537,12 +498,26 @@ export function Patrimonio() {
                 <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
                   <div className={cards.progressFill} style={{ width: `${goalProgress}%`, background: 'var(--accent)' }} />
                 </div>
-                <div className={cards.chartMeta}>
-                  {wealth.wealthGoalYearly.length === 0 && (
-                    <span>adicione pelo menos uma meta anual abaixo pra ver a projeção de data</span>
+
+                <div className={styles.returnNote}>
+                  {wealth.avgMonthlyReturnPct === null ? (
+                    <span>ainda não tenho pelo menos 2 meses de histórico real pra calcular o retorno da carteira</span>
+                  ) : (
+                    <span>
+                      retorno médio real: {wealth.avgMonthlyReturnPct >= 0 ? '+' : ''}
+                      {wealth.avgMonthlyReturnPct.toFixed(2)}% ao mês (~
+                      {(((1 + wealth.avgMonthlyReturnPct / 100) ** 12 - 1) * 100).toFixed(1)}% ao ano), média dos
+                      últimos {wealth.evolution.length} meses de dado real
+                    </span>
                   )}
-                  {wealth.wealthGoalYearly.length > 0 && wealth.projection === null && (
-                    <span>no ritmo das metas anuais configuradas, a meta não é alcançada nos próximos 50 anos</span>
+                </div>
+
+                <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+                  {wealth.projection === null && (
+                    <span>
+                      no ritmo atual (retorno real + aporte mensal), a meta não é alcançada nos próximos 50 anos —
+                      considere aumentar o aporte mensal
+                    </span>
                   )}
                   {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
                   {wealth.projection && wealth.projection.monthsToGoal > 0 && (
@@ -553,66 +528,11 @@ export function Patrimonio() {
                         year: 'numeric',
                       })}{' '}
                       (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
-                      {wealth.projection.usedExtrapolation && ' — usando a meta do último ano configurado pra frente'}
                     </span>
                   )}
                 </div>
               </>
             )}
-
-            <h3 className={styles.subheading}>Meta por ano</h3>
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Ano</th>
-                    <th>Aporte no ano</th>
-                    <th>Retorno assumido</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wealth.wealthGoalYearly.map((row) => (
-                    <tr key={row.year}>
-                      <td>{row.year}</td>
-                      <td>R$ {currency(row.savingsTarget)}</td>
-                      <td>{row.annualReturnAssumptionPct}% a.a.</td>
-                      <td>
-                        <button className={styles.iconBtn} onClick={() => removeYear(row.year)} aria-label={`Remover meta de ${row.year}`}>
-                          <Trash2 size={13} strokeWidth={2} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <form className={styles.yearForm} onSubmit={saveYear}>
-              <Input
-                type="number"
-                placeholder="Ano"
-                value={yearForm.year}
-                onChange={(e) => setYearForm({ ...yearForm, year: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Aporte no ano (R$)"
-                value={yearForm.savingsTarget}
-                onChange={(e) => setYearForm({ ...yearForm, savingsTarget: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Retorno assumido (% a.a.)"
-                value={yearForm.annualReturnAssumptionPct}
-                onChange={(e) => setYearForm({ ...yearForm, annualReturnAssumptionPct: e.target.value })}
-              />
-              <button className={cards.saveBtn} type="submit" disabled={savingYear}>
-                Adicionar/atualizar ano
-              </button>
-            </form>
 
             {wealth.yearlyBreakdown.length > 0 && (
               <>
@@ -630,10 +550,7 @@ export function Patrimonio() {
                     <tbody>
                       {wealth.yearlyBreakdown.map((row) => (
                         <tr key={row.year}>
-                          <td>
-                            {row.year}
-                            {row.extrapolated && <span className={styles.extrapolatedTag}>estimado</span>}
-                          </td>
+                          <td>{row.year}</td>
                           <td>R$ {currency(row.startBalance)}</td>
                           <td>R$ {currency(row.contribution)}</td>
                           <td>R$ {currency(row.endBalance)}</td>
@@ -650,18 +567,6 @@ export function Patrimonio() {
       <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
-
-      {uploadTarget && (
-        <StatementUploadModal
-          brokerId={uploadTarget.id}
-          brokerName={uploadTarget.name}
-          onClose={() => setUploadTarget(null)}
-          onSaved={() => {
-            setUploadTarget(null)
-            load()
-          }}
-        />
-      )}
 
       {showAddForm && (
         <div className={styles.overlay} onClick={() => setShowAddForm(false)}>

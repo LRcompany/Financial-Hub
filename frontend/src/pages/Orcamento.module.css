@@ -1,0 +1,454 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.monthLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  min-width: 80px;
+  text-align: center;
+}
+
+.todayBtn {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.reviewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reviewBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.reviewBannerBtn {
+  margin-left: auto;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ofPlanned {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.chartLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-4);
+}
+
+.upcomingDisclaimer {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: var(--space-2) 0 0;
+  line-height: 1.4;
+}
+
+.groupTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 var(--space-4);
+}
+
+.kindSummary {
+  display: flex;
+  gap: var(--space-5);
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.kindSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kindSummaryLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.kindSummaryValue {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- accordion por categoria-mãe ---------- */
+.accordion {
+  border-radius: var(--r-md);
+  margin-bottom: var(--space-1);
+}
+
+.accordionOpen {
+  background: var(--accent-soft);
+}
+
+.accordionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: none;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+}
+
+.accordionToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-full);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.accordionOpen .accordionToggle {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.accordionName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.accordionBody {
+  /* indent alinha embaixo do nome da categoria-mãe: espaço à esquerda do
+     header (var(--space-4)) + largura do círculo do toggle (22px) + gap
+     até o nome (var(--space-3)) */
+  padding: 0 var(--space-4) var(--space-3) calc(22px + var(--space-4) + var(--space-3));
+}
+
+.categoryColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .categoryColumns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- linha de categoria (sem barra — só destaca quando estoura) ---------- */
+.categoryRow {
+  padding: var(--space-2) 0;
+}
+
+.categoryRow + .categoryRow {
+  margin-top: var(--space-2);
+}
+
+.categoryRowOver {
+  background: var(--danger-soft);
+  border-radius: var(--r-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-left: calc(var(--space-3) * -1);
+  margin-right: calc(var(--space-3) * -1);
+}
+
+.categoryRowTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.categoryRowName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overIcon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.categoryRowValues {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.spentValue {
+  color: var(--ink-soft);
+}
+
+.plannedBold {
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.spentOver {
+  color: var(--danger);
+}
+
+/* ---------- cartões de crédito ---------- */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .cardsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.creditCardTile {
+  background: var(--fill-muted);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
+}
+
+.creditCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.creditCardName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.creditCardBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.creditCardBrand {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estimatedTag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estimatedNote {
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.4;
+  margin: var(--space-2) 0 0;
+}
+
+.creditCardFooter {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-top: var(--space-2);
+}
+
+/* ---------- parcelas futuras ---------- */
+.upcomingByMonth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.upcomingMonthChip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+.upcomingMonthChip strong {
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chip do carrossel "Por mês" é um <button> (clicável) — reseta os estilos
+ * padrão de botão pra ficar igual ao chip <div> de "Por cartão". */
+button.upcomingMonthChip {
+  border: 1px solid transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  align-items: flex-start;
+}
+
+button.upcomingMonthChip:hover {
+  border-color: var(--accent-hover);
+}
+
+.upcomingMonthChipActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.upcomingMonthChipActive span {
+  color: var(--ink);
+}
+
+/* ---------- tabela ---------- */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.installmentRawName {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: normal;
+  margin-top: 2px;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.spinningIcon {
+  animation: orcamentoSpin 0.8s linear infinite;
+}
+
+@keyframes orcamentoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

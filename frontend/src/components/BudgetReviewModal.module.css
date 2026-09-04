@@ -20,8 +20,9 @@
   padding: var(--space-5);
   width: 100%;
   max-width: 640px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-md);
 }
 
@@ -29,6 +30,13 @@
   .sheet {
     border-radius: var(--r-lg);
   }
+}
+
+.loading {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
 }
 
 .header {
@@ -55,74 +63,12 @@
   justify-content: center;
   color: var(--ink-soft);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.uploadArea {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-3);
-  padding: var(--space-6) var(--space-4);
-  border: 1px dashed var(--border);
-  border-radius: var(--r-md);
-}
-
-.uploadIcon {
-  color: var(--ink-faint);
-}
-
-.uploadText {
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  margin: 0;
-}
-
-.fileBtn {
-  height: 38px;
-  padding: 0 var(--space-4);
-  background: var(--accent);
-  color: #fff;
-  border-radius: var(--r-full);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-
-.review {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.periodLabel {
-  font-size: 13px;
-  color: var(--ink-soft);
-  margin: 0;
-}
-
-.warningBox {
-  display: flex;
-  gap: var(--space-2);
-  background: var(--warning-soft);
-  color: var(--warning);
-  border-radius: var(--r-sm);
-  padding: var(--space-3);
-  font-size: 12.5px;
-}
-
-.warningBox p {
-  margin: 0 0 4px;
-}
-
-.warningBox p:last-child {
-  margin-bottom: 0;
-}
-
-.tableWrap {
-  overflow-x: auto;
+.listWrap {
+  overflow-y: auto;
+  flex: 1;
 }
 
 .table {
@@ -132,6 +78,9 @@
 }
 
 .table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
   text-align: left;
   font-weight: 600;
   color: var(--ink-soft);
@@ -146,39 +95,46 @@
 .table td {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
-.assetName {
-  font-weight: 500;
-  max-width: 180px;
-}
-
-.cusip {
-  font-size: 11px;
+.parentTrail {
+  font-size: 10.5px;
   color: var(--ink-faint);
-  margin-top: 2px;
+  line-height: 1.3;
 }
 
-.checkLine {
-  font-size: 12.5px;
+.kindTag {
+  font-size: 10px;
+  font-weight: 600;
   color: var(--ink-soft);
-  margin: 0;
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
-.error {
-  font-size: 12.5px;
-  color: var(--danger);
-  margin: 0;
+.previousCell {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rowInput {
+  width: 110px !important;
+  height: 32px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
 }
 
-.secondaryBtn {
+.cancelBtn {
   height: 38px;
   padding: 0 var(--space-4);
   background: var(--fill-muted);
@@ -190,7 +146,7 @@
   cursor: pointer;
 }
 
-.saveBtn {
+.confirmBtn {
   height: 38px;
   padding: 0 var(--space-4);
   background: var(--accent);
@@ -202,8 +158,8 @@
   cursor: pointer;
 }
 
-.saveBtn:disabled,
-.secondaryBtn:disabled {
+.cancelBtn:disabled,
+.confirmBtn:disabled {
   opacity: 0.6;
   cursor: default;
 }

@@ -21,8 +21,16 @@ model Transaction {
   description String
   amount      Float
   source      String   @default("manual") // manual | pluggy | ofx_import
-  externalId  String? // id da transação na Pluggy/OFX, evita duplicar import
+  externalId  String?  @unique // id da transação na Pluggy/OFX, evita duplicar import (upsert)
   isTransfer  Boolean  @default(false) // true = não conta como gasto/receita real
+  // true = a Pluggy reportou como "PENDING" (comum em compra internacional —
+  // entra com descrição genérica tipo "MASTERCARD INTERNACIONAL" antes do
+  // banco confirmar o lojista real). Enquanto true, o próximo sync confere
+  // se já virou "POSTED" e atualiza descrição/valor/categoria pro dado real
+  // — sem isso, uma transação pendente ficava presa com o nome genérico pra
+  // sempre (nosso sync nunca revisita uma já sincronizada). Nunca mexe numa
+  // transação já `false` (poderia sobrescrever categoria corrigida à mão).
+  pluggyPending Boolean @default(false)
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
@@ -51,6 +59,46 @@ model Transaction {
   @@index([categoryId])
 }
 
+// Parcela de compra parcelada que ainda vai vencer — não é Transaction (não
+// aconteceu de fato ainda, "nada de valor fake"), mas é informação real
+// (vem do próprio livro-razão dele, que já projeta parcela futura). Serve
+// pra responder "quanto ainda tenho comprometido no cartão".
+model UpcomingInstallment {
+  id          String   @id @default(uuid())
+  dueDate     DateTime
+  description String
+  // Nome real do comerciante geralmente vem ilegível da fatura (ex:
+  // "AMAZONMKTPLC HEIMONLTD") — `note` é o detalhe que o Luiz mesmo escreve
+  // ("fone de ouvido bluetooth") pra lembrar o que a compra foi de verdade.
+  // Nunca sobrescreve `description` (que continua batendo com a fatura real).
+  note        String?
+  amount      Float
+  // Qual cartão/fatura essa parcela pertence (ex: "Caixa 5709", "C6", "BTG")
+  // — null pra parcela que veio da planilha sem essa informação (não dava
+  // pra saber o cartão só pelo livro-razão). Permite sintetizar "quanto
+  // ainda falta em cada cartão", não só o total geral.
+  cardLabel   String?
+  // "pluggy:<id da transação>:<parcela N>" pra parcela que veio do sync real
+  // da Pluggy — evita recriar a mesma parcela futura toda vez que o sync
+  // roda de novo. Null pra parcela importada da planilha (sem esse conceito).
+  externalId String? @unique
+  // Total de parcelas da compra (ex: 10 numa compra parcelada em 10x) —
+  // override MANUAL (Luiz corrige na modal "Revisar parcelas"). Pra parcela
+  // vinda do sync real da Pluggy, dá pra DERIVAR isso sem esse campo (maior
+  // N visto no externalId "pluggy:<txId>:<N>" entre as parcelas da mesma
+  // compra), então esse campo normalmente fica null e o cálculo automático
+  // já resolve. Só é preenchido quando o automático erra ou quando a parcela
+  // é da planilha antiga (sem externalId, sem como derivar nada sozinho).
+  totalInstallments Int?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([dueDate])
+}
+
 model Recurrence {
   id           String    @id @default(uuid())
   frequency    String    @default("monthly") // monthly (único usado hoje)
@@ -65,8 +113,13 @@ model Category {
   id       String  @id @default(uuid())
   name     String
   type     String // income | expense
-  essential Boolean @default(false) // só relevante para expense
-  usage    String? // pessoal | trabalho
+  // Só relevante pra expense — 3 estados reais (não dava pra fazer isso com
+  // um booleano "essential" só): essential | non_essential | investment.
+  // "investment" é a seção separada da planilha do Luiz (Reserva de
+  // Emergência, Nomad, Ações...) — não é "gasto" no sentido normal, então
+  // nunca deveria ter ficado misturada com Streaming/Cinema em "não
+  // essencial" (era exatamente isso que a coluna essential=false fazia).
+  kind     String  @default("non_essential")
 
   parentId String?
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
@@ -75,6 +128,7 @@ model Category {
   transactions   Transaction[]
   budgetTargets  BudgetTarget[]
   categorizationRules CategorizationRule[]
+  upcomingInstallments UpcomingInstallment[]
 
   @@unique([name, parentId])
 }
@@ -151,6 +205,11 @@ model Broker {
   // de espalhar as posições por tipo de ativo (Nomad: bonds e ETF ficam
   // juntos, não bonds em "Renda Fixa" e ETF em "Fundo" — é uma carteira só).
   standalone        Boolean  @default(false)
+  // Conexão que o Luiz não usa mais, mas cujo histórico real (posições,
+  // transações) não pode ser apagado sem querer — arquivar tira a corretora
+  // das telas ativas (Patrimônio, sync automático, botão Sincronizar) sem
+  // perder nenhum registro. Reversível a qualquer momento (desarquivar).
+  archivedAt        DateTime?
 
   transactions     Transaction[]
   positionSnapshots PositionSnapshot[]
@@ -202,21 +261,17 @@ model PositionSnapshot {
   @@unique([brokerId, securityId, month, year])
 }
 
-// Meta geral (o "1º milhão" em si) — singleton, só o valor alvo.
+// Meta geral (o "1º milhão" em si) — singleton: valor alvo + quanto o Luiz
+// pretende investir por mês. Substituiu (01/09) a antiga WealthGoalYearly
+// (tabela ano a ano com "retorno assumido" chutado por ele) — o retorno
+// agora vem calculado de verdade a partir do histórico real de
+// PositionSnapshot (ver services/wealthProjection.ts), só o aporte mensal
+// continua sendo algo só ele sabe (intenção futura, não tem como derivar
+// de dado passado).
 model WealthGoal {
-  id           String @id @default(uuid())
-  targetAmount Float
-}
-
-// Meta ano a ano — espelha a aba "Primeira Milha(o)" da planilha: cada ano
-// tem seu próprio aporte planejado e retorno assumido (em vez de uma taxa
-// única valendo pra sempre). Ano sem linha aqui usa a última configurada
-// (extrapolação, sinalizada na resposta da API).
-model WealthGoalYearly {
-  id                        String @id @default(uuid())
-  year                      Int    @unique
-  savingsTarget             Float // quanto planeja guardar/aportar no ano
-  annualReturnAssumptionPct Float
+  id                 String @id @default(uuid())
+  targetAmount       Float
+  monthlyContribution Float @default(0)
 }
 
 model CategorizationRule {
@@ -232,6 +287,15 @@ model CategorizationRule {
 model Client {
   id       String    @id @default(uuid())
   name     String    @unique
+  // Determina o tratamento de imposto do projeto (01/09, confirmado com o
+  // Luiz): cliente nacional paga DAS fixo 6% sobre o valor — dá pra mostrar
+  // na hora. Cliente estrangeiro tem DAS variável (ele só sabe o valor real
+  // quando chega o boleto, ex: 3,4% da última vez) — imposto fica "a
+  // definir" até existir um TaxPayment real pro mês de competência, e nesse
+  // caso o valor é rateado proporcionalmente entre os projetos daquele mês
+  // (nunca um chute, só o valor real do boleto dividido pela participação
+  // de cada projeto no faturamento do mês).
+  isForeign Boolean   @default(false)
   projects Project[]
 }
 
@@ -306,4 +370,28 @@ model SupplierPayment {
   paymentDate            DateTime
 
   transactions Transaction[]
+}
+
+// ---------- Módulo 3: Acesso (login do app, uso pessoal) ----------
+
+// Trava de acesso do app inteiro — uso pessoal, um usuário só, sem sistema de
+// contas/cadastro. Singleton (igual WealthGoal): guarda só o hash da senha
+// de 6 dígitos (nunca a senha em texto puro). Criada no primeiro acesso
+// (POST /auth/setup), trocável depois em Configurações.
+model AppAuth {
+  id      String @id @default(uuid())
+  pinHash String
+}
+
+// Credencial Face ID/Touch ID (WebAuthn) cadastrada por aparelho — atalho
+// pra não digitar a senha de 6 dígitos toda vez; a senha continua sendo o
+// mecanismo real (sempre disponível como alternativa). `id` é o credential
+// ID que o próprio navegador gera (base64url), não é gerado por nós.
+model WebauthnCredential {
+  id          String   @id
+  publicKey   Bytes
+  counter     Int      @default(0)
+  transports  String? // JSON array (ex: ["internal"])
+  deviceLabel String // ex: "iPhone do Luiz" — escolhido no cadastro
+  createdAt   DateTime @default(now())
 }

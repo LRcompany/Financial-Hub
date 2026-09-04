@@ -87,7 +87,7 @@ positionsRouter.get("/positions", async (_req, res) => {
   }
 
   const standaloneBrokerNames = new Set(
-    (await prisma.broker.findMany({ where: { standalone: true }, select: { name: true } })).map((b) => b.name)
+    (await prisma.broker.findMany({ where: { standalone: true, archivedAt: null }, select: { name: true } })).map((b) => b.name)
   );
 
   const result = [...byType.entries()]
