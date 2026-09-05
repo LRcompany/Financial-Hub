@@ -9,6 +9,7 @@ import { CardHeader } from '../components/CardHeader'
 import { Carousel } from '../components/Carousel'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
+import { TransactionModal } from '../components/TransactionModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -57,6 +58,7 @@ export function Orcamento() {
   const [installmentDetail, setInstallmentDetail] = useState<UpcomingInstallmentsSummary | null>(null)
   const [showReview, setShowReview] = useState(false)
   const [showInstallmentReview, setShowInstallmentReview] = useState(false)
+  const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [copying, setCopying] = useState(false)
   const [syncingTx, setSyncingTx] = useState(false)
 
@@ -565,6 +567,20 @@ export function Orcamento() {
           onClose={() => {
             setShowInstallmentReview(false)
             loadCardsAndUpcoming()
+          }}
+        />
+      )}
+
+      <button className={cards.fab} aria-label="Lançar gasto manual" onClick={() => setShowAddTransaction(true)}>
+        <Plus size={22} strokeWidth={2} />
+      </button>
+
+      {showAddTransaction && (
+        <TransactionModal
+          onClose={() => setShowAddTransaction(false)}
+          onSaved={() => {
+            setShowAddTransaction(false)
+            load()
           }}
         />
       )}

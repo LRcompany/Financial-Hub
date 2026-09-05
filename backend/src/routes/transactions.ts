@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { reinforceRule, categoryPath } from "../services/categorization.js";
+import { reinforceRule, categoryPath, leafExpenseCategories } from "../services/categorization.js";
 
 export const transactionsRouter = Router();
 
@@ -103,12 +103,29 @@ transactionsRouter.put("/transactions/group", async (req, res) => {
   res.json({ updated: result.count });
 });
 
-// POST /api/transactions — lançamento manual avulso
+// GET /api/transactions/leaf-categories — categoria-folha de despesa pro
+// dropdown do lançamento manual (mesma lista de /uncategorized-groups, só sem
+// precisar puxar transação nenhuma pra pedir isso).
+transactionsRouter.get("/transactions/leaf-categories", async (_req, res) => {
+  res.json(await leafExpenseCategories());
+});
+
+// POST /api/transactions — lançamento manual avulso. `brokerId` é opcional
+// (pedido do Luiz, 05/09: "deixe um campo pra falar de qual banco veio essa
+// transação" — pro caso de banco sem Pluggy, ex: Wise) — não precisa bater
+// com um Broker de scope "transactions", qualquer corretora cadastrada serve.
 transactionsRouter.post("/transactions", async (req, res) => {
-  const { date, type, description, amount, categoryId } = req.body;
+  const { date, type, description, amount, categoryId, brokerId } = req.body ?? {};
 
   if (!date || !type || !description || amount == null) {
     return res.status(400).json({ error: "Campos obrigatórios: date, type, description, amount" });
+  }
+  if (type !== "income" && type !== "expense") {
+    return res.status(400).json({ error: 'type precisa ser "income" ou "expense"' });
+  }
+  if (brokerId) {
+    const broker = await prisma.broker.findUnique({ where: { id: brokerId } });
+    if (!broker) return res.status(404).json({ error: "Corretora/banco não encontrado." });
   }
 
   const transaction = await prisma.transaction.create({
@@ -118,6 +135,7 @@ transactionsRouter.post("/transactions", async (req, res) => {
       description,
       amount,
       categoryId: categoryId ?? null,
+      brokerId: brokerId ?? null,
       source: "manual",
     },
   });

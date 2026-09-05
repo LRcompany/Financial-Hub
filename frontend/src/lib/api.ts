@@ -515,6 +515,9 @@ export const api = {
     ),
   categorizeTransactionGroup: (ids: string[], categoryId: string) =>
     request<{ updated: number }>('/transactions/group', { method: 'PUT', body: JSON.stringify({ ids, categoryId }) }),
+  transactionLeafCategories: () => request<LeafCategoryOption[]>('/transactions/leaf-categories'),
+  createTransaction: (input: { date: string; type: 'income' | 'expense'; description: string; amount: number; categoryId?: string; brokerId?: string }) =>
+    postJson<Transaction>('/transactions', input),
   categories: () => request<Category[]>('/categories'),
   createCategory: async (input: { name: string; type?: 'income' | 'expense'; kind?: CategoryKind; parentId?: string }) => {
     const response = await fetch(`${API_URL}/categories`, {

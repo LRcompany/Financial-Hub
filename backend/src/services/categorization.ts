@@ -13,6 +13,21 @@ export function categoryPath(
   return [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > ");
 }
 
+/** Lista de categoria-folha de despesa (id + path completo) pro dropdown de
+ * lançamento manual — meta/gasto real nunca vai numa categoria-mãe.
+ * `kind !== "investment"` porque aporte tem seu próprio fluxo (modal
+ * "Registrar aporte" em Patrimônio), não passa por categorização de gasto. */
+export async function leafExpenseCategories() {
+  const leaves = await prisma.category.findMany({
+    where: { type: "expense", kind: { not: "investment" }, children: { none: {} } },
+    include: { parent: { include: { parent: true } } },
+    orderBy: { name: "asc" },
+  });
+  return leaves
+    .map((c) => ({ id: c.id, path: categoryPath(c) ?? c.name }))
+    .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
+}
+
 /**
  * Sugere uma categoria a partir da descrição de uma transação importada,
  * usando as CategorizationRule já cadastradas (pré-populadas com o padrão
