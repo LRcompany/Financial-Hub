@@ -13,6 +13,7 @@ import { positionsRouter } from "./routes/positions.js";
 import { projectsRouter } from "./routes/projects.js";
 import { brokersRouter } from "./routes/brokers.js";
 import { pluggyConnectRouter } from "./routes/pluggyConnect.js";
+import { contributionsRouter } from "./routes/contributions.js";
 import { pluggyWebhookRouter } from "./routes/pluggyWebhook.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { startCreditCardSyncScheduler } from "./services/scheduler.js";
@@ -51,6 +52,7 @@ app.use("/api", positionsRouter);
 app.use("/api", projectsRouter);
 app.use("/api", brokersRouter);
 app.use("/api", pluggyConnectRouter);
+app.use("/api", contributionsRouter);
 
 app.listen(port, () => {
   console.log(`Command OS backend rodando em http://localhost:${port}`);

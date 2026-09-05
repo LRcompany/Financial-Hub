@@ -24,6 +24,7 @@ import { HoverCard, HoverRow } from '../components/HoverCard'
 import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
+import { ContributionModal } from '../components/ContributionModal'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
@@ -157,6 +158,8 @@ export function Patrimonio() {
   const [contributionInput, setContributionInput] = useState('')
   const [savingGoal, setSavingGoal] = useState(false)
 
+  const [showContributionModal, setShowContributionModal] = useState(false)
+
   function load() {
     api
       .wealthOverview()
@@ -256,7 +259,22 @@ export function Patrimonio() {
 
   return (
     <div className={cards.page}>
-      <h1 className={styles.pageTitle}>Patrimônio</h1>
+      <div className={styles.titleRow}>
+        <h1 className={styles.pageTitle}>Patrimônio</h1>
+        <button className={styles.addContributionBtn} onClick={() => setShowContributionModal(true)}>
+          + Registrar aporte
+        </button>
+      </div>
+
+      {showContributionModal && (
+        <ContributionModal
+          onClose={() => setShowContributionModal(false)}
+          onSaved={() => {
+            setShowContributionModal(false)
+            load()
+          }}
+        />
+      )}
 
       <div className={cards.grid}>
         {!wealth.hasData && (

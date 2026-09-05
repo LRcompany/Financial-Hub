@@ -1,7 +1,29 @@
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
 .pageTitle {
   font-size: 1.4rem;
   font-weight: 600;
-  margin: 0 0 var(--space-5);
+  margin: 0;
+}
+
+.addContributionBtn {
+  height: 36px;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 @media (max-width: 480px) {

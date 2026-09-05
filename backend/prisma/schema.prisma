@@ -213,6 +213,7 @@ model Broker {
 
   transactions     Transaction[]
   positionSnapshots PositionSnapshot[]
+  contributions     Contribution[]
 }
 
 model Security {
@@ -236,6 +237,33 @@ model Security {
   ratePeriodicity String? // ex: DAILY
 
   positionSnapshots PositionSnapshot[]
+  contributions     Contribution[]
+}
+
+// Registro de aporte/resgate lançado à mão (05/09) — histórico auditável de
+// "quando entrou/saiu dinheiro de verdade", em vez de inferir isso por
+// diferença de snapshot (foi exatamente a raiz dos 2 bugs corrigidos no mesmo
+// dia: câmbio da Nomad vazando pro investido, e Ação/FII perdendo a proteção
+// contra sync). `investedAmount` do PositionSnapshot continua sendo o valor
+// "travado" usado em todo o resto do app — Contribution só é a fonte que
+// ALIMENTA esse valor (ver applyContribution em services/contributions.ts),
+// nunca é recalculado a partir dele.
+model Contribution {
+  id          String   @id @default(uuid())
+  brokerId    String
+  broker      Broker   @relation(fields: [brokerId], references: [id])
+  securityId  String
+  security    Security @relation(fields: [securityId], references: [id])
+  date        DateTime
+  amount      Float // valor digitado, na moeda original (currency) — nunca convertido aqui
+  currency    String // moeda em que o valor foi digitado (BRL | USD)
+  amountBRL   Float // valor já convertido pra BRL no momento do registro — histórico nunca recota
+  fxRateToBRL Float? // cotação usada na conversão, se currency != BRL
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([securityId])
+  @@index([brokerId])
 }
 
 model PositionSnapshot {

@@ -382,6 +382,41 @@ export interface PositionFieldConfig {
   excludeSecurityNames?: string[]
 }
 
+export interface ContributionAsset {
+  securityId: string
+  securityName: string
+  ticker: string | null
+  type: string
+  currency: string
+  brokerId: string
+  brokerName: string
+  investedAmount: number
+}
+
+export interface Contribution {
+  id: string
+  date: string
+  amount: number
+  currency: string
+  amountBRL: number
+  note: string | null
+  securityId: string
+  securityName: string
+  brokerId: string
+  brokerName: string
+}
+
+export interface NewContributionInput {
+  securityId?: string
+  newSecurity?: { name: string; ticker?: string; type: string; currency: 'BRL' | 'USD' }
+  brokerId?: string
+  newBroker?: { name: string }
+  amount: number
+  currency: 'BRL' | 'USD'
+  date: string
+  note?: string
+}
+
 export interface AuthStatus {
   authenticated: boolean
   hasPinConfigured: boolean
@@ -460,6 +495,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ itemId, connectorName }),
     }),
+  contributionAssets: () => request<ContributionAsset[]>('/contributions/assets'),
+  contributions: (params?: { securityId?: string; brokerId?: string }) => {
+    const query = new URLSearchParams()
+    if (params?.securityId) query.set('securityId', params.securityId)
+    if (params?.brokerId) query.set('brokerId', params.brokerId)
+    const qs = query.toString()
+    return request<Contribution[]>(`/contributions${qs ? `?${qs}` : ''}`)
+  },
+  createContribution: (input: NewContributionInput) => postJson<Contribution>('/contributions', input),
+  deleteContribution: (id: string) => request<void>(`/contributions/${id}`, { method: 'DELETE' }),
   transactions: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<Transaction[]>(`/transactions${query}`)
