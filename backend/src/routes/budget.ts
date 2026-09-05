@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { reinforceRule } from "../services/categorization.js";
+import { reinforceRule, categoryPath } from "../services/categorization.js";
 
 export const budgetRouter = Router();
 
@@ -340,7 +340,11 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
     prisma.upcomingInstallment.findMany({
       where: { dueDate: { gte: monthStart, lt: monthEnd } },
       orderBy: { dueDate: "asc" },
-      include: { category: true },
+      // Cadeia de pai completa — Luiz pediu (05/09) pra sempre ver a
+      // categoria-mãe junto da folha ("bike" só como "Compra" não diz nada;
+      // "Transporte > Compra" sim) — mesmo padrão já usado em
+      // /upcoming-installments/groups e nos outros lugares que montam path.
+      include: { category: { include: { parent: { include: { parent: true } } } } },
     }),
     prisma.upcomingInstallment.findMany({
       where: { dueDate: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
@@ -384,7 +388,7 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
         description: i.description,
         note: i.note,
         amount: i.amount,
-        category: i.category?.name ?? null,
+        category: categoryPath(i.category),
         cardLabel: i.cardLabel,
         installmentNumber: position?.installmentNumber ?? null,
         totalInstallments: position?.totalInstallments ?? null,
@@ -432,9 +436,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
   >();
   for (const i of installments) {
     const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
-    const categoryPath = i.category
-      ? [i.category.parent?.parent?.name, i.category.parent?.name, i.category.name].filter(Boolean).join(" > ")
-      : null;
+    const groupCategoryPath = categoryPath(i.category);
     // Todas as linhas da mesma compra resolvem pro mesmo total (override
     // manual é sempre aplicado em bloco pra compra inteira) — a 1ª linha já
     // resolvida basta.
@@ -450,7 +452,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
         amount: i.amount,
         cardLabel: i.cardLabel,
         categoryId: i.categoryId,
-        categoryPath,
+        categoryPath: groupCategoryPath,
         ids: [i.id],
         dueDates: [i.dueDate],
         totalInstallments,
@@ -489,7 +491,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
   const categories = leafCategories
     .map((c) => ({
       id: c.id,
-      path: [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > "),
+      path: categoryPath(c) ?? c.name,
     }))
     .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
 
@@ -598,7 +600,7 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
       // Caminho completo ("Moradia > Aluguel") — várias folhas repetem nome
       // entre pais diferentes de propósito (Aluguel existe em Moradia E em
       // Transporte > Carro), só o nome sozinho não dá pra distinguir.
-      const path = [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > ");
+      const path = categoryPath(c) ?? c.name;
       return {
         categoryId: c.id,
         name: c.name,

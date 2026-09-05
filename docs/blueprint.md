@@ -1056,6 +1056,15 @@ Luiz reparou que uma compra do dia 03/09 só apareceu no app dele (direto no ban
 - Registrado 2 webhooks (`transactions/created` e `transactions/updated`, mesmo endpoint) via script one-off (`tmp-import/register-pluggy-webhooks.mjs`, rodado 1x contra produção, apagado depois — mesma disciplina de sempre pra script de uso único).
 - `startCreditCardSyncScheduler()` (1x/dia) continua existindo como rede de segurança — se o webhook falhar silenciosamente por qualquer motivo, o pior caso volta a ser "1x/dia", nunca "nunca mais sincroniza".
 
+### Categoria sempre mostra o pai junto (05/09)
+
+Luiz mandou print da tabela "Comprometido em parcelas futuras": a categoria da Bike aparecia só como "Compra" — sem contexto nenhum de que "Compra" ali é de Transporte. Pedido: "toda vez que mostrar uma categoria, mostra o pai junto".
+
+- Extraído `categoryPath()` pra `services/categorization.ts` (compartilhado entre `budget.ts` e `transactions.ts` — antes tinha essa MESMA lógica de path duplicada 3x só dentro de `budget.ts`, unificado numa função só). Segue a mesma regra já usada em outros lugares do app: `[avó, pai, folha].filter(Boolean).join(" > ")`, até 3 níveis.
+- `GET /upcoming-installments` (a tabela do print) passou a incluir a cadeia de pai na query e devolver o path completo em vez do nome da folha sozinho — o frontend não precisou mudar nada (`UpcomingInstallment.category` já era `string`, só o CONTEÚDO ficou mais completo).
+- `GET /transactions` (feed do "Últimas transações" no Dashboard) ganhou `categoryPath` novo ao lado do `category` original (não mudei o formato de `category` pra não quebrar nada que já lê `.name`/`.kind` dele).
+- **Confirmado com dado real por que isso importa de verdade, não só estética**: existem DUAS categorias-folha chamadas "Compra" no banco — uma em Transporte > Bicicleta, outra em Transporte > Carro. Sem o path completo, "Compra" sozinho é ambíguo até pra quem já sabe o contexto; com o path (3 níveis: "Transporte > Bicicleta > Compra") a ambiguidade some.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

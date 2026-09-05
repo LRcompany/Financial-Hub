@@ -1,5 +1,18 @@
 import { prisma } from "../prisma.js";
 
+/** Caminho completo até 3 níveis (categoria-mãe > filha > neta) — várias
+ * folhas repetem nome entre pais diferentes de propósito (ex: "Aluguel"
+ * existe em Moradia E em Transporte > Carro), só o nome da folha sozinho não
+ * diz de onde ela veio. Compartilhado entre rotas (budget.ts, transactions.ts
+ * — qualquer lugar que mostre categoria de transação/parcela pro Luiz;
+ * pedido dele, 05/09: "toda vez que mostrar uma categoria, mostra o pai junto"). */
+export function categoryPath(
+  c: { name: string; parent?: { name: string; parent?: { name: string } | null } | null } | null | undefined
+): string | null {
+  if (!c) return null;
+  return [c.parent?.parent?.name, c.parent?.name, c.name].filter(Boolean).join(" > ");
+}
+
 /**
  * Sugere uma categoria a partir da descrição de uma transação importada,
  * usando as CategorizationRule já cadastradas (pré-populadas com o padrão

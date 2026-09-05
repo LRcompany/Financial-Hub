@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { reinforceRule } from "../services/categorization.js";
+import { reinforceRule, categoryPath } from "../services/categorization.js";
 
 export const transactionsRouter = Router();
 
@@ -26,11 +26,14 @@ transactionsRouter.get("/transactions", async (req, res) => {
 
   const transactions = await prisma.transaction.findMany({
     where,
-    include: { category: true, broker: true },
+    include: { category: { include: { parent: { include: { parent: true } } } }, broker: true },
     orderBy: { date: "desc" },
   });
 
-  res.json(transactions);
+  // categoryPath junto do objeto category original (mesmo formato de sempre,
+  // pra não quebrar nada que já lê `category.name`/`.kind`) — pedido do Luiz
+  // (05/09): mostrar a categoria-mãe junto sempre que mostrar uma categoria.
+  res.json(transactions.map((t) => ({ ...t, categoryPath: categoryPath(t.category) })));
 });
 
 // GET /api/transactions/uncategorized-groups — transação real (Transaction,

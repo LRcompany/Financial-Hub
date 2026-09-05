@@ -38,6 +38,10 @@ export interface Transaction {
   amount: number
   isTransfer: boolean
   category: Category | null
+  // Categoria-mãe junto da folha ("Transporte > Compra") — null quando não
+  // tem categoria. Prefere isso a `category.name` sozinho pra exibição
+  // (pedido do Luiz, 05/09: sempre mostrar a categoria-mãe junto).
+  categoryPath: string | null
   broker: { id: string; name: string } | null
 }
 

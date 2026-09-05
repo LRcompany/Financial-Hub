@@ -304,7 +304,7 @@ export function Dashboard() {
                   <div className={styles.listBody}>
                     <div className={styles.listTitle}>{t.description}</div>
                     <div className={styles.listSub}>
-                      {formatDayLabel(t.date)} · {t.category?.name ?? 'Sem categoria'}
+                      {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
                     </div>
                   </div>
