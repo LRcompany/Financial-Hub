@@ -123,8 +123,31 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
       },
     });
 
-    const investedAmount = convert(inv.amountOriginal ?? inv.amount ?? inv.balance);
+    // A Pluggy só manda amountOriginal/amount (custo de aquisição de
+    // verdade) pra Renda Fixa — confirmado 25/08. Pra Ação/FII ela não manda
+    // NADA disso, e sem esse fallback aqui a gente cairia sempre em
+    // `inv.balance` (valor de mercado ATUAL), fazendo "investido = atual"
+    // (rentabilidade sempre 0%, "investido por mês" sempre mostrando a
+    // VARIAÇÃO DE MERCADO como se fosse aporte novo). Por isso o investido
+    // desses ativos foi corrigido à mão uma vez (importado da planilha,
+    // 25/08) — só que sem essa proteção aqui, o PRÓXIMO sync automático
+    // sobrescrevia esse valor de volta pro fallback errado (achado real,
+    // 05/09: PETR4/HGLG11 já tinham voltado a "investido = atual" em
+    // setembro). Agora, sem dado real de custo, herda o investido do
+    // snapshot anterior em vez de resetar — mesma regra já usada pro CDB
+    // embutido de conta corrente e pra cripto on-chain.
+    const hasRealInvestedAmount = inv.amountOriginal != null || inv.amount != null;
     const marketValue = convert(inv.balance);
+    let investedAmount: number;
+    if (hasRealInvestedAmount) {
+      investedAmount = convert(inv.amountOriginal ?? inv.amount!);
+    } else {
+      const previous = await prisma.positionSnapshot.findFirst({
+        where: { brokerId: broker.id, securityId: security.id },
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+      });
+      investedAmount = previous?.investedAmount ?? marketValue;
+    }
     const monthlyRatePct = inv.lastMonthRate ?? null;
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
     const quantity = inv.quantity ?? null;
