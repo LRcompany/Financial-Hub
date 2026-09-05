@@ -54,7 +54,7 @@ export function ContributionModal({ onClose, onSaved }: { onClose: () => void; o
   }, [])
 
   const selectedAsset = assets.find((a) => `${a.brokerId}:${a.securityId}` === assetKey) ?? null
-  const currency = assetMode === 'existing' ? selectedAsset?.currency ?? 'BRL' : newCurrency
+  const currency: 'BRL' | 'USD' = assetMode === 'existing' ? (selectedAsset?.currency === 'USD' ? 'USD' : 'BRL') : newCurrency
 
   async function handleSave() {
     setError(null)
