@@ -13,6 +13,7 @@ import { positionsRouter } from "./routes/positions.js";
 import { projectsRouter } from "./routes/projects.js";
 import { brokersRouter } from "./routes/brokers.js";
 import { pluggyConnectRouter } from "./routes/pluggyConnect.js";
+import { pluggyWebhookRouter } from "./routes/pluggyWebhook.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { startCreditCardSyncScheduler } from "./services/scheduler.js";
 
@@ -32,10 +33,13 @@ app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:5173", cred
 app.use(express.json());
 app.use(cookieParser());
 
-// Login (senha + Face ID/Touch ID) é a única coisa acessível sem sessão —
-// tudo abaixo dessa linha exige o cookie de sessão válido.
+// Login (senha + Face ID/Touch ID) e o webhook da Pluggy são as únicas coisas
+// acessíveis sem sessão — o webhook tem sua PRÓPRIA proteção (segredo no
+// header, ver pluggyWebhook.ts), não o cookie de sessão (é a Pluggy chamando,
+// não o navegador do Luiz). Tudo abaixo da linha do requireAuth exige sessão.
 app.use("/api", healthRouter);
 app.use("/api", authRouter);
+app.use("/api", pluggyWebhookRouter);
 app.use("/api", requireAuth);
 
 app.use("/api", transactionsRouter);

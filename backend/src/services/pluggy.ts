@@ -42,6 +42,19 @@ async function pluggyGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function pluggyPost<T>(path: string, body: unknown): Promise<T> {
+  const apiKey = await getPluggyApiKey();
+  const response = await fetch(`${PLUGGY_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Pluggy POST ${path} falhou: ${response.status} ${await response.text()}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 /** Detalhes + status de sincronização de uma conexão (item). Não existe endpoint pra listar todos — o itemId vem do Dashboard. */
 export function getItem(itemId: string) {
   return pluggyGet(`/items/${itemId}`);
@@ -80,3 +93,12 @@ export async function createConnectToken(itemId?: string): Promise<{ accessToken
 }
 
 // Sync de transação real: ver services/pluggyTransactionSync.ts (31/08).
+
+// Webhook (05/09) — em vez de só esperar o sync 1x/dia (e às vezes bater
+// ANTES da Pluggy ter atualizado o dia com o banco, ficando 1 dia inteiro
+// atrasado sem necessidade), a Pluggy avisa a gente NA HORA que tem
+// transação nova/atualizada (docs.pluggy.ai/docs/webhooks). Direto na API —
+// não existe endpoint de listar webhook por item, só criar/consultar por id.
+export function createWebhook(event: string, url: string, headers?: Record<string, string>) {
+  return pluggyPost<{ id: string; url: string; event: string }>("/webhooks", { event, url, headers });
+}
