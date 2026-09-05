@@ -237,7 +237,9 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
     const assetCurrency = fieldConfig.currency === "selectable" ? (raw.currency === "USD" ? "USD" : "BRL") : fieldConfig.currency;
     let marketValue = raw.marketValue;
     let unitValue = fieldConfig.showUnitValue && typeof raw.unitValue === "number" ? raw.unitValue : null;
-    let investedAmountInput = fieldConfig.showInvestedAmount && typeof raw.investedAmount === "number" ? raw.investedAmount : null;
+    // Valor digitado na MOEDA ORIGINAL (USD, pro caso da Nomad) — NÃO converte
+    // ainda aqui (ver por quê logo abaixo, no cálculo de investedAmount).
+    const investedAmountRawInput = fieldConfig.showInvestedAmount && typeof raw.investedAmount === "number" ? raw.investedAmount : null;
     const quantity = fieldConfig.showQuantity && typeof raw.quantity === "number" ? raw.quantity : null;
 
     if (assetCurrency === "USD") {
@@ -250,7 +252,6 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       }
       marketValue = marketValue * usdRate;
       if (unitValue != null) unitValue = unitValue * usdRate;
-      if (investedAmountInput != null) investedAmountInput = investedAmountInput * usdRate;
     }
 
     const type = fieldConfig.fixedType ?? raw.type ?? "Outro";
@@ -261,13 +262,32 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       create: { id: securityId, name, type, currency: assetCurrency },
     });
 
-    let investedAmount = investedAmountInput;
-    if (investedAmount == null) {
-      const previous = await prisma.positionSnapshot.findFirst({
-        where: { brokerId: broker.id, securityId },
-        orderBy: [{ year: "desc" }, { month: "desc" }],
-      });
+    const previous = await prisma.positionSnapshot.findFirst({
+      where: { brokerId: broker.id, securityId },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+    });
+
+    let investedAmount: number;
+    if (investedAmountRawInput == null) {
       investedAmount = previous?.investedAmount ?? marketValue;
+    } else if (assetCurrency === "USD") {
+      // Achado real (05/09, print do Luiz comparando 3 posições da Nomad que
+      // subiram todas ~1,39% — a mesma % em ativos sem relação nenhuma entre
+      // si, ETF e 2 bonds diferentes): reconverter o valor investido TOTAL
+      // pela cotação de HOJE todo mês fazia o câmbio vazar pro "aportado" —
+      // mesmo sem aportar 1 dólar a mais, o BRL subia junto com o dólar. Em
+      // vez disso, converte só a DIFERENÇA em dólar (o aporte/resgate de
+      // verdade) pela cotação de hoje, e soma em cima do BRL que já estava
+      // registrado — histórico velho nunca é recotado, só o que muda de fato.
+      const previousRawInvested = previous ? (previous.fxRateToBRL ? previous.investedAmount / previous.fxRateToBRL : previous.investedAmount) : null;
+      if (previous && previousRawInvested != null) {
+        const deltaRaw = investedAmountRawInput - previousRawInvested;
+        investedAmount = previous.investedAmount + deltaRaw * usdRate!;
+      } else {
+        investedAmount = investedAmountRawInput * usdRate!; // primeira vez — nada pra preservar ainda
+      }
+    } else {
+      investedAmount = investedAmountRawInput; // BRL: sem conversão, sem essa pegadinha
     }
 
     await prisma.positionSnapshot.upsert({
