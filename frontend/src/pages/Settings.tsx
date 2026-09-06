@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import { PluggyConnect } from 'pluggy-connect-sdk'
-import { Plus, RefreshCw, Landmark, Target } from 'lucide-react'
+import { Plus, RefreshCw, Landmark, Target, PencilLine, Archive, ArchiveRestore } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
 import { CardHeader } from '../components/CardHeader'
 import { Input } from '../components/Input'
+import { ManualPositionsModal } from '../components/ManualPositionsModal'
+import { CategoryManager } from '../components/CategoryManager'
+import { SecuritySettings } from '../components/SecuritySettings'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
+
+// Corretoras sem sync automático onde o Luiz atualiza o valor olhando o app
+// dele mesmo, mês a mês, num popup — não tem extrato/PDF nem parser aqui.
+const MANUAL_POSITION_BROKERS = new Set(['NOMAD', 'INCO', 'WISE'])
 
 function formatLastSync(iso: string | null) {
   if (!iso) return 'nunca sincronizado'
@@ -21,6 +28,9 @@ export function Settings() {
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [archiveErrorId, setArchiveErrorId] = useState<{ id: string; message: string } | null>(null)
+  const [positionsTarget, setPositionsTarget] = useState<{ id: string; name: string } | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
   const [dailyGoalInput, setDailyGoalInput] = useState('')
@@ -74,6 +84,23 @@ export function Settings() {
     }
   }
 
+  async function toggleArchive(broker: Broker) {
+    setBusyId(broker.id)
+    setArchiveErrorId(null)
+    try {
+      if (broker.archivedAt) {
+        await api.unarchiveBroker(broker.id)
+      } else {
+        await api.archiveBroker(broker.id)
+      }
+      loadBrokers()
+    } catch (err) {
+      setArchiveErrorId({ id: broker.id, message: (err as Error).message })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function saveDailyGoal(e: React.FormEvent) {
     e.preventDefault()
     const amount = Number(dailyGoalInput)
@@ -89,10 +116,18 @@ export function Settings() {
   }
 
   const currentGoal = dailyGoals[0] ?? null
+  const activeBrokers = brokers.filter((b) => !b.archivedAt)
+  const archivedBrokers = brokers.filter((b) => b.archivedAt)
 
   return (
     <div className={cards.page}>
       <h1 className={styles.pageTitle}>Configurações</h1>
+
+      {/* ---------- Segurança ---------- */}
+      <section>
+        <h2 className={cards.sectionTitle}>Segurança</h2>
+        <SecuritySettings />
+      </section>
 
       {/* ---------- Variáveis fixas ---------- */}
       <section>
@@ -140,6 +175,12 @@ export function Settings() {
         </div>
       </section>
 
+      {/* ---------- Categorias ---------- */}
+      <section>
+        <h2 className={cards.sectionTitle}>Categorias</h2>
+        <CategoryManager />
+      </section>
+
       {/* ---------- Conexões ---------- */}
       <section>
         <h2 className={cards.sectionTitle}>Conexões</h2>
@@ -152,35 +193,108 @@ export function Settings() {
 
         {error && <div className={styles.error}>{error}</div>}
 
-        {brokers.length === 0 && !error && (
+        {activeBrokers.length === 0 && !error && (
           <div className={cards.emptyState}>Nenhum banco conectado ainda — clique em "Conectar banco" pra começar.</div>
         )}
 
         <div className={styles.list}>
-          {brokers.map((broker) => (
-            <div key={broker.id} className={styles.row}>
-              <div className={styles.rowIcon}>
-                <Landmark size={18} strokeWidth={2} />
-              </div>
-              <div className={styles.rowBody}>
-                <div className={styles.rowName}>{broker.name}</div>
-                <div className={styles.rowMeta}>{formatLastSync(broker.lastSyncedAt)}</div>
-              </div>
-              {broker.dataSource === 'pluggy' && (
+          {activeBrokers.map((broker) => {
+            const canUpdatePositions = MANUAL_POSITION_BROKERS.has(broker.name)
+            const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
+            return (
+              <div key={broker.id} className={styles.row}>
+                <div className={styles.rowIcon}>
+                  <Landmark size={18} strokeWidth={2} />
+                </div>
+                <div className={styles.rowBody}>
+                  <div className={styles.rowName}>{broker.name}</div>
+                  <div className={styles.rowMeta}>{formatLastSync(broker.lastSyncedAt)}</div>
+                  {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
+                </div>
                 <div className={styles.rowActions}>
-                  <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
-                    <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
-                    Sincronizar
-                  </button>
-                  <button className={styles.actionBtn} onClick={() => openWidget(broker.pluggyConnectorId ?? undefined)}>
-                    Reconectar
+                  {broker.dataSource === 'pluggy' && (
+                    <>
+                      <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
+                        <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
+                        Sincronizar
+                      </button>
+                      <button className={styles.actionBtn} onClick={() => openWidget(broker.pluggyConnectorId ?? undefined)}>
+                        Reconectar
+                      </button>
+                    </>
+                  )}
+                  {broker.dataSource === 'onchain_query' && (
+                    <button className={styles.actionBtn} onClick={() => syncNow(broker)} disabled={busyId === broker.id}>
+                      <RefreshCw size={13} strokeWidth={2} className={busyId === broker.id ? styles.spinning : ''} />
+                      Sincronizar
+                    </button>
+                  )}
+                  {canUpdatePositions && (
+                    <button className={styles.actionBtn} onClick={() => setPositionsTarget({ id: broker.id, name: broker.name })}>
+                      <PencilLine size={13} strokeWidth={2} />
+                      Atualizar posições
+                    </button>
+                  )}
+                  <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
+                    <Archive size={13} strokeWidth={2} />
+                    Arquivar
                   </button>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
+
+        {archivedBrokers.length > 0 && (
+          <>
+            <button className={styles.showArchivedBtn} onClick={() => setShowArchived((v) => !v)}>
+              {showArchived ? 'Ocultar' : 'Mostrar'} arquivadas ({archivedBrokers.length})
+            </button>
+            {showArchived && (
+              <>
+                <p className={styles.helperText}>
+                  Fora do Patrimônio, da fatura de cartão e do sync automático — o histórico continua guardado, é só desarquivar pra voltar.
+                </p>
+                <div className={styles.list}>
+                  {archivedBrokers.map((broker) => {
+                    const archiveError = archiveErrorId?.id === broker.id ? archiveErrorId.message : null
+                    return (
+                      <div key={broker.id} className={`${styles.row} ${styles.rowArchived}`}>
+                        <div className={styles.rowIcon}>
+                          <Landmark size={18} strokeWidth={2} />
+                        </div>
+                        <div className={styles.rowBody}>
+                          <div className={styles.rowName}>{broker.name}</div>
+                          <div className={styles.rowMeta}>arquivada {broker.archivedAt ? formatDate(broker.archivedAt) : ''}</div>
+                          {archiveError && <div className={styles.error} style={{ marginTop: 6 }}>{archiveError}</div>}
+                        </div>
+                        <div className={styles.rowActions}>
+                          <button className={styles.actionBtn} onClick={() => toggleArchive(broker)} disabled={busyId === broker.id}>
+                            <ArchiveRestore size={13} strokeWidth={2} />
+                            Desarquivar
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </section>
+
+      {positionsTarget && (
+        <ManualPositionsModal
+          brokerId={positionsTarget.id}
+          brokerName={positionsTarget.name}
+          onClose={() => setPositionsTarget(null)}
+          onSaved={() => {
+            setPositionsTarget(null)
+            loadBrokers()
+          }}
+        />
+      )}
     </div>
   )
 }

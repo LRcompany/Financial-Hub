@@ -123,8 +123,35 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
       },
     });
 
-    const investedAmount = convert(inv.amountOriginal ?? inv.amount ?? inv.balance);
+    // A Pluggy só manda `amountOriginal` (custo de aquisição de verdade) pra
+    // Renda Fixa — confirmado 25/08. Pra Ação/FII ela não manda NADA disso.
+    //
+    // Achado real (05/09, 2ª rodada): o fix original daqui checava também
+    // `inv.amount != null` como sinal de "tem dado real" — só que `amount`
+    // NUNCA é null, pra NENHUM tipo de ativo, e não é custo em nenhum dos
+    // dois casos: pra Ação/FII ele é sempre EXATAMENTE igual a `balance`
+    // (confirmado ao vivo: PETR4/VALE3/ITUB4/AXIA3/CPLE3 têm amount===balance
+    // sempre), e pra Renda Fixa ele é outro número calculado (não bate nem
+    // com `amountOriginal` nem com `balance` — parece valor bruto antes de
+    // IR/IOF). Com o check antigo, `hasRealInvestedAmount` dava sempre true
+    // pra Ação/FII (porque `amount` "existia"), reintroduzindo o MESMO bug
+    // que esse trecho existe pra evitar, na primeira sincronização manual
+    // depois do fix (ainda não tinha acontecido — pego a tempo).
+    // Agora só confia em `amountOriginal` de Renda Fixa; sem isso, herda o
+    // investido do snapshot anterior em vez de resetar — mesma regra já
+    // usada pro CDB embutido de conta corrente e pra cripto on-chain.
+    const hasRealInvestedAmount = inv.type === "FIXED_INCOME" && inv.amountOriginal != null;
     const marketValue = convert(inv.balance);
+    let investedAmount: number;
+    if (hasRealInvestedAmount) {
+      investedAmount = convert(inv.amountOriginal!);
+    } else {
+      const previous = await prisma.positionSnapshot.findFirst({
+        where: { brokerId: broker.id, securityId: security.id },
+        orderBy: [{ year: "desc" }, { month: "desc" }],
+      });
+      investedAmount = previous?.investedAmount ?? marketValue;
+    }
     const monthlyRatePct = inv.lastMonthRate ?? null;
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
     const quantity = inv.quantity ?? null;

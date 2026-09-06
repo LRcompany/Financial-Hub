@@ -1,6 +1,14 @@
 .wrap {
-  position: relative;
   width: 100%;
+}
+
+/* Altura FIXA própria (definida inline via `style={{height}}`) — as bolinhas
+ * e o tooltip usam `top: X%` relativo a ESSE container, não ao `.wrap`
+ * inteiro (que também tem o rodapé de datas embaixo). Se dividissem o mesmo
+ * container, a altura do rodapé entraria na conta do "X%" e desalinharia a
+ * bolinha da linha (bug real, 04/09). */
+.chartArea {
+  position: relative;
 }
 
 .svg {
@@ -23,6 +31,32 @@
   height: 10px;
   border: 2px solid var(--surface);
   box-shadow: var(--shadow-sm);
+}
+
+/* Bolinha fixa (não depende de hover) — cor própria (warning, não o azul de
+ * accent normal) pra ficar claramente diferente do ponto mais recente e do
+ * ponto em hover. */
+.dotMarked {
+  width: 10px;
+  height: 10px;
+  background: var(--warning);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+}
+
+.footerLabels {
+  position: relative;
+  height: 14px;
+  margin-top: 6px;
+}
+
+.footerLabel {
+  position: absolute;
+  top: 0;
+  font-size: 10px;
+  color: var(--ink-faint);
+  white-space: nowrap;
 }
 
 .tooltip {

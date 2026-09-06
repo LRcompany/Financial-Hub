@@ -12,11 +12,13 @@ import {
   Coins,
   Activity,
   Briefcase,
+  FileText,
 } from 'lucide-react'
 import {
   api,
   type Transaction,
   type BudgetSummary,
+  type BudgetCategory,
   type WealthOverview,
   type ProjectsSummary,
 } from '../lib/api'
@@ -24,13 +26,37 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
+import { MonthlySummaryModal } from '../components/MonthlySummaryModal'
+import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
-/** "2026-08-21" -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por UTC). */
+const MONTH_NAMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+/** "2026-08-21" (ou um datetime ISO completo, tipo o `date` de Transaction)
+ * -> "21 ago", sem risco de virar o dia anterior por fuso (não passa por
+ * UTC) — o slice(0,10) normaliza os dois formatos pro mesmo caminho. */
 function formatDayLabel(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+/** Agrega as ~80 folhas por categoria-mãe — Dashboard mostra visão geral
+ * (Moradia, Transporte...), o detalhe por folha fica na página Orçamento. */
+function groupByParent(categories: BudgetCategory[]) {
+  const groups = new Map<string, { parentName: string; planned: number; spent: number; previousSpent: number }>()
+  for (const c of categories) {
+    const key = c.parentName ?? 'Outras'
+    const existing = groups.get(key)
+    if (existing) {
+      existing.planned += c.planned
+      existing.spent += c.spent
+      existing.previousSpent += c.previousSpent
+    } else {
+      groups.set(key, { parentName: key, planned: c.planned, spent: c.spent, previousSpent: c.previousSpent })
+    }
+  }
+  return [...groups.values()].sort((a, b) => b.spent - a.spent)
 }
 
 export function Dashboard() {
@@ -46,27 +72,106 @@ export function Dashboard() {
   const [projects, setProjects] = useState<ProjectsSummary | null>(null)
   const [projectsError, setProjectsError] = useState(false)
 
+  const [showMonthlySummary, setShowMonthlySummary] = useState(false)
+  const [uncategorizedCount, setUncategorizedCount] = useState(0)
+  const [showTransactionReview, setShowTransactionReview] = useState(false)
+
+  function loadUncategorizedCount() {
+    api.uncategorizedTransactionGroups().then((r) => setUncategorizedCount(r.total)).catch(() => {})
+  }
+
   useEffect(() => {
-    const now = new Date()
+    // Sem filtro de mês — "últimas compras" de verdade, não "compras deste
+    // mês" (viraria vazio nos primeiros dias, quando as compras reais mais
+    // recentes ainda são do mês anterior no cartão). Guarda a lista inteira
+    // (sem cortar aqui) — quantas aparecem na tela depende do box vizinho
+    // "Orçamento do mês" (ver `visibleTransactionCount`), calculado no render.
     api
-      .transactions({ month: now.getMonth() + 1, year: now.getFullYear() })
-      .then((data) => setTransactions(data.slice(0, 5)))
+      .transactions()
+      .then(setTransactions)
       .catch(() => setTransactionsError(true))
 
     api.budgetSummary().then(setBudget).catch(() => setBudgetError(true))
     api.wealthOverview().then(setWealth).catch(() => setWealthError(true))
     api.projectsSummary().then(setProjects).catch(() => setProjectsError(true))
+    loadUncategorizedCount()
   }, [])
 
-  const today = budget?.last14Days[budget.last14Days.length - 1]?.amount ?? 0
-  const diff = budget?.dailyGoal != null ? budget.dailyGoal - today : null
+  // "Últimas transações" mostra o mesmo tanto de linhas que "Orçamento do
+  // mês" (o box vizinho, à esquerda) tem de categoria-mãe — pedido do Luiz
+  // pra os dois boxes ficarem com altura parecida. 5 é só o fallback antes
+  // do orçamento carregar (ou se não tiver nenhuma categoria com meta).
+  const budgetGroupCount = budget ? groupByParent(budget.categories).length : 0
+  const visibleTransactionCount = budgetGroupCount > 0 ? budgetGroupCount : 5
+
+  // A Pluggy sincroniza com atraso — "gasto de hoje" quase sempre mostra
+  // R$0 só porque a transação de verdade ainda não chegou (não porque o
+  // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
+  // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
+  // "hoje" no dia em que o dado de hoje já chegou de verdade.
+  const todayBucket = budget?.last14Days[budget.last14Days.length - 1]
+  const lastSpendDay = budget?.lastDayWithSpend ?? null
+  const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
+  const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
+  const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
+  const diff = budget?.dailyGoal != null ? budget.dailyGoal - displaySpend : null
+  // Posição do "último dia com gasto" dentro de last14Days — pra desenhar a
+  // bolinha fixa no gráfico marcando "a gente se encontra ali" (pedido do
+  // Luiz, 04/09). undefined quando é literalmente hoje (a bolinha do último
+  // ponto já cobre esse caso, não precisa duplicar).
+  const lastSpendDayIndex =
+    !isShowingToday && lastSpendDay ? budget?.last14Days.findIndex((d) => d.date === lastSpendDay.date) : undefined
+  const markedDayIndex = lastSpendDayIndex != null && lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
 
   const wealthGoal = wealth?.wealthGoal ?? null
   const wealthTotal = wealth?.total ?? 0
   const goalProgress = wealthGoal ? Math.min((wealthTotal / wealthGoal.targetAmount) * 100, 100) : 0
 
+  // Banner do resumo mensal só nos primeiros 5 dias do mês — depois disso
+  // some sozinho (não tem histórico ainda, só o mês que acabou de fechar).
+  const now = new Date()
+  const showSummaryBanner = now.getDate() <= 5
+  const summaryMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const summaryMonth = summaryMonthDate.getMonth() + 1
+  const summaryYear = summaryMonthDate.getFullYear()
+
   return (
     <div className={styles.page}>
+      {showSummaryBanner && (
+        <div className={styles.banner}>
+          <FileText size={16} strokeWidth={2} />
+          <span>Resumo de {MONTH_NAMES[summaryMonth - 1]} pronto.</span>
+          <button className={styles.bannerBtn} onClick={() => setShowMonthlySummary(true)}>
+            Ver resumo
+          </button>
+        </div>
+      )}
+
+      {showMonthlySummary && (
+        <MonthlySummaryModal month={summaryMonth} year={summaryYear} onClose={() => setShowMonthlySummary(false)} />
+      )}
+
+      {uncategorizedCount > 0 && (
+        <div className={styles.banner}>
+          <Receipt size={16} strokeWidth={2} />
+          <span>
+            {uncategorizedCount} compra{uncategorizedCount !== 1 ? 's' : ''} no cartão sem categoria.
+          </span>
+          <button className={styles.bannerBtn} onClick={() => setShowTransactionReview(true)}>
+            Categorizar
+          </button>
+        </div>
+      )}
+
+      {showTransactionReview && (
+        <TransactionReviewModal
+          onClose={() => {
+            setShowTransactionReview(false)
+            loadUncategorizedCount()
+          }}
+        />
+      )}
+
       {/* ---------- Orçamento ---------- */}
       <section>
         <h1 className={styles.sectionTitle}>Orçamento</h1>
@@ -80,8 +185,8 @@ export function Dashboard() {
               <>
                 <div className={styles.dailyGoalTop}>
                   <div>
-                    <div className={styles.heroLabel}>Gasto de hoje</div>
-                    <div className={styles.heroValue}>R$ {currency(today)}</div>
+                    <div className={styles.heroLabel}>{dailySpendLabel}</div>
+                    <div className={styles.heroValue}>R$ {currency(displaySpend)}</div>
                   </div>
                   <div className={styles.dailyGoalMeta}>
                     <span className={styles.heroLabel}>Meta diária</span>
@@ -95,7 +200,7 @@ export function Dashboard() {
                     <div
                       className={styles.progressFill}
                       style={{
-                        width: `${Math.min((today / budget.dailyGoal) * 100, 100)}%`,
+                        width: `${Math.min((displaySpend / budget.dailyGoal) * 100, 100)}%`,
                         background: 'var(--accent)',
                       }}
                     />
@@ -106,8 +211,8 @@ export function Dashboard() {
                     {diff === null
                       ? 'defina uma meta diária pra acompanhar'
                       : diff >= 0
-                        ? `R$ ${currency(diff)} abaixo da meta hoje`
-                        : `R$ ${currency(-diff)} acima da meta hoje`}
+                        ? `R$ ${currency(diff)} abaixo da meta${isShowingToday ? ' hoje' : ''}`
+                        : `R$ ${currency(-diff)} acima da meta${isShowingToday ? ' hoje' : ''}`}
                   </span>
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
@@ -117,6 +222,7 @@ export function Dashboard() {
                   threshold={budget.dailyGoal ?? undefined}
                   gradientId="dailySpendGradient"
                   className={styles.evolutionChart}
+                  markedIndex={markedDayIndex}
                 />
                 <div className={styles.chartMeta}>
                   <span>últimos 14 dias</span>
@@ -137,16 +243,16 @@ export function Dashboard() {
 
             {!budgetError && budget && budget.categories.length > 0 && (
               <>
-                <div className={styles.progressRow} style={{ marginBottom: 'var(--space-4)' }}>
-                  <div className={styles.progressLabel}>
+                <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
+                  <div className={styles.totalLabel}>
                     <span>Total do mês</span>
                     <span>
                       R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
                     </span>
                   </div>
-                  <div className={styles.progressTrack}>
+                  <div className={styles.totalTrack}>
                     <div
-                      className={styles.progressFill}
+                      className={styles.totalFill}
                       style={{
                         width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`,
                         background: 'var(--accent)',
@@ -154,25 +260,25 @@ export function Dashboard() {
                     />
                   </div>
                 </div>
-                {budget.categories.map((item) => (
-                  <div key={item.categoryId} className={styles.progressRow}>
+                {groupByParent(budget.categories).map((group) => (
+                  <div key={group.parentName} className={styles.progressRow}>
                     <div className={styles.progressLabel}>
-                      <span>{item.name}</span>
+                      <span>{group.parentName}</span>
                       <span>
-                        R$ {currency(item.spent)} / R$ {currency(item.planned)}
+                        R$ {currency(group.spent)} / R$ {currency(group.planned)}
                       </span>
                     </div>
                     <div className={styles.progressTrack}>
                       <div
                         className={styles.progressFill}
                         style={{
-                          width: `${Math.min((item.spent / item.planned) * 100, 100)}%`,
+                          width: `${group.planned > 0 ? Math.min((group.spent / group.planned) * 100, 100) : 0}%`,
                           background: 'var(--accent)',
                         }}
                       />
                     </div>
                     <div className={styles.deltaRow}>
-                      <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
+                      <MonthDelta current={group.spent} previous={group.previousSpent} higherIsBetter={false} />
                     </div>
                   </div>
                 ))}
@@ -192,12 +298,18 @@ export function Dashboard() {
             )}
 
             {!transactionsError &&
-              transactions?.map((t) => (
+              transactions?.slice(0, visibleTransactionCount).map((t) => (
                 <div key={t.id} className={styles.listRow}>
                   <div className={styles.listIcon}>💳</div>
                   <div className={styles.listBody}>
-                    <div className={styles.listTitle}>{t.description}</div>
-                    <div className={styles.listSub}>{t.category?.name ?? 'Sem categoria'}</div>
+                    <div className={styles.listTitle}>
+                      {t.description}
+                      {t.awaitingPluggyMatch && <span className={styles.pendingPill}>pendente</span>}
+                    </div>
+                    <div className={styles.listSub}>
+                      {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
+                      {t.broker && ` · ${t.broker.name}`}
+                    </div>
                   </div>
                   <div className={styles.listValue}>
                     {t.type === 'income' ? (
@@ -236,76 +348,6 @@ export function Dashboard() {
           {!wealthError && wealth?.hasData && (
             <>
               <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={Coins} title="Aportes e proventos do mês" />
-                <div className={styles.statGrid3}>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Investido este mês</span>
-                    <span className={styles.statTileValue}>R$ {currency(wealth.investedThisMonth ?? 0)}</span>
-                    {wealth.investedLastMonth != null && (
-                      <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
-                    )}
-                  </div>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Proventos previstos (mês)</span>
-                    <span className={styles.statTileValue}>
-                      {wealth.projectedDividends != null ? `R$ ${currency(wealth.projectedDividends)}` : '—'}
-                    </span>
-                    {wealth.projectedDividends != null && wealth.projectedDividendsLastMonth != null && (
-                      <MonthDelta current={wealth.projectedDividends} previous={wealth.projectedDividendsLastMonth} />
-                    )}
-                  </div>
-                  <div className={styles.statTile}>
-                    <span className={styles.heroLabel}>Patrimônio total</span>
-                    <span className={styles.statTileValue}>R$ {currency(wealthTotal)}</span>
-                    <MonthDelta current={wealthTotal} previous={wealth.previousTotal ?? wealthTotal} />
-                  </div>
-                </div>
-              </div>
-
-              <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={Flag} title="Primeira Milhão" href="/patrimonio" />
-                {(!wealthGoal || wealth.wealthGoalYearly.length === 0) && (
-                  <div className={styles.emptyState}>
-                    Configure sua meta (valor alvo + aporte/retorno por ano) na página de Patrimônio pra ver a projeção.
-                  </div>
-                )}
-                {wealthGoal && wealth.wealthGoalYearly.length > 0 && (
-                  <>
-                    <div className={styles.dailyGoalTop}>
-                      <div>
-                        <div className={styles.heroLabel}>Progresso até R$ {currency(wealthGoal.targetAmount)}</div>
-                        <div className={styles.heroValue}>{goalProgress.toFixed(0)}%</div>
-                      </div>
-                      <div className={styles.dailyGoalMeta}>
-                        <span className={styles.heroLabel}>Faltam</span>
-                        <span style={{ fontWeight: 600 }}>R$ {currency(Math.max(0, wealthGoal.targetAmount - wealthTotal))}</span>
-                      </div>
-                    </div>
-                    <div className={styles.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
-                      <div className={styles.progressFill} style={{ width: `${goalProgress}%`, background: 'var(--accent)' }} />
-                    </div>
-                    <div className={styles.chartMeta}>
-                      {wealth.projection === null && (
-                        <span>no ritmo das metas anuais configuradas, a meta não é alcançada nos próximos 50 anos</span>
-                      )}
-                      {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
-                      {wealth.projection && wealth.projection.monthsToGoal > 0 && (
-                        <span>
-                          você chega lá em{' '}
-                          {new Date(wealth.projection.projectedDate).toLocaleDateString('pt-BR', {
-                            month: 'long',
-                            year: 'numeric',
-                          })}{' '}
-                          (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
-                          {wealth.projection.usedExtrapolation && ' — usando a meta do último ano configurado pra frente'}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
                 <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
                   R$ {currency(wealthTotal)}
@@ -329,6 +371,37 @@ export function Dashboard() {
                 </div>
               </div>
 
+              {/* Só "investido por mês" agora — "proventos previstos" saiu
+               * (dado que não conseguimos coletar de verdade da Pluggy ainda,
+               * ver docs/blueprint.md) e virou gráfico em vez de um número só,
+               * pra dar pra ver o ritmo de aporte mês a mês, não só o mês
+               * atual isolado (pedido do Luiz, 04/09). */}
+              <div className={`${styles.card} ${styles.fullWidth}`}>
+                <CardHeader icon={Coins} title="Investido por mês" href="/patrimonio" />
+                <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
+                  R$ {currency(wealth.investedThisMonth ?? 0)}
+                </div>
+                <div className={styles.chartMeta}>
+                  <span>Investido este mês</span>
+                  {wealth.investedLastMonth != null && (
+                    <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
+                  )}
+                </div>
+                {wealth.investedByMonth.length >= 2 ? (
+                  <SmoothLineChart
+                    values={wealth.investedByMonth.map((e) => e.value)}
+                    labels={wealth.investedByMonth.map((e) => e.label)}
+                    gradientId="investedByMonthGradient"
+                    className={styles.evolutionChart}
+                  />
+                ) : (
+                  <div className={styles.emptyState}>Ainda sem histórico suficiente pra montar o gráfico.</div>
+                )}
+                <div className={styles.chartMeta}>
+                  <span>últimos meses com dado</span>
+                </div>
+              </div>
+
               <div className={styles.card}>
                 <CardHeader icon={PieChart} title="Alocação de investimentos" href="/patrimonio" />
                 {wealth.allocation.length > 0 ? (
@@ -342,8 +415,8 @@ export function Dashboard() {
                 <CardHeader icon={Activity} title="Destaques do mês" href="/patrimonio" />
                 {wealth.movers.length === 0 && <div className={styles.emptyState}>Sem histórico suficiente pra comparar.</div>}
                 {wealth.movers.map((m, i) => (
-                  <div key={`${m.ticker}-${i}`} className={styles.moverRow}>
-                    <span className={styles.moverTicker}>{m.ticker}</span>
+                  <div key={`${m.category}-${i}`} className={styles.moverRow}>
+                    <span className={styles.moverTicker}>{m.category}</span>
                     <span className={styles.moverChange}>
                       {m.changePct >= 0 ? (
                         <TrendingUp size={14} className={styles.dirIn} />
@@ -355,6 +428,46 @@ export function Dashboard() {
                     </span>
                   </div>
                 ))}
+              </div>
+
+              <div className={`${styles.card} ${styles.fullWidth}`}>
+                <CardHeader icon={Flag} title="Primeira Milhão" href="/patrimonio" />
+                {!wealthGoal && (
+                  <div className={styles.emptyState}>Configure sua meta na página de Patrimônio pra ver a projeção.</div>
+                )}
+                {wealthGoal && (
+                  <>
+                    <div className={styles.dailyGoalTop}>
+                      <div>
+                        <div className={styles.heroLabel}>Progresso até R$ {currency(wealthGoal.targetAmount)}</div>
+                        <div className={styles.heroValue}>{goalProgress.toFixed(0)}%</div>
+                      </div>
+                      <div className={styles.dailyGoalMeta}>
+                        <span className={styles.heroLabel}>Faltam</span>
+                        <span style={{ fontWeight: 600 }}>R$ {currency(Math.max(0, wealthGoal.targetAmount - wealthTotal))}</span>
+                      </div>
+                    </div>
+                    <div className={styles.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
+                      <div className={styles.progressFill} style={{ width: `${goalProgress}%`, background: 'var(--accent)' }} />
+                    </div>
+                    <div className={styles.chartMeta}>
+                      {wealth.projection === null && (
+                        <span>no ritmo atual (retorno real + aporte mensal), a meta não é alcançada nos próximos 50 anos</span>
+                      )}
+                      {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
+                      {wealth.projection && wealth.projection.monthsToGoal > 0 && (
+                        <span>
+                          você chega lá em{' '}
+                          {new Date(wealth.projection.projectedDate).toLocaleDateString('pt-BR', {
+                            month: 'long',
+                            year: 'numeric',
+                          })}{' '}
+                          (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -389,6 +502,26 @@ export function Dashboard() {
                     <span className={styles.heroLabel}>A receber</span>
                     <span className={styles.statTileValue}>R$ {currency(projects.outstanding)}</span>
                     <MonthDelta current={projects.outstanding} previous={projects.outstandingLastMonth} higherIsBetter={false} />
+                  </div>
+                </div>
+                <div className={styles.statGrid} style={{ marginTop: 'var(--space-3)' }}>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Fornecedor pago</span>
+                    <span className={styles.statTileValue}>R$ {currency(projects.supplierPaid)}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Fornecedor a pagar</span>
+                    <span className={styles.statTileValue}>R$ {currency(projects.supplierOutstanding)}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Dias trabalhados</span>
+                    <span className={styles.statTileValue}>{projects.totalDaysWorked}</span>
+                  </div>
+                  <div className={styles.statTile}>
+                    <span className={styles.heroLabel}>Finalizados / em aberto</span>
+                    <span className={styles.statTileValue}>
+                      {projects.finalizedCount} / {projects.openCount}
+                    </span>
                   </div>
                 </div>
               </div>
