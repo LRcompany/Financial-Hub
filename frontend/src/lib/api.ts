@@ -43,6 +43,9 @@ export interface Transaction {
   // (pedido do Luiz, 05/09: sempre mostrar a categoria-mãe junto).
   categoryPath: string | null
   broker: { id: string; name: string } | null
+  // true = lançado manualmente adiantado, ainda esperando o sync da Pluggy
+  // confirmar contra a fatura real (ver pluggyTransactionSync.ts).
+  awaitingPluggyMatch: boolean
 }
 
 export interface UncategorizedTransactionGroup {

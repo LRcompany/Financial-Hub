@@ -32,6 +32,17 @@ model Transaction {
   // transação já `false` (poderia sobrescrever categoria corrigida à mão).
   pluggyPending Boolean @default(false)
 
+  // true só pra lançamento MANUAL feito contra um banco/cartão que TEM sync
+  // automático da Pluggy (ideia do Luiz, 06/09: lançar a compra assim que
+  // acontece, com valor "virtual" já contando no orçamento, em vez de
+  // esperar os dias de atraso da Pluggy). O sync de cartão
+  // (pluggyTransactionSync.ts) tenta casar a transação real que chegar
+  // depois (mesmo broker + valor + data próxima) com essa aqui — quando
+  // acha, ATUALIZA em vez de criar linha nova (evita contar a compra 2x) e
+  // vira false. Nunca true pra corretora manual de verdade (Wise, Nomad):
+  // essas não têm o que confirmar depois.
+  awaitingPluggyMatch Boolean @default(false)
+
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
 

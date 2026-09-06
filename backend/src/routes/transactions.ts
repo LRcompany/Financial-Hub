@@ -123,9 +123,23 @@ transactionsRouter.post("/transactions", async (req, res) => {
   if (type !== "income" && type !== "expense") {
     return res.status(400).json({ error: 'type precisa ser "income" ou "expense"' });
   }
+
+  // "awaitingPluggyMatch" nunca vem do body — é inferido aqui, sempre a
+  // partir do banco escolhido (ideia do Luiz, 06/09): lançar assim que a
+  // compra acontece, sem esperar o atraso da Pluggy, e deixar o sync de
+  // cartão casar com a transação real depois (ver
+  // pluggyTransactionSync.ts). Só faz sentido pra corretora que TEM sync
+  // automático de cartão — pra corretora manual de verdade (Wise, Nomad)
+  // nunca vai chegar nada da Pluggy pra casar, então fica sempre false.
+  let awaitingPluggyMatch = false;
+  let broker: { dataSource: string; scope: string } | null = null;
   if (brokerId) {
-    const broker = await prisma.broker.findUnique({ where: { id: brokerId } });
+    broker = await prisma.broker.findUnique({ where: { id: brokerId }, select: { dataSource: true, scope: true } });
     if (!broker) return res.status(404).json({ error: "Corretora/banco não encontrado." });
+    if (broker.dataSource === "pluggy") {
+      const scope: string[] = JSON.parse(broker.scope);
+      awaitingPluggyMatch = scope.includes("transactions");
+    }
   }
 
   const transaction = await prisma.transaction.create({
@@ -136,6 +150,7 @@ transactionsRouter.post("/transactions", async (req, res) => {
       amount,
       categoryId: categoryId ?? null,
       brokerId: brokerId ?? null,
+      awaitingPluggyMatch,
       source: "manual",
     },
   });

@@ -75,6 +75,36 @@ function isSelfCancelingCharge(description: string): boolean {
   return ALWAYS_TRANSFER_DESCRIPTION_PATTERNS.some((p) => normalized.includes(p));
 }
 
+// Ideia do Luiz (06/09): lançar a compra manualmente assim que acontece (já
+// conta no orçamento na hora, sem esperar o atraso da Pluggy) e deixar esse
+// sync casar com a transação real quando ela chegar. Janela de 10 dias pra
+// cada lado (a Pluggy às vezes leva vários dias pra postar a compra na
+// fatura) e tolerância de 1 centavo de arredondamento no valor — o valor é o
+// sinal forte do match, a data só limita falso-positivo de compra parecida
+// em outro mês. Quando tem mais de um candidato (raro: 2 compras do mesmo
+// valor no mesmo período), pega o de data mais próxima.
+const MATCH_WINDOW_DAYS = 10;
+const MATCH_AMOUNT_TOLERANCE = 0.01;
+
+async function findAwaitingMatch(brokerId: string, amount: number, date: Date) {
+  const windowStart = new Date(date);
+  windowStart.setDate(windowStart.getDate() - MATCH_WINDOW_DAYS);
+  const windowEnd = new Date(date);
+  windowEnd.setDate(windowEnd.getDate() + MATCH_WINDOW_DAYS);
+
+  const candidates = await prisma.transaction.findMany({
+    where: {
+      brokerId,
+      awaitingPluggyMatch: true,
+      amount: { gte: amount - MATCH_AMOUNT_TOLERANCE, lte: amount + MATCH_AMOUNT_TOLERANCE },
+      date: { gte: windowStart, lte: windowEnd },
+    },
+  });
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => Math.abs(a.date.getTime() - date.getTime()) - Math.abs(b.date.getTime() - date.getTime()));
+  return candidates[0];
+}
+
 // Mapeamento conservador: só categoria da Pluggy que a gente já viu de
 // verdade numa transação real e que bate SEM ambiguidade com uma folha
 // nossa. Categoria da Pluggy sem entrada aqui fica null (melhor sem
@@ -179,15 +209,42 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         continue;
       }
 
-      const categoryId = await resolveCategoryId(tx);
-      if (categoryId) categorizedCount++;
-
       // CREDIT numa fatura de cartão é pagamento/estorno, não gasto — grava
       // como transferência (mesma lógica já usada pra fatura Caixa→C6), não
       // soma em "quanto gastei". Cobrança que sempre se anula com um estorno
       // (ver isSelfCancelingCharge) também nunca é gasto real, mesmo sendo
       // DEBIT.
       const isTransfer = tx.type === "CREDIT" || isSelfCancelingCharge(tx.description);
+
+      // Antes de criar linha nova, confere se é a confirmação de um
+      // lançamento manual feito adiantado (ver findAwaitingMatch) — se for,
+      // ATUALIZA em vez de criar (senão a compra conta 2x: a manual +
+      // a real). Categoria do lançamento manual NUNCA é sobrescrita (o Luiz
+      // já escolheu na hora de lançar).
+      const manualMatch = await findAwaitingMatch(broker.id, realAmount(tx), new Date(tx.date));
+      if (manualMatch) {
+        await prisma.transaction.update({
+          where: { id: manualMatch.id },
+          data: {
+            date: new Date(tx.date),
+            description: tx.description,
+            amount: realAmount(tx),
+            isTransfer,
+            externalId,
+            awaitingPluggyMatch: false,
+            pluggyPending: tx.status === "PENDING",
+          },
+        });
+        transactionsReconciled++;
+        // Ainda entra em `newlyCreated` (mesmo sem ser create) — se essa
+        // compra confirmada for parcelada, a projeção do passo 2 abaixo
+        // precisa dela pra gerar as parcelas futuras normalmente.
+        newlyCreated.push({ tx, categoryId: manualMatch.categoryId });
+        continue;
+      }
+
+      const categoryId = await resolveCategoryId(tx);
+      if (categoryId) categorizedCount++;
 
       await prisma.transaction.create({
         data: {

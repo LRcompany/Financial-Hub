@@ -302,7 +302,10 @@ export function Dashboard() {
                 <div key={t.id} className={styles.listRow}>
                   <div className={styles.listIcon}>💳</div>
                   <div className={styles.listBody}>
-                    <div className={styles.listTitle}>{t.description}</div>
+                    <div className={styles.listTitle}>
+                      {t.description}
+                      {t.awaitingPluggyMatch && <span className={styles.pendingPill}>pendente</span>}
+                    </div>
                     <div className={styles.listSub}>
                       {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
