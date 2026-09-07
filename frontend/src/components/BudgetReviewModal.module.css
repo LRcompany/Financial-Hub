@@ -1,6 +1,13 @@
 .overlay {
   position: fixed;
   inset: 0;
+  /* width/height explícitos além do inset (achado real, 07/09: PWA em modo
+     standalone no iOS tem bug conhecido de position:fixed se deslocar/cortar
+     quando o teclado abre, ex: campo de data/número desses modais) — 100dvh
+     acompanha a viewport visual de VERDADE (some o espaço do teclado), 100vh
+     sozinho não. */
+  width: 100vw;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.35);
   z-index: 30;
   display: flex;
