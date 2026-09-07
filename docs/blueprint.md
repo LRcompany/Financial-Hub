@@ -1106,6 +1106,10 @@ Luiz pediu, pra não precisar mais me chamar pra isso: **"Todas as transações 
 
 **Processo, não código**: o Luiz corrigiu nessa mesma conversa que eu tinha implementado uma feature inteira (a reconciliação de lançamento antecipado acima) só porque ele perguntou "o que acha?" — pergunta aberta pede opinião, não é luz verde pra codar/migrar/deployar. Registrado em memória permanente (`confirm-before-implementing`): só implementar depois de confirmação explícita, e sempre "posicionar" ele (explicar o que vi) antes de corrigir dado que pareça errado, decisão de correção é conjunta.
 
+### "Dias abaixo da meta esse mês" no gráfico de gasto diário (07/09)
+
+Pedido do Luiz: no gráfico de "Meta diária de gasto" (Dashboard e Orçamento), quantos dias ele ficou abaixo da meta — "o recorte tem que ser focado no mês atual". Implementado em `budget-summary`: `daysUnderGoalThisMonth`/`daysWithGoalThisMonth`, sempre calculado a partir do mês-calendário ATUAL de verdade (`now`, não o mês navegado em Orçamento nem os últimos 14 dias do gráfico) — mesmo critério já usado em `dailyGoal`/`lastDayWithSpend`. Conta do dia 1 até hoje; dia sem `DailySpendGoal` cadastrada fica fora dos dois números (não dá pra avaliar cumprimento sem meta); dia com gasto exatamente igual à meta conta como "dentro". Verificado contra SQL direto antes do deploy (setembro/26: 7 dias rastreados, 6 abaixo, só dia 04 estourou a R$168,38 vs meta de R$150).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
