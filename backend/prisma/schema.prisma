@@ -345,7 +345,15 @@ model Project {
   name             String
   startDate        DateTime
   endDate          DateTime?
-  contractValue    Float
+  contractValue    Float // sempre em BRL — é o número que alimenta DAS/receita bruta/"a receber" em todo o resto do sistema, nunca muda de significado
+  // Contrato de cliente estrangeiro (07/09): valor real combinado na moeda
+  // dele (ex: USD) — só informativo, nunca entra em nenhuma soma agregada
+  // (DAS, receita, "a receber" continuam 100% em BRL via contractValue
+  // acima). Serve só pra "progresso do contrato" bater exato (USD contra
+  // USD), já que contractValue em BRL é só uma estimativa que nunca vai
+  // bater com o que realmente chega depois de câmbio + tarifa.
+  contractValueForeign Float?
+  currency             String? // moeda de contractValueForeign, ex: "USD" — null = projeto 100% BRL
   hasInvoice       Boolean   @default(true)
   installmentCount Int       @default(1)
   status           String    @default("em_andamento") // em_andamento | pausado | finalizado | cancelado
@@ -362,8 +370,16 @@ model ProjectReceipt {
   projectId         String
   project           Project  @relation(fields: [projectId], references: [id])
   installmentNumber Int      @default(1)
-  amount            Float // valor cheio, sem desconto
+  amount            Float // valor LÍQUIDO em BRL que realmente caiu na conta — digitado do extrato, nunca calculado/estimado. É o que vira Transaction (dashboard, orçamento, DAS etc. leem daqui, sem exceção).
   paymentDate       DateTime
+
+  // Recebimento de contrato em moeda estrangeira (07/09) — mesma lógica do
+  // Project acima: só informativo, pra progresso e pra conferir quanto foi
+  // tarifa/IOF de verdade (extrato da Wise). `amount` acima continua sendo
+  // o dado real que já alimenta o resto do sistema.
+  grossAmountForeign Float? // valor bruto recebido, na moeda do contrato
+  feeAmount          Float? // tarifa (ex: Wise), na moeda do contrato
+  iofAmount          Float? // IOF, na moeda do contrato
 
   transactions Transaction[]
 }

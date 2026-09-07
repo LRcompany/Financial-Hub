@@ -147,6 +147,12 @@ projectsRouter.get("/projects", async (_req, res) => {
   const result = projects.map((p) => {
     const received = p.receipts.reduce((s, r) => s + r.amount, 0);
     const remaining = Math.max(0, p.contractValue - received);
+    // Progresso em moeda estrangeira (07/09) — soma bruto recebido contra o
+    // valor combinado, os dois na MESMA moeda do contrato. Só existe quando
+    // `currency` está setado; não entra em nenhum cálculo de BRL acima (DAS,
+    // receita, "a receber" continuam só com contractValue/amount em BRL).
+    const receivedForeign = p.currency ? p.receipts.reduce((s, r) => s + (r.grossAmountForeign ?? 0), 0) : null;
+    const remainingForeign = p.currency && p.contractValueForeign != null ? Math.max(0, p.contractValueForeign - (receivedForeign ?? 0)) : null;
     const supplierCost = p.supplierCosts.reduce((s, c) => s + c.agreedAmount, 0);
     const supplierPaid = p.supplierCosts.reduce((s, c) => s + c.payments.reduce((ps, pay) => ps + pay.amount, 0), 0);
     const tax = computeProjectTax(p, p.client, p.receipts, taxPayments);
@@ -163,12 +169,16 @@ projectsRouter.get("/projects", async (_req, res) => {
       startDate: p.startDate,
       endDate: p.endDate,
       contractValue: p.contractValue,
+      contractValueForeign: p.contractValueForeign,
+      currency: p.currency,
       hasInvoice: p.hasInvoice,
       installmentCount: p.installmentCount,
       status: effectiveStatus,
       daysTotal,
       received,
       remaining,
+      receivedForeign,
+      remainingForeign,
       supplierCost,
       supplierPaid,
       taxAmount: tax.amount,
@@ -212,7 +222,7 @@ projectsRouter.get("/projects/:id", async (req, res) => {
 });
 
 projectsRouter.post("/projects", async (req, res) => {
-  const { clientId, name, startDate, endDate, contractValue, hasInvoice, installmentCount } = req.body ?? {};
+  const { clientId, name, startDate, endDate, contractValue, hasInvoice, installmentCount, contractValueForeign, currency } = req.body ?? {};
   if (!clientId || !name || !startDate || typeof contractValue !== "number") {
     return res.status(400).json({ error: "Campos obrigatórios: clientId, name, startDate, contractValue" });
   }
@@ -228,13 +238,15 @@ projectsRouter.post("/projects", async (req, res) => {
       contractValue,
       hasInvoice: hasInvoice ?? true,
       installmentCount: installmentCount ?? 1,
+      contractValueForeign: typeof contractValueForeign === "number" ? contractValueForeign : null,
+      currency: currency || null,
     },
   });
   res.status(201).json(project);
 });
 
 projectsRouter.put("/projects/:id", async (req, res) => {
-  const { name, startDate, endDate, contractValue, hasInvoice, installmentCount, status } = req.body ?? {};
+  const { name, startDate, endDate, contractValue, hasInvoice, installmentCount, status, contractValueForeign, currency } = req.body ?? {};
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
   if (startDate !== undefined) data.startDate = new Date(startDate);
@@ -242,6 +254,8 @@ projectsRouter.put("/projects/:id", async (req, res) => {
   if (contractValue !== undefined) data.contractValue = contractValue;
   if (hasInvoice !== undefined) data.hasInvoice = hasInvoice;
   if (installmentCount !== undefined) data.installmentCount = installmentCount;
+  if (contractValueForeign !== undefined) data.contractValueForeign = contractValueForeign;
+  if (currency !== undefined) data.currency = currency || null;
   if (status !== undefined) {
     if (!["em_andamento", "pausado", "cancelado"].includes(status)) {
       return res.status(400).json({ error: "status precisa ser em_andamento, pausado ou cancelado (finalizado é automático)" });
@@ -255,7 +269,7 @@ projectsRouter.put("/projects/:id", async (req, res) => {
 // ---------- Recebimentos ----------
 
 projectsRouter.post("/project-receipts", async (req, res) => {
-  const { projectId, installmentNumber, amount, paymentDate } = req.body ?? {};
+  const { projectId, installmentNumber, amount, paymentDate, grossAmountForeign, feeAmount, iofAmount } = req.body ?? {};
   if (!projectId || typeof amount !== "number" || !paymentDate) {
     return res.status(400).json({ error: "Campos obrigatórios: projectId, amount, paymentDate" });
   }
@@ -265,7 +279,15 @@ projectsRouter.post("/project-receipts", async (req, res) => {
   const category = await getOrCreateClientIncomeCategory(project.client.name);
 
   const receipt = await prisma.projectReceipt.create({
-    data: { projectId, installmentNumber: installmentNumber ?? 1, amount, paymentDate: new Date(paymentDate) },
+    data: {
+      projectId,
+      installmentNumber: installmentNumber ?? 1,
+      amount,
+      paymentDate: new Date(paymentDate),
+      grossAmountForeign: typeof grossAmountForeign === "number" ? grossAmountForeign : null,
+      feeAmount: typeof feeAmount === "number" ? feeAmount : null,
+      iofAmount: typeof iofAmount === "number" ? iofAmount : null,
+    },
   });
   await prisma.transaction.create({
     data: {

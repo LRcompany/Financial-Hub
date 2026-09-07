@@ -266,12 +266,18 @@ export interface ProjectListItem {
   startDate: string
   endDate: string | null
   contractValue: number
+  // Contrato em moeda estrangeira (07/09) — só informativo, nunca substitui
+  // contractValue (que continua em BRL e alimenta DAS/receita/"a receber").
+  contractValueForeign: number | null
+  currency: string | null // ex: "USD" — null = projeto 100% BRL
   hasInvoice: boolean
   installmentCount: number
   status: 'em_andamento' | 'pausado' | 'cancelado' | 'finalizado'
   daysTotal: number | null
   received: number
   remaining: number
+  receivedForeign: number | null
+  remainingForeign: number | null
   supplierCost: number
   supplierPaid: number
   taxAmount: number
@@ -286,6 +292,10 @@ export interface ProjectReceipt {
   installmentNumber: number
   amount: number
   paymentDate: string
+  // Recebimento em moeda estrangeira (07/09) — extrato real da Wise/etc.
+  grossAmountForeign: number | null
+  feeAmount: number | null
+  iofAmount: number | null
 }
 
 export interface SupplierPayment {
@@ -303,6 +313,8 @@ export interface ProjectDetail {
   startDate: string
   endDate: string | null
   contractValue: number
+  contractValueForeign: number | null
+  currency: string | null
   hasInvoice: boolean
   installmentCount: number
   status: string
@@ -637,6 +649,8 @@ export const api = {
     contractValue: number
     hasInvoice: boolean
     installmentCount?: number
+    contractValueForeign?: number | null
+    currency?: string | null
   }) => postJson<{ id: string }>('/projects', input),
   updateProject: (
     id: string,
@@ -648,10 +662,19 @@ export const api = {
       hasInvoice: boolean
       installmentCount: number
       status: 'em_andamento' | 'pausado' | 'cancelado'
+      contractValueForeign: number | null
+      currency: string | null
     }>
   ) => putJson<{ id: string }>(`/projects/${id}`, input),
-  createProjectReceipt: (input: { projectId: string; installmentNumber?: number; amount: number; paymentDate: string }) =>
-    postJson<ProjectReceipt>('/project-receipts', input),
+  createProjectReceipt: (input: {
+    projectId: string
+    installmentNumber?: number
+    amount: number
+    paymentDate: string
+    grossAmountForeign?: number | null
+    feeAmount?: number | null
+    iofAmount?: number | null
+  }) => postJson<ProjectReceipt>('/project-receipts', input),
   deleteProjectReceipt: (id: string) => request<{ deleted: true }>(`/project-receipts/${id}`, { method: 'DELETE' }),
   createProjectSupplierCost: (input: { projectId: string; supplierId: string; agreedAmount: number; installmentCount?: number }) =>
     postJson<{ id: string }>('/project-supplier-costs', input),

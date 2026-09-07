@@ -282,8 +282,16 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
   const [contractValue, setContractValue] = useState('')
   const [hasInvoice, setHasInvoice] = useState(true)
   const [installmentCount, setInstallmentCount] = useState('1')
+  const [contractValueForeign, setContractValueForeign] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Contrato em moeda estrangeira (07/09) — só faz sentido oferecer quando o
+  // cliente (existente ou novo) já está marcado como estrangeiro. Valor em
+  // R$ continua obrigatório sempre (alimenta DAS/receita/"a receber"); o
+  // valor em USD é adicional, só pra "progresso do contrato" bater exato.
+  const selectedClientForeign = clients.find((c) => c.id === clientChoice)?.isForeign ?? false
+  const isForeignClient = clientChoice === NEW_CLIENT ? newClientForeign : selectedClientForeign
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -309,6 +317,8 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         contractValue: Number(contractValue),
         hasInvoice,
         installmentCount: Number(installmentCount) || 1,
+        contractValueForeign: isForeignClient && contractValueForeign ? Number(contractValueForeign) : null,
+        currency: isForeignClient && contractValueForeign ? 'USD' : null,
       })
       onSaved()
     } catch (err) {
@@ -353,6 +363,22 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
             Com nota fiscal
           </label>
         </div>
+        {isForeignClient && (
+          <div className={styles.formRow}>
+            <Input
+              label="Valor real do contrato (US$)"
+              type="number"
+              step="0.01"
+              value={contractValueForeign}
+              onChange={(e) => setContractValueForeign(e.target.value)}
+              placeholder="Ex: 9400"
+            />
+            <p className={styles.helperText}>
+              Opcional — o valor em R$ acima continua valendo pro imposto/receita. O valor em US$ só serve pra acompanhar
+              o progresso do contrato certo (US$ contra US$), já que o câmbio muda todo dia.
+            </p>
+          </div>
+        )}
         {error && <p className={styles.error}>{error}</p>}
         <div className={styles.formActions}>
           <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
@@ -457,6 +483,12 @@ function ProjectCard({
               <span className={styles.projectSub}>
                 recebido R$ {currency(project.received)} · falta R$ {currency(project.remaining)}
               </span>
+              {project.currency && project.contractValueForeign != null && (
+                <span className={styles.projectSub}>
+                  progresso do contrato: {project.currency} {currency(project.receivedForeign ?? 0)} de {project.currency}{' '}
+                  {currency(project.contractValueForeign)}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -536,7 +568,17 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
       {detail.receipts.map((r) => (
         <div key={r.id} className={styles.subRow}>
           <span>Parcela {r.installmentNumber}</span>
-          <span>R$ {currency(r.amount)}</span>
+          <span>
+            R$ {currency(r.amount)}
+            {r.grossAmountForeign != null && (
+              <span className={styles.subRowMeta}>
+                {' '}
+                ({detail.currency} {currency(r.grossAmountForeign)} bruto
+                {r.feeAmount != null && ` − ${currency(r.feeAmount)} tarifa`}
+                {r.iofAmount != null && ` − ${currency(r.iofAmount)} IOF`})
+              </span>
+            )}
+          </span>
           <span className={styles.subRowMeta}>{formatDate(r.paymentDate)}</span>
           <button className={styles.iconBtn} onClick={() => handleDelete(r.id)} aria-label="Remover">
             <Trash2 size={12} strokeWidth={2} />
@@ -571,8 +613,13 @@ function ReceiptsAddButton({ detail, onChanged }: { detail: ProjectDetail; onCha
 function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; onClose: () => void; onSaved: () => void }) {
   const [amount, setAmount] = useState('')
   const [paymentDate, setPaymentDate] = useState('')
+  const [grossAmountForeign, setGrossAmountForeign] = useState('')
+  const [feeAmount, setFeeAmount] = useState('')
+  const [iofAmount, setIofAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isForeign = Boolean(detail.currency)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -585,6 +632,9 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
         installmentNumber: detail.receipts.length + 1,
         amount: Number(amount),
         paymentDate,
+        grossAmountForeign: isForeign && grossAmountForeign ? Number(grossAmountForeign) : null,
+        feeAmount: isForeign && feeAmount ? Number(feeAmount) : null,
+        iofAmount: isForeign && iofAmount ? Number(iofAmount) : null,
       })
       onSaved()
     } catch (err) {
@@ -597,8 +647,30 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
   return (
     <Modal title="Novo recebimento" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
       <form className={styles.form} onSubmit={handleSubmit}>
+        {isForeign && (
+          <>
+            <p className={styles.helperText}>Digite os números exatos do extrato (Wise etc.) — nada aqui é calculado/estimado.</p>
+            <div className={styles.formRow}>
+              <Input
+                label={`Valor bruto recebido (${detail.currency})`}
+                type="number"
+                step="0.01"
+                value={grossAmountForeign}
+                onChange={(e) => setGrossAmountForeign(e.target.value)}
+              />
+              <Input label={`Tarifa (${detail.currency})`} type="number" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} />
+              <Input label={`IOF (${detail.currency})`} type="number" step="0.01" value={iofAmount} onChange={(e) => setIofAmount(e.target.value)} />
+            </div>
+          </>
+        )}
         <div className={styles.formRow}>
-          <Input label="Valor recebido (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Input
+            label={isForeign ? 'Valor líquido que caiu em R$' : 'Valor recebido (R$)'}
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
           <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
