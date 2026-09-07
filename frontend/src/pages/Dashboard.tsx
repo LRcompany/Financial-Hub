@@ -228,6 +228,14 @@ export function Dashboard() {
                   <span>últimos 14 dias</span>
                   {budget.dailyGoal != null && <span>linha tracejada = meta de R$ {budget.dailyGoal}</span>}
                 </div>
+                {budget.daysWithGoalThisMonth > 0 && (
+                  <div className={styles.chartMeta}>
+                    <span>
+                      {budget.daysUnderGoalThisMonth} de {budget.daysWithGoalThisMonth} dia
+                      {budget.daysWithGoalThisMonth === 1 ? '' : 's'} abaixo da meta esse mês
+                    </span>
+                  </div>
+                )}
               </>
             )}
           </div>

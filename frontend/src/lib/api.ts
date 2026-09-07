@@ -90,6 +90,12 @@ export interface BudgetSummary {
   lastDayWithSpend: { date: string; amount: number } | null
   monthlyAvgDailySpend: number
   previousMonthlyAvgDailySpend: number
+  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
+  // mês-calendário atual de verdade, do dia 1 até hoje (não os últimos 14
+  // dias, não o mês navegado em Orçamento). daysWithGoalThisMonth é o
+  // denominador (dia sem meta cadastrada não entra em nenhum dos dois).
+  daysUnderGoalThisMonth: number
+  daysWithGoalThisMonth: number
   last14Days: { date: string; amount: number; goal: number | null }[]
   totalPlanned: number
   totalSpent: number

@@ -387,6 +387,14 @@ export function Orcamento() {
               markedIndex={markedDayIndex}
             />
           </div>
+          {budget.daysWithGoalThisMonth > 0 && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>
+                {budget.daysUnderGoalThisMonth} de {budget.daysWithGoalThisMonth} dia
+                {budget.daysWithGoalThisMonth === 1 ? '' : 's'} abaixo da meta esse mês
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ---------- cartões de crédito ---------- */}

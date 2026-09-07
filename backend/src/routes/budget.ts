@@ -184,6 +184,29 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     }
   }
 
+  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
+  // mês-calendário ATUAL de verdade (`now`), não o mês navegado em Orçamento
+  // nem os últimos 14 dias — mesmo critério já usado em `dailyGoal` acima.
+  // Conta do dia 1 até HOJE (dia futuro não tem gasto lançado ainda, não é
+  // "acima" nem "abaixo", só ainda não aconteceu). Dia sem meta cadastrada
+  // (goal null) fica de fora dos dois números — não dá pra avaliar
+  // cumprimento sem meta.
+  const realMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthToDateTransactions = await prisma.transaction.findMany({
+    where: { type: "expense", isTransfer: false, date: { gte: realMonthStart, lt: todayEnd } },
+    select: { date: true, amount: true },
+  });
+  let daysUnderGoalThisMonth = 0;
+  let daysWithGoalThisMonth = 0;
+  for (let day = new Date(realMonthStart); day <= todayStart; day = new Date(day.getTime() + 24 * 60 * 60 * 1000)) {
+    const goal = goalAt(dailyGoals, day);
+    if (goal == null) continue;
+    daysWithGoalThisMonth++;
+    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+    const spent = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
+    if (spent <= goal) daysUnderGoalThisMonth++;
+  }
+
   res.json({
     month,
     year,
@@ -192,6 +215,8 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     lastDayWithSpend,
     monthlyAvgDailySpend,
     previousMonthlyAvgDailySpend,
+    daysUnderGoalThisMonth,
+    daysWithGoalThisMonth,
     last14Days,
     totalPlanned,
     totalSpent,
