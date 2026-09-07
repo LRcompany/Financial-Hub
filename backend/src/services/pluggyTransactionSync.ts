@@ -105,31 +105,16 @@ async function findAwaitingMatch(brokerId: string, amount: number, date: Date) {
   return candidates[0];
 }
 
-// Mapeamento conservador: só categoria da Pluggy que a gente já viu de
-// verdade numa transação real e que bate SEM ambiguidade com uma folha
-// nossa. Categoria da Pluggy sem entrada aqui fica null (melhor sem
-// categoria do que categoria chutada) — expandir conforme for aparecendo
-// mais transação real pra conferir contra.
-const PLUGGY_CATEGORY_MAP: Record<string, [string, string]> = {
-  "Taxi and ride-hailing": ["Transporte", "Uber, 99"],
-};
-
-async function findLeafCategoryId(path: [string, string] | [string, string, string]): Promise<string | null> {
-  let parentId: string | null = null;
-  let found = null;
-  for (const name of path) {
-    found = await prisma.category.findFirst({ where: { name, parentId } });
-    if (!found) return null;
-    parentId = found.id;
-  }
-  return found?.id ?? null;
-}
-
+// Removido o mapeamento de categoria da Pluggy (07/09, pedido do Luiz): o
+// banco não sabe de verdade do que se trata a compra (achado real — mandou
+// "Taxi and ride-hailing" pra uma pamonha, "MP *CLARISSYLAYAN"), e essa tag
+// tinha PRIORIDADE sobre a `CategorizationRule` que o próprio Luiz confirma
+// à mão — ou seja, uma correção dele podia ser revertida pela Pluggy no
+// próximo sync. Agora a única fonte de categoria automática é
+// `suggestCategory` (nossas regras, construídas a partir do que o Luiz
+// mesmo já categorizou) — sem regra ainda, fica sem categoria (nunca chuta
+// pela tag do banco).
 async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> {
-  if (tx.category && PLUGGY_CATEGORY_MAP[tx.category]) {
-    const id = await findLeafCategoryId(PLUGGY_CATEGORY_MAP[tx.category]);
-    if (id) return id;
-  }
   const suggested = await suggestCategory(tx.description);
   return suggested?.id ?? null;
 }
