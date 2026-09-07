@@ -615,9 +615,9 @@ export function Orcamento() {
           </p>
           {transactions.length === 0 && <div className={cards.emptyState}>Nenhuma transação em {MONTH_NAMES[month - 1]}/{year}.</div>}
           {transactions.map((t) => (
-            <div key={t.id} className={cards.listRow}>
+            <div key={t.id} className={`${cards.listRow} ${styles.transactionRow}`}>
               <div className={cards.listIcon}>💳</div>
-              <div className={cards.listBody}>
+              <div className={`${cards.listBody} ${styles.transactionBody}`}>
                 <div className={cards.listTitle}>
                   {t.description}
                   {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
@@ -628,15 +628,15 @@ export function Orcamento() {
                 </div>
               </div>
               {t.isTransfer ? (
-                <span className={styles.transactionStaticLabel}>Transferência — não conta como gasto</span>
+                <span className={`${styles.transactionStaticLabel} ${styles.transactionSecondRow}`}>Transferência — não conta como gasto</span>
               ) : t.type === 'income' ? (
-                <span className={styles.transactionStaticLabel}>Receita de projeto — categoria automática</span>
+                <span className={`${styles.transactionStaticLabel} ${styles.transactionSecondRow}`}>Receita de projeto — categoria automática</span>
               ) : (
                 <Select
                   value={t.category?.id ?? ''}
                   onChange={(e) => changeTransactionCategory(t.id, e.target.value)}
                   disabled={savingTransactionId === t.id}
-                  className={styles.transactionCategorySelect}
+                  className={`${styles.transactionCategorySelect} ${styles.transactionSecondRow}`}
                 >
                   <option value="" disabled>
                     Sem categoria
@@ -648,7 +648,7 @@ export function Orcamento() {
                   ))}
                 </Select>
               )}
-              <div className={cards.listValue}>R$ {currency(t.amount)}</div>
+              <div className={`${cards.listValue} ${styles.transactionSecondRow}`}>R$ {currency(t.amount)}</div>
             </div>
           ))}
         </div>

@@ -149,10 +149,11 @@ export function SmoothLineChart({
           <line x1={0} y1={thresholdY} x2={width} y2={thresholdY} stroke="var(--ink-faint)" strokeWidth={1} strokeDasharray="4 4" />
         )}
 
-        {/* Linha do zero — sólida (não tracejada, pra não confundir com a
-            meta/threshold acima) e mais visível que as tick lines, já que
-            aqui é a única referência que diz "isso é negativo ou positivo". */}
-        {zeroY !== null && <line x1={0} y1={zeroY} x2={width} y2={zeroY} stroke="var(--ink-faint)" strokeWidth={1.5} />}
+        {/* Linha do zero — mesmo estilo tracejado da meta/threshold acima
+            (pedido do Luiz, 07/09: "se usamos linha tracejada pra limitar,
+            usa em tudo" — toda linha de referência do gráfico segue a mesma
+            linguagem visual, não só a de meta). */}
+        {zeroY !== null && <line x1={0} y1={zeroY} x2={width} y2={zeroY} stroke="var(--ink-faint)" strokeWidth={1.5} strokeDasharray="4 4" />}
 
         <path d={areaPath} fill={`url(#${gradientId}-fill)`} stroke="none" />
         <path d={linePath} fill="none" stroke={`url(#${gradientId})`} strokeWidth={3} strokeLinecap="round" />

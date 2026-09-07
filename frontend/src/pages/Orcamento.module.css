@@ -475,13 +475,6 @@ button.upcomingMonthChip:hover {
   height: 34px;
 }
 
-@media (max-width: 640px) {
-  .transactionCategorySelect {
-    width: 100%;
-    order: 3;
-  }
-}
-
 /* Transferência (fatura/anuidade) e receita de projeto — categoria não é
    editável aqui (já vem certa de outro lugar, ou não conta como gasto de
    qualquer forma), só um rótulo explicando o porquê. */
@@ -493,9 +486,26 @@ button.upcomingMonthChip:hover {
   font-style: italic;
 }
 
+/* Tela estreita (pedido do Luiz, 07/09 — achou nome de comerciante longo
+   SOBREPONDO o valor): nome/descrição precisa da linha inteira pra si,
+   então o seletor/rótulo + valor descem pra uma segunda linha, lado a
+   lado, em vez de brigar por espaço na mesma linha do ícone+nome. */
 @media (max-width: 640px) {
+  .transactionRow {
+    flex-wrap: wrap;
+  }
+  /* Ícone + descrição reivindicam a linha inteira sozinhos — sem isso o
+     seletor/valor tentavam espremer nessa mesma linha antes de quebrar. */
+  .transactionBody {
+    flex-basis: 100%;
+  }
+  .transactionCategorySelect,
   .transactionStaticLabel {
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .transactionSecondRow {
     order: 3;
   }
 }
