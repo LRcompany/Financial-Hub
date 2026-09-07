@@ -1116,6 +1116,16 @@ Luiz reparou (compra "Pagamento" de R$3.769,98 do BTG — pagamento do financiam
 
 **Alarme falso durante o teste, já descartado (07/09)**: cheguei a avisar o Luiz que "Tarifa Anuidade Diferenciada" (a cobrança, não o Estorno) estava com `isTransfer: false` em produção — só que a checagem tinha sido feita no `dev.db` LOCAL (banco de teste, divergente), não em produção. Conferido direto no `prod.db`: cobrança e Estorno sempre estiveram `isTransfer: true` os dois, todo o histórico — nunca existiu gasto fantasma real. Nenhuma correção foi aplicada (nem precisava).
 
+### Sync de Pix (conta BANK) de todos os bancos (07/09)
+
+Luiz perguntou "o pix tem como saber o destinatário?" — confirmado com dado real: a Pluggy manda `paymentData.receiver.documentNumber` sempre, e `paymentData.receiver.name` só quando o destinatário é empresa (CNPJ); pessoa física (CPF) vem só o número. A partir disso, pediu pra trazer Pix de todos os bancos, com regra pra não sujar dado: **só grava Pix ENVIADO (DEBIT) pra outra pessoa/empresa de verdade** — Pix recebido nunca vira Transaction (mantém a regra travada de nunca inferir receita de movimentação bancária), e "pra mim mesmo" (mesmo documento como payer E receiver — comum entre contas próprias) também nunca é gravado.
+
+- `isPixToThirdParty()` — compara `payer.documentNumber` com `receiver.documentNumber` na MESMA transação. Funciona pra qualquer banco, sem guardar CPF do Luiz em lugar nenhum do código (a Pluggy já resolve os dois lados). Sem documento de um dos lados (raro), ignora por segurança.
+- `pixDescription()` — usa o nome do destinatário (CNPJ) como descrição, ou "Pix para CPF/CNPJ ...", nunca o texto genérico "pix key transfer" — sem isso a `CategorizationRule` nunca aprenderia por comerciante de verdade.
+- Reaproveita o `findAwaitingMatch` já existente do sync de cartão: lançamento manual antecipado (o motivo original do pedido — "assim vamos conseguir bater a faxina, hotel") casa e confirma sozinho quando o Pix real chega.
+- **Testado com dado real antes do deploy**: local (broker 99, sem tocar produção) confirmou reconciliação + idempotência (2ª rodada não duplica). Depois do deploy, rodado de verdade em produção: **124 Pix reais sincronizados** (BTG 2, 99 66, Sofisa 0, C6 56), 143 ignorados (pra mim mesmo/sem documento) — incluindo a confirmação exata dos 2 lançamentos manuais que motivaram o pedido ("Faxina" → "Pix para CPF 081.026.034-45" R$200; "Hotel em Natal" → "CAMARGO ALUGUEL DE IMOVEIS LTDA" R$84).
+- Categoria automática ainda não existe pra esses novos comerciantes (Pix é tudo novo) — vão entrar "sem categoria" até o Luiz categorizar uma vez cada um pelo editor self-service ("Todas as transações do mês"), que a partir daí aprende sozinho.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
