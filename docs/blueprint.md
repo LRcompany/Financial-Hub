@@ -1126,6 +1126,16 @@ Luiz perguntou "o pix tem como saber o destinatário?" — confirmado com dado r
 - **Testado com dado real antes do deploy**: local (broker 99, sem tocar produção) confirmou reconciliação + idempotência (2ª rodada não duplica). Depois do deploy, rodado de verdade em produção: **124 Pix reais sincronizados** (BTG 2, 99 66, Sofisa 0, C6 56), 143 ignorados (pra mim mesmo/sem documento) — incluindo a confirmação exata dos 2 lançamentos manuais que motivaram o pedido ("Faxina" → "Pix para CPF 081.026.034-45" R$200; "Hotel em Natal" → "CAMARGO ALUGUEL DE IMOVEIS LTDA" R$84).
 - Categoria automática ainda não existe pra esses novos comerciantes (Pix é tudo novo) — vão entrar "sem categoria" até o Luiz categorizar uma vez cada um pelo editor self-service ("Todas as transações do mês"), que a partir daí aprende sozinho.
 
+### Projeto/recebimento em moeda estrangeira (07/09)
+
+Luiz cadastrou Soilytix em R$ (`contractValue: 23500`), mas o contrato real é em USD — recebeu a 1ª parcela de US$2.250 e o valor nunca ia bater por causa de câmbio + tarifa Wise (US$10,92) + IOF (US$8,48, ~0,38% — alíquota padrão de câmbio simplificado, igual em qualquer provedor; a tarifa da Wise já é competitiva, mas vale comparar contra Payoneer/Nomad se quiser reduzir essa parte). Decisão: parar de tentar fazer BRL bater com USD (impossível por definição) e medir progresso do contrato NA MOEDA REAL.
+
+- `Project.contractValueForeign`/`currency` — opcionais, só informativos. `contractValue` continua 100% em BRL e segue sendo o único número que alimenta DAS/receita bruta/"a receber" em toda a agregação existente — ZERO mudança de comportamento nos cálculos já existentes.
+- `ProjectReceipt.grossAmountForeign`/`feeAmount`/`iofAmount` — nível de detalhe completo (confirmado com o Luiz: prefere separar tarifa de IOF em vez de só um número consolidado). `amount` continua sendo o BRL LÍQUIDO real que caiu na conta (digitado do extrato, nunca calculado) — é o único valor que já virava `Transaction`/dashboard/orçamento, sem mudança nenhuma aí.
+- "Progresso do contrato" novo (`receivedForeign`/`remainingForeign` em `GET /projects`): soma USD bruto contra USD combinado — sempre bate exato, porque compara a mesma moeda dos dois lados.
+- Testado localmente ponta a ponta com os números reais do Soilytix antes do deploy (progresso "USD 2.250,00 de USD 9.400,00", receita líquida de R$11.200,50 criada certa) — dado de teste removido depois.
+- **Sem UI de "editar projeto" ainda** — só dá pra setar `currency`/`contractValueForeign` na CRIAÇÃO do projeto. Soilytix já existe em produção sem esses campos (criado antes dessa feature) — precisa de um ajuste manual (script) ou de uma tela de edição pra corrigir retroativo. Pendente: perguntar ao Luiz o valor real total do contrato Soilytix em USD.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
