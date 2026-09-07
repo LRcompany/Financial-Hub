@@ -28,6 +28,7 @@
 
 .bar {
   width: 100%;
+  height: var(--bar-size);
   /* Teto generoso — com poucas categorias (Renda Fixa: CDB/Tesouro/CRA/
      Debêntures, só 4) a coluna fica bem larga; um teto baixo deixava a
      barra fina boiando num vão grande, parecendo quebrado comparado com
@@ -60,4 +61,48 @@
 .col:hover .label {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* Tela estreita (pedido do Luiz, 07/09): virar linha em vez de coluna vertical
+   — nome comprido ("PICKLEBALL FORUM") truncava demais numa coluna fina, e
+   "linha e coluna" (grid) não resolve o mesmo problema, só muda o formato.
+   Item por item: nome à esquerda, barra horizontal, % à direita. Precisa
+   vir DEPOIS das regras base acima — mesma especificidade (uma classe só),
+   então ordem no arquivo decide quem ganha, não a media query sozinha. */
+@media (max-width: 640px) {
+  .chart {
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    gap: var(--space-3);
+  }
+  .col {
+    flex-direction: row;
+    align-items: flex-start;
+    height: auto;
+    width: 100%;
+    gap: var(--space-2);
+  }
+  .label {
+    order: 1;
+    margin-top: 0;
+    flex: 0 0 96px;
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+  .bar {
+    order: 2;
+    flex: 1;
+    height: 14px;
+    width: var(--bar-size);
+    max-width: none;
+  }
+  .pct {
+    order: 3;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
 }

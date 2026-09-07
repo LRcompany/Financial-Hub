@@ -12,12 +12,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  /* Mobile: logo em cima, saudação+ações embaixo (ver .headerTop) — no
-   * desktop volta a ser 1 linha só (a sidebar já tem o logo, ver media
-   * query abaixo). */
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
   padding: var(--space-4) var(--space-4);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -27,6 +22,7 @@
 
 .headerLogo {
   display: block;
+  flex-shrink: 0;
   border-radius: var(--r-sm);
 }
 
@@ -35,11 +31,24 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
 }
 
+/* Logo do lado da saudação, não empilhado (pedido do Luiz, 07/09 — estava
+   em cima e cortando). Só aparece no mobile — a sidebar já tem o logo no
+   desktop, ver media query abaixo. */
 .greeting {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.greeting > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .greeting .hello {

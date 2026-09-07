@@ -562,6 +562,40 @@ export function Orcamento() {
                 </tbody>
               </table>
             </div>
+
+            {/* Tela estreita (pedido do Luiz, 07/09): tabela vira célula por
+                célula, uma por linha — "não por colunas e linhas, assim não
+                precisamos do scroll" (horizontal). Mesma lista de dados, só
+                a apresentação muda; alternado via CSS (ver .tableWrap/
+                .installmentCards em Orcamento.module.css), sem duplicar
+                busca nenhuma. */}
+            <div className={styles.installmentCards} style={{ marginTop: 'var(--space-4)' }}>
+              {displayedInstallments.installments.map((i) => (
+                <div key={i.id} className={styles.installmentCard}>
+                  <div className={styles.installmentCardTop}>
+                    <span className={styles.installmentCardTitle}>{i.note ?? i.description}</span>
+                    <span className={styles.installmentCardValue}>R$ {currency(i.amount)}</span>
+                  </div>
+                  {i.note && <div className={styles.installmentRawName}>{i.description}</div>}
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Vencimento</span>
+                    <span>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Parcela</span>
+                    <span>{i.installmentNumber && i.totalInstallments ? `${i.installmentNumber}/${i.totalInstallments}` : '—'}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Cartão</span>
+                    <span>{i.cardLabel ?? '—'}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Categoria</span>
+                    <span>{i.category ?? '—'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

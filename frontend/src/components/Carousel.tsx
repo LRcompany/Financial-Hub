@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import styles from './Carousel.module.css'
 
@@ -10,13 +10,45 @@ interface CarouselProps<T> {
   className?: string
 }
 
+const CHIP_MIN_WIDTH = 140 // bate com o minmax(140px, 1fr) do grid abaixo
+
+/** `perPage` de tela estreita: cada chip precisa de pelo menos CHIP_MIN_WIDTH,
+ * senão o carrossel ultrapassa a borda do card (pedido do Luiz, 07/09 — 6 por
+ * página estourava a largura toda no mobile). Nunca aumenta além do `perPage`
+ * pedido pelo chamador, só reduz quando a tela não cabe tudo. */
+function useResponsivePerPage(requested: number): number {
+  const [perPage, setPerPage] = useState(requested)
+
+  useEffect(() => {
+    function recompute() {
+      // 32px de padding do card (--space-4 de cada lado) + ~64px pras duas
+      // setas de navegação — aproximação suficiente, só decide quantas
+      // colunas cabem, não precisa ser exato ao pixel.
+      const available = window.innerWidth - 96
+      const fits = Math.max(1, Math.floor(available / CHIP_MIN_WIDTH))
+      setPerPage(Math.min(requested, fits))
+    }
+    recompute()
+    window.addEventListener('resize', recompute)
+    return () => window.removeEventListener('resize', recompute)
+  }, [requested])
+
+  return perPage
+}
+
 /** Paginação simples (setas + dots) pra lista de chips que não cabe numa
  * linha só — em vez de deixar tudo visível de uma vez (quebrando em várias
  * linhas) ou escondido num scroll horizontal sem indicação nenhuma. Genérico
  * o bastante pra reaproveitar em qualquer lista curta do tipo "N por vez". */
-export function Carousel<T>({ items, perPage, keyExtractor, renderItem, className }: CarouselProps<T>) {
+export function Carousel<T>({ items, perPage: requestedPerPage, keyExtractor, renderItem, className }: CarouselProps<T>) {
+  const perPage = useResponsivePerPage(requestedPerPage)
   const [page, setPage] = useState(0)
   const totalPages = Math.ceil(items.length / perPage)
+  // perPage muda (ex: girar o celular, redimensionar) pode deixar a página
+  // atual fora do intervalo novo — volta pro início em vez de mostrar vazio.
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(0, totalPages - 1)))
+  }, [totalPages])
   const start = page * perPage
   const visible = items.slice(start, start + perPage)
 

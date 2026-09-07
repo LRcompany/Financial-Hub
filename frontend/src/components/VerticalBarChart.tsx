@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { currency } from '../lib/format'
 import { HoverCard, HoverRow } from './HoverCard'
 import styles from './VerticalBarChart.module.css'
@@ -37,7 +38,7 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
           <span className={styles.pct}>{((b.value / total) * 100).toFixed(1)}%</span>
           <div
             className={styles.bar}
-            style={{ height: `${Math.max((b.value / maxValue) * 100, 6)}%` }}
+            style={{ '--bar-size': `${Math.max((b.value / maxValue) * 100, 6)}%` } as CSSProperties}
             title={`R$ ${currency(b.value)}`}
           />
           <HoverCard

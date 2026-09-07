@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import styles from './SmoothLineChart.module.css'
 
 const GRADIENT_STOPS = [
@@ -13,17 +13,29 @@ const GRADIENT_STOPS = [
 /** Índices dos pontos que ganham uma linha vertical de referência sempre
  * visível (não só no hover) e uma data no rodapé — demarcação pra dar uma
  * noção de escala de primeira, sem precisar passar o mouse. `max=14` cobre
- * os dois casos reais de hoje sem pular nenhum (14 dias, 12 meses) — 04/09,
- * o Luiz reparou que tava pulando dia/mês sem motivo aparente com o max=8
- * antigo. Só reduz de verdade se algum gráfico futuro passar de 14 pontos
- * (ex: 24 meses), pra não virar um "código de barras" — sempre inclui o
- * primeiro e o último nesse caso. */
+ * os dois casos reais mais comuns sem pular nenhum (14 dias, 12 meses).
+ *
+ * Achado real (07/09): histórico de FII/Ação chega a 24 meses de dado —
+ * acima do `max`, o pulo antigo (`Math.round(i*step)`) pulava mês de forma
+ * IRREGULAR (às vezes 1, às vezes 2 meses de diferença), parecendo aleatório
+ * em vez de intencional. Agora pula sempre de N em N meses (passo fixo,
+ * `Math.ceil`), só ajustando o ÚLTIMO ponto pra sempre incluir "hoje" —
+ * padrão previsível ("mês sim, mês não") em vez de espaçamento torto. */
 function pickTickIndices(count: number, max = 14): number[] {
   if (count <= max) return Array.from({ length: count }, (_, i) => i)
-  const step = (count - 1) / (max - 1)
-  const indices = new Set<number>()
-  for (let i = 0; i < max; i++) indices.add(Math.round(i * step))
-  return [...indices].sort((a, b) => a - b)
+  const step = Math.ceil((count - 1) / (max - 1)) || 1
+  const indices: number[] = []
+  for (let i = 0; i < count; i += step) indices.push(i)
+  const last = count - 1
+  // Sempre inclui "hoje" (último ponto) — mas SUBSTITUI o penúltimo em vez de
+  // só empilhar em cima se ele já tava perto de mais (achado real, 07/09:
+  // "06"/"07 de set" colados um no outro quando o passo deixava só 1 dia de
+  // sobra no fim).
+  if (indices[indices.length - 1] !== last) {
+    if (last - indices[indices.length - 1] < step / 2) indices.pop()
+    indices.push(last)
+  }
+  return indices
 }
 
 /** Catmull-Rom → cúbica de Bézier — curva suave passando por todos os pontos. */
@@ -76,6 +88,21 @@ export function SmoothLineChart({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
+  // Quantas labels cabem de VERDADE na largura real do container — sem isso,
+  // o mesmo `max=14` de um gráfico largo (desktop) esmagava as datas umas
+  // nas outras no mobile (achado real, 07/09: "labels encavalando"). ~68px
+  // por label curta ("set/26") é uma estimativa suficiente, não precisa ser
+  // exata — só decide quantas mostrar, o hover sempre mostra o valor certo.
+  const [containerWidth, setContainerWidth] = useState(600)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const maxTicks = Math.max(3, Math.min(14, Math.floor(containerWidth / 68)))
+
   const allValues = threshold ? [...values, threshold] : values
   const min = Math.min(...allValues)
   const max = Math.max(...allValues)
@@ -89,7 +116,7 @@ export function SmoothLineChart({
   const linePath = smoothPath(points)
   const areaPath = `${linePath} L${points[points.length - 1][0]},${height} L0,${height} Z`
   const thresholdY = threshold !== undefined ? height - padY - ((threshold - min) / range) * (height - padY * 2) : null
-  const tickIndices = pickTickIndices(points.length)
+  const tickIndices = pickTickIndices(points.length, maxTicks)
   // Linha do zero — só quando a série realmente cruza zero (tem negativo),
   // senão desenharia fora da área útil sem servir de referência nenhuma.
   // Pedido do Luiz (04/09): "investido por mês" pode dar negativo (resgate),

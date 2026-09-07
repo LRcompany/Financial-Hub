@@ -61,11 +61,12 @@ export function AppLayout() {
 
       <div className={styles.main}>
         <header className={styles.header}>
-          {/* Só aparece no mobile (a sidebar já tem o logo no desktop) — no
-           * topo do header, acima da saudação (pedido do Luiz, 04/09). */}
-          <img src="/favicon.svg" alt="Command OS" width={22} height={22} className={styles.headerLogo} />
           <div className={styles.headerTop}>
             <div className={styles.greeting}>
+              {/* Só aparece no mobile (a sidebar já tem o logo no desktop) —
+               * do lado da saudação, não empilhado (pedido do Luiz, 07/09:
+               * estava em cima e cortando). */}
+              <img src="/favicon.svg" alt="Command OS" width={22} height={22} className={styles.headerLogo} />
               <span className={styles.hello}>{greeting()}</span>
             </div>
             <div className={styles.headerActions}>

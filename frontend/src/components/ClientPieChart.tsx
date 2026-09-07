@@ -42,7 +42,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
   return (
     <div className={styles.wrap}>
       <div className={styles.svgBox}>
-        <svg viewBox="0 0 160 160" width="160" height="160">
+        <svg viewBox="0 0 160 160">
           {slices.map((s, i) => (
             <path
               key={s.label}
