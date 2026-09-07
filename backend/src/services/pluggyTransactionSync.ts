@@ -1,23 +1,22 @@
-// Sync real de transação de cartão de crédito via Pluggy (31/08). Escopo
-// hoje: só conta CREDIT (o pedido do Luiz foi especificamente "cartão de
-// crédito") — conta BANK (99, corrente do BTG etc.) fica pra uma próxima
-// rodada, não é o mesmo formato de dado (sem parcelamento).
+// Sync real de transação de cartão de crédito via Pluggy (31/08), estendido
+// (07/09) pra também trazer Pix de conta BANK (99, corrente do BTG etc.).
 //
 // Confirmado em teste real (30/08): GET /v2/transactions?accountId= devolve
 // creditCardMetadata.{installmentNumber,totalInstallments,billForecastDate}
 // quando a compra é parcelada — é exatamente o dado que faltava pra
 // automatizar o que vínhamos fazendo à mão (bater fatura da Caixa).
 //
-// REGRA TRAVADA (01/09), vale pra quando essa rodada de conta BANK for
-// implementada: Luiz faz muita transferência entre as próprias contas (BTG
-// <-> C6, recebimento de cliente que passa pela conta corrente antes de ir
-// pra outro lugar etc.) — uma entrada de dinheiro na conta corrente NUNCA
-// pode virar `Transaction.type: "income"` automaticamente só por ter
-// chegado lá. "Entrada" só existe quando ele lança manualmente ("recebi R$X
-// no dia Y", via POST /transactions ou um fluxo equivalente ligado a
-// Projetos) — o sync de conta BANK, quando existir, deve gravar a
-// movimentação (se gravar) sempre como transferência (isTransfer: true),
-// nunca como receita inferida.
+// REGRA TRAVADA (01/09, ainda vale pro Pix): Luiz faz muita transferência
+// entre as próprias contas (BTG <-> C6, recebimento de cliente que passa
+// pela conta corrente antes de ir pra outro lugar etc.) — uma entrada de
+// dinheiro na conta corrente NUNCA pode virar `Transaction.type: "income"`
+// automaticamente só por ter chegado lá. "Entrada" só existe quando ele
+// lança manualmente (via POST /transactions ou um fluxo ligado a Projetos).
+// Por isso o Pix (ver syncPixFromBankAccounts abaixo) só grava SAÍDA
+// (DEBIT) pra outra pessoa/empresa — Pix recebido de qualquer origem, e
+// Pix "de mim pra mim" (mesma pessoa como payer e receiver, comum entre
+// contas próprias), nunca vira Transaction — nem como transferência, nem
+// como receita, pra não sujar o histórico com ruído que não importa.
 import { prisma } from "../prisma.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
 import { suggestCategory } from "./categorization.js";
@@ -51,6 +50,15 @@ interface PluggyTransaction {
     totalInstallments?: number | null;
     installmentNumber?: number | null;
     billForecastDate?: string | null; // "YYYY-MM"
+  } | null;
+  // Só vem em transação de conta BANK (Pix, TED, boleto...) — confirmado com
+  // dado real (07/09) que `paymentData.receiver.name` só existe quando o
+  // destinatário é empresa (CNPJ); pra pessoa física (CPF) vem só o
+  // documento, sem nome.
+  operationType?: string | null; // "PIX" | outros
+  paymentData?: {
+    payer?: { documentNumber?: { type: string; value: string } | null } | null;
+    receiver?: { documentNumber?: { type: string; value: string } | null; name?: string | null } | null;
   } | null;
 }
 
@@ -119,6 +127,33 @@ async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> 
   return suggested?.id ?? null;
 }
 
+// "Pix pra mim mesmo" (entre contas próprias) — mesmo documento (CPF/CNPJ)
+// como payer E receiver na mesma transação. Funciona pra QUALQUER banco
+// conectado, sem guardar CPF/CNPJ do Luiz em lugar nenhum do código — a
+// Pluggy já resolve os dois lados, só comparar. Sem documento de um dos
+// dois lados (raro, mas achado real: alguns Pix pra pessoa física vêm sem
+// documentNumber nenhum), trata como "não dá pra confirmar que é de
+// terceiro" e ignora por segurança — melhor perder um Pix real do que
+// sujar o histórico com um que na verdade era transferência própria.
+function isPixToThirdParty(tx: PluggyTransaction): boolean {
+  const payerDoc = tx.paymentData?.payer?.documentNumber?.value;
+  const receiverDoc = tx.paymentData?.receiver?.documentNumber?.value;
+  if (!payerDoc || !receiverDoc) return false;
+  return payerDoc !== receiverDoc;
+}
+
+// Nome do destinatário (só vem quando é CNPJ — confirmado com dado real,
+// 07/09) vira a descrição, no lugar do texto genérico "pix key transfer" /
+// "pix qr transfer" que a Pluggy manda — sem isso, toda CategorizationRule
+// de Pix cairia no mesmo texto genérico e nunca aprenderia por comerciante
+// de verdade (mesmo motivo que já vale pra descrição de compra de cartão).
+function pixDescription(tx: PluggyTransaction): string {
+  const receiver = tx.paymentData?.receiver;
+  if (receiver?.name?.trim()) return receiver.name.trim();
+  if (receiver?.documentNumber) return `Pix para ${receiver.documentNumber.type} ${receiver.documentNumber.value}`;
+  return tx.description;
+}
+
 /** Último dia válido de um mês (28-31) — pra não estourar pro mês seguinte
  * projetando "dia 31" num mês de 30 dias (ex: `new Date(y, 1, 31)` vira 3 de
  * março, não fevereiro). */
@@ -144,12 +179,15 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   const { results: accounts } = (await getAccounts(itemId)) as { results: PluggyAccountRaw[] };
   const creditAccounts = accounts.filter((a) => a.type === "CREDIT");
+  const bankAccounts = accounts.filter((a) => a.type === "BANK");
 
   let transactionsSynced = 0;
   let transactionsSkipped = 0;
   let transactionsReconciled = 0;
   let installmentsCreated = 0;
   let categorizedCount = 0;
+  let pixSynced = 0;
+  let pixIgnored = 0; // recebido, ou pra mim mesmo, ou sem documento do destinatário
 
   for (const account of creditAccounts) {
     const { results: transactions } = (await getTransactions(account.id)) as { results: PluggyTransaction[] };
@@ -297,9 +335,61 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
     }
   }
 
+  // Pix (07/09, pedido do Luiz: "vamos implementar trazer o pix de todos os
+  // bancos"). Só SAÍDA (DEBIT) pra terceiro de verdade — ver isPixToThirdParty
+  // e a nota travada no topo do arquivo sobre nunca inferir receita daqui.
+  for (const account of bankAccounts) {
+    const { results: transactions } = (await getTransactions(account.id)) as { results: PluggyTransaction[] };
+
+    for (const tx of transactions) {
+      if (tx.operationType !== "PIX" || tx.type !== "DEBIT") continue;
+      if (!isPixToThirdParty(tx)) {
+        pixIgnored++;
+        continue;
+      }
+
+      const externalId = `pluggy:${tx.id}`;
+      const existing = await prisma.transaction.findUnique({ where: { externalId } });
+      if (existing) continue; // já sincronizado antes, nada a fazer (Pix não tem estado PENDING pra reconciliar)
+
+      const description = pixDescription(tx);
+      const amount = Math.abs(realAmount(tx));
+
+      // Mesmo lançamento manual adiantado + reconciliação já usado pra
+      // cartão (ver findAwaitingMatch acima) — é literalmente o caso que
+      // motivou o pedido: "Faxina"/"Hotel em Natal" lançados na hora,
+      // confirmados aqui quando o Pix de verdade aparece.
+      const manualMatch = await findAwaitingMatch(broker.id, amount, new Date(tx.date));
+      if (manualMatch) {
+        await prisma.transaction.update({
+          where: { id: manualMatch.id },
+          data: { date: new Date(tx.date), description, amount, externalId, awaitingPluggyMatch: false },
+        });
+        pixSynced++;
+        continue;
+      }
+
+      const categoryId = (await suggestCategory(description))?.id ?? null;
+      await prisma.transaction.create({
+        data: {
+          date: new Date(tx.date),
+          type: "expense",
+          description,
+          amount,
+          source: "pluggy",
+          externalId,
+          isTransfer: false,
+          categoryId,
+          brokerId: broker.id,
+        },
+      });
+      pixSynced++;
+    }
+  }
+
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
 
-  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount };
+  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount, pixSynced, pixIgnored };
 }
 
 /**
@@ -317,6 +407,8 @@ export async function syncAllBrokersCreditCardTransactions() {
     transactionsReconciled: number;
     installmentsCreated: number;
     categorizedCount: number;
+    pixSynced: number;
+    pixIgnored: number;
     error?: string;
   }[] = [];
 
@@ -332,6 +424,8 @@ export async function syncAllBrokersCreditCardTransactions() {
         transactionsReconciled: 0,
         installmentsCreated: 0,
         categorizedCount: 0,
+        pixSynced: 0,
+        pixIgnored: 0,
         error: (err as Error).message,
       });
     }
@@ -344,8 +438,10 @@ export async function syncAllBrokersCreditCardTransactions() {
       transactionsReconciled: acc.transactionsReconciled + r.transactionsReconciled,
       installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
       categorizedCount: acc.categorizedCount + r.categorizedCount,
+      pixSynced: acc.pixSynced + r.pixSynced,
+      pixIgnored: acc.pixIgnored + r.pixIgnored,
     }),
-    { transactionsSynced: 0, transactionsSkipped: 0, transactionsReconciled: 0, installmentsCreated: 0, categorizedCount: 0 }
+    { transactionsSynced: 0, transactionsSkipped: 0, transactionsReconciled: 0, installmentsCreated: 0, categorizedCount: 0, pixSynced: 0, pixIgnored: 0 }
   );
 
   return { ...totals, perBroker };

@@ -587,6 +587,8 @@ export const api = {
       transactionsReconciled: number
       installmentsCreated: number
       categorizedCount: number
+      pixSynced: number
+      pixIgnored: number
       perBroker: {
         broker: string
         transactionsSynced: number
@@ -594,6 +596,8 @@ export const api = {
         transactionsReconciled: number
         installmentsCreated: number
         categorizedCount: number
+        pixSynced: number
+        pixIgnored: number
         error?: string
       }[]
     }>('/credit-cards/sync-transactions', { method: 'POST' }),

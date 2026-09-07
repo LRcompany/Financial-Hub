@@ -185,11 +185,14 @@ export function Orcamento() {
     try {
       const r = await api.syncCreditCardTransactions()
       loadCardsAndUpcoming()
+      loadTransactions()
+      load()
       alert(
         `${r.transactionsSynced} transação(ões) nova(s) puxada(s) da Pluggy (${r.transactionsSkipped} já existiam).\n` +
           `${r.transactionsReconciled} pendente(s) confirmada(s) agora (descrição/valor atualizados pro dado real).\n` +
           `${r.installmentsCreated} parcela(s) futura(s) identificada(s) automaticamente.\n` +
-          `${r.categorizedCount} categorizada(s) sozinha(s) — o resto revisa em "Revisar parcelas".`
+          `${r.categorizedCount} categorizada(s) sozinha(s) — o resto revisa em "Revisar parcelas".\n` +
+          `${r.pixSynced} Pix pra outra pessoa/empresa sincronizado(s) (${r.pixIgnored} ignorado(s): recebido ou pra você mesmo).`
       )
     } catch (err) {
       alert(`Falha ao sincronizar: ${(err as Error).message}`)
