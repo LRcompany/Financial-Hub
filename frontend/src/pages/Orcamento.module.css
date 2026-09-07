@@ -482,6 +482,24 @@ button.upcomingMonthChip:hover {
   }
 }
 
+/* Transferência (fatura/anuidade) e receita de projeto — categoria não é
+   editável aqui (já vem certa de outro lugar, ou não conta como gasto de
+   qualquer forma), só um rótulo explicando o porquê. */
+.transactionStaticLabel {
+  flex-shrink: 0;
+  width: 220px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .transactionStaticLabel {
+    width: 100%;
+    order: 3;
+  }
+}
+
 @keyframes orcamentoSpin {
   to {
     transform: rotate(360deg);

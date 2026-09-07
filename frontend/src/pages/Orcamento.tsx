@@ -624,21 +624,27 @@ export function Orcamento() {
                   {t.broker && ` · ${t.broker.name}`}
                 </div>
               </div>
-              <Select
-                value={t.category?.id ?? ''}
-                onChange={(e) => changeTransactionCategory(t.id, e.target.value)}
-                disabled={savingTransactionId === t.id}
-                className={styles.transactionCategorySelect}
-              >
-                <option value="" disabled>
-                  Sem categoria
-                </option>
-                {leafCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.path}
+              {t.isTransfer ? (
+                <span className={styles.transactionStaticLabel}>Transferência — não conta como gasto</span>
+              ) : t.type === 'income' ? (
+                <span className={styles.transactionStaticLabel}>Receita de projeto — categoria automática</span>
+              ) : (
+                <Select
+                  value={t.category?.id ?? ''}
+                  onChange={(e) => changeTransactionCategory(t.id, e.target.value)}
+                  disabled={savingTransactionId === t.id}
+                  className={styles.transactionCategorySelect}
+                >
+                  <option value="" disabled>
+                    Sem categoria
                   </option>
-                ))}
-              </Select>
+                  {leafCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.path}
+                    </option>
+                  ))}
+                </Select>
+              )}
               <div className={cards.listValue}>R$ {currency(t.amount)}</div>
             </div>
           ))}
