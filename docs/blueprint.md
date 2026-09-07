@@ -1110,6 +1110,12 @@ Luiz pediu, pra não precisar mais me chamar pra isso: **"Todas as transações 
 
 Pedido do Luiz: no gráfico de "Meta diária de gasto" (Dashboard e Orçamento), quantos dias ele ficou abaixo da meta — "o recorte tem que ser focado no mês atual". Implementado em `budget-summary`: `daysUnderGoalThisMonth`/`daysWithGoalThisMonth`, sempre calculado a partir do mês-calendário ATUAL de verdade (`now`, não o mês navegado em Orçamento nem os últimos 14 dias do gráfico) — mesmo critério já usado em `dailyGoal`/`lastDayWithSpend`. Conta do dia 1 até hoje; dia sem `DailySpendGoal` cadastrada fica fora dos dois números (não dá pra avaliar cumprimento sem meta); dia com gasto exatamente igual à meta conta como "dentro". Verificado contra SQL direto antes do deploy (setembro/26: 7 dias rastreados, 6 abaixo, só dia 04 estourou a R$168,38 vs meta de R$150).
 
+### Editor de categoria não deve mexer em transferência/receita de projeto (07/09)
+
+Luiz reparou (compra "Pagamento" de R$3.769,98 do BTG — pagamento do financiamento da Usina Solar) que "Todas as transações do mês" mostrava seletor de categoria de despesa em TODA linha, inclusive receita de projeto (campo "categoria" ali guarda o nome do CLIENTE, outro conceito) e transferência (`isTransfer: true` — Pagamento de fatura/financiamento, Tarifa Anuidade/Estorno). Investigado a fundo: **os totais de gasto já estavam corretos** (`isTransfer` já exclui certo em toda agregação), o problema era só a UI convidando a mexer em algo que não devia. Fix: seletor editável só em `type === "expense" && !isTransfer`; o resto vira legenda somente-leitura ("Transferência — não conta como gasto" / "Receita de projeto — categoria automática").
+
+**Achado incidental durante o teste** (ainda NÃO corrigido, avisar o Luiz): a cobrança "Tarifa Anuidade Diferenciada" (não o Estorno) está com `isTransfer: false` em produção — deveria ser `true` igual o Estorno (mesma regra, `isSelfCancelingCharge`), mas essas linhas foram criadas antes desse fix existir no sync e nunca foram corrigidas retroativamente (o sync nunca revisita uma transação já sincronizada e não-pendente). Resultado: R$98/mês de gasto fantasma nos totais desde que essa cobrança começou a ser sincronizada. Precisa de correção retroativa (`UPDATE Transaction SET isTransfer=true WHERE description = 'Tarifa Anuidade Diferenciada'`) — não feita ainda, decisão pendente com o Luiz.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
