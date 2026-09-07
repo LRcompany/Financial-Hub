@@ -1096,6 +1096,14 @@ Ideia do Luiz pra contornar o atraso da Pluggy pra sincronizar compra de cartão
 - Badge "pendente" em "Últimas transações" (Dashboard) enquanto não confirma — visual, não afeta nenhum total (o valor já conta no orçamento desde o lançamento, confirmado ou não).
 - **Não implementado ainda**: uma forma de cancelar manualmente um lançamento que nunca vai casar (ex: comprou em outro cartão por engano) — hoje ele fica "pendente" pra sempre até um match aparecer. Fora do escopo de hoje.
 
+### Achado real na mesma época: Pluggy categoriza errado, e editar categoria virou self-service (06-07/09)
+
+Luiz achou uma compra (pamonha, "MP *CLARISSYLAYAN") categorizada como "Transporte > Uber, 99" — a própria Pluggy manda essa transação com a tag "Taxi and ride-hailing" (nosso `PLUGGY_CATEGORY_MAP` em `pluggyTransactionSync.ts` confia nisso direto, sem checar se faz sentido). Corrigido à mão as 3 ocorrências existentes + criada a `CategorizationRule` pra próxima já vir certa — mas **a tag errada da Pluggy tem prioridade sobre nossa regra no código atual**, então se ela continuar mandando "Taxi and ride-hailing" pra esse comerciante, o mapeamento pode voltar a vencer a regra da próxima vez (não corrigido ainda — avisado ao Luiz, aguardando decisão sobre inverter essa prioridade).
+
+Luiz pediu, pra não precisar mais me chamar pra isso: **"Todas as transações do mês"**, nova seção em Orçamento (07/09) — lista toda `Transaction` do mês navegado com um seletor de categoria por linha. Trocar chama `PUT /transactions/group` (mesmo endpoint da revisão de categorização em lote, já reforça a `CategorizationRule` do comerciante) com só aquele 1 id. Update otimista na tela — não espera o servidor confirmar pra refletir a troca, já que é uma ação de baixo risco e reversível.
+
+**Processo, não código**: o Luiz corrigiu nessa mesma conversa que eu tinha implementado uma feature inteira (a reconciliação de lançamento antecipado acima) só porque ele perguntou "o que acha?" — pergunta aberta pede opinião, não é luz verde pra codar/migrar/deployar. Registrado em memória permanente (`confirm-before-implementing`): só implementar depois de confirmação explícita, e sempre "posicionar" ele (explicar o que vi) antes de corrigir dado que pareça errado, decisão de correção é conjunta.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
