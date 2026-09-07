@@ -459,6 +459,29 @@ button.upcomingMonthChip:hover {
   animation: orcamentoSpin 0.8s linear infinite;
 }
 
+.transactionsHelperText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-3);
+}
+
+/* Seletor de categoria dentro da linha da lista de transações — largura fixa
+   pra não empurrar o valor pra fora em descrição longa, mas com espaço
+   suficiente pra caminho de categoria de 3 níveis não cortar o texto. */
+.transactionCategorySelect {
+  flex-shrink: 0;
+  width: 220px;
+  font-size: 12.5px;
+  height: 34px;
+}
+
+@media (max-width: 640px) {
+  .transactionCategorySelect {
+    width: 100%;
+    order: 3;
+  }
+}
+
 @keyframes orcamentoSpin {
   to {
     transform: rotate(360deg);

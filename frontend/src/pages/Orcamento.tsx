@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp } from 'lucide-react'
-import { api, type BudgetSummary, type CreditCard, type UpcomingInstallmentsSummary, type BudgetCategory } from '../lib/api'
+import {
+  api,
+  type BudgetSummary,
+  type CreditCard,
+  type UpcomingInstallmentsSummary,
+  type BudgetCategory,
+  type Transaction,
+  type LeafCategoryOption,
+} from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
@@ -10,6 +18,7 @@ import { Carousel } from '../components/Carousel'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
+import { Select } from '../components/Select'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -61,6 +70,45 @@ export function Orcamento() {
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [copying, setCopying] = useState(false)
   const [syncingTx, setSyncingTx] = useState(false)
+
+  // Lista de TODAS as transações do mês navegado, com categoria editável na
+  // hora — pedido do Luiz (07/09): "assim eu não tenho que ficar pedindo pra
+  // você checar" (veio depois de eu corrigir à mão uma compra categorizada
+  // errado pela Pluggy). Trocar a categoria aqui chama o mesmo endpoint que
+  // já reforça a regra de categorização — a próxima compra do mesmo
+  // comerciante já chega certa sozinha.
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [leafCategories, setLeafCategories] = useState<LeafCategoryOption[]>([])
+  const [savingTransactionId, setSavingTransactionId] = useState<string | null>(null)
+
+  function loadTransactions() {
+    api.transactions({ month, year }).then(setTransactions).catch(() => {})
+  }
+
+  useEffect(loadTransactions, [month, year])
+  useEffect(() => {
+    api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
+  }, [])
+
+  async function changeTransactionCategory(id: string, categoryId: string) {
+    setSavingTransactionId(id)
+    // Otimista: atualiza a tela na hora, sem esperar o servidor confirmar —
+    // trocar categoria é uma ação de baixo risco (reversível clicando de
+    // novo) e a lista pode ter muita linha, não vale a pena re-buscar tudo
+    // a cada clique.
+    const newPath = leafCategories.find((c) => c.id === categoryId)?.path ?? null
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, category: { ...(t.category ?? { name: '', type: 'expense', kind: 'non_essential' }), id: categoryId }, categoryPath: newPath } : t))
+    )
+    try {
+      await api.categorizeTransactionGroup([id], categoryId)
+    } catch (err) {
+      alert(`Falha ao trocar categoria: ${(err as Error).message}`)
+      loadTransactions()
+    } finally {
+      setSavingTransactionId(null)
+    }
+  }
 
   function load() {
     api
@@ -547,6 +595,45 @@ export function Orcamento() {
               </div>
             )
           })}
+        </div>
+
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <CardHeader icon={ListChecks} title="Todas as transações do mês" />
+          <p className={styles.transactionsHelperText}>
+            Errou uma categoria (ex: a Pluggy manda errado às vezes)? Troca aqui direto, sem precisar pedir pra checar.
+          </p>
+          {transactions.length === 0 && <div className={cards.emptyState}>Nenhuma transação em {MONTH_NAMES[month - 1]}/{year}.</div>}
+          {transactions.map((t) => (
+            <div key={t.id} className={cards.listRow}>
+              <div className={cards.listIcon}>💳</div>
+              <div className={cards.listBody}>
+                <div className={cards.listTitle}>
+                  {t.description}
+                  {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
+                </div>
+                <div className={cards.listSub}>
+                  {formatDayLabel(t.date.slice(0, 10))}
+                  {t.broker && ` · ${t.broker.name}`}
+                </div>
+              </div>
+              <Select
+                value={t.category?.id ?? ''}
+                onChange={(e) => changeTransactionCategory(t.id, e.target.value)}
+                disabled={savingTransactionId === t.id}
+                className={styles.transactionCategorySelect}
+              >
+                <option value="" disabled>
+                  Sem categoria
+                </option>
+                {leafCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.path}
+                  </option>
+                ))}
+              </Select>
+              <div className={cards.listValue}>R$ {currency(t.amount)}</div>
+            </div>
+          ))}
         </div>
       </div>
 
