@@ -1162,6 +1162,14 @@ Luiz mandou 7 prints do próprio celular (não mais o emulador desta sessão, qu
 
 Todos os 7 verificados visualmente em viewport 375px (emulador local) antes do deploy — dessa vez sem o artefato de `position:fixed` que atrapalhou a verificação anterior, já que nenhum dos 7 envolvia elemento fixo.
 
+### Modal deslocada no mobile — fix defensivo sem reprodução 100% confirmada (07/09)
+
+Fechando a pendência da modal "Lançar gasto manual" aparentemente cortada/deslocada no mobile (print anterior do Luiz). Não deu pra reproduzir com certeza: o emulador desta sessão tem artefato próprio com `position:fixed` (achado documentado antes), e o simulador de iOS de verdade não está disponível aqui (`Xcode is installed but not selected` — precisa de `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, comando que só o Luiz pode rodar).
+
+Mesmo sem confirmação 100%, o app é PWA e o padrão bate com um bug conhecido do WebKit em modo standalone no iOS: teclado abrindo (campo de data/número desses modais) encolhe a viewport VISUAL, mas `vh`/`inset:0` sozinho referencia a viewport de LAYOUT (antes do teclado) — desloca/corta o `position:fixed`. Aplicado o fix padrão da indústria pra essa classe de bug: `width:100vw` + `height:100dvh` explícitos em cima do `inset:0`, nos 6 modais do app (mesmo `.overlay` duplicado em cada `.module.css`). `dvh` acompanha a viewport visual de verdade; sem efeito colateral em desktop (confirmado visualmente — dvh se comporta igual a 100% sem teclado virtual).
+
+**Pendente de verdade**: confirmar com o Luiz se isso realmente resolveu no celular dele. Se não resolver, o simulador de iOS (depois do `xcode-select`) seria o próximo passo pra reproduzir com certeza.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
