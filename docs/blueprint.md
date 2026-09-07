@@ -1136,6 +1136,16 @@ Luiz cadastrou Soilytix em R$ (`contractValue: 23500`), mas o contrato real é e
 - Testado localmente ponta a ponta com os números reais do Soilytix antes do deploy (progresso "USD 2.250,00 de USD 9.400,00", receita líquida de R$11.200,50 criada certa) — dado de teste removido depois.
 - **Sem UI de "editar projeto" ainda** — só dá pra setar `currency`/`contractValueForeign` na CRIAÇÃO do projeto. Soilytix já existe em produção sem esses campos (criado antes dessa feature) — precisa de um ajuste manual (script) ou de uma tela de edição pra corrigir retroativo. Pendente: perguntar ao Luiz o valor real total do contrato Soilytix em USD.
 
+### Consistência visual dos gráficos + UI espremida no mobile (07/09)
+
+Luiz mandou print de 3 problemas de UI:
+
+1. **Linha do zero devia ser tracejada igual a linha de meta** — `SmoothLineChart` desenhava a linha do zero SÓLIDA de propósito (comentário antigo: "pra não confundir com a meta/threshold"), mas isso quebrava a linguagem visual única que ele quer em todo gráfico. Trocado pra tracejada igual ao threshold — como é componente compartilhado, corrige em todos os gráficos de uma vez só.
+2. **Linha de categoria em Configurações espremida no mobile** — nome + badge (Essencial/Não essencial) + 3 botões de ação brigando pela mesma linha em <480px chegava a quebrar "Cuidado Pessoal" em 2 linhas. Ações vão pra linha de baixo nesse breakpoint — mesmo padrão já usado antes na linha de corretora (Settings.module.css).
+3. **Bug real, não só espremido**: em "Todas as transações do mês" (Orçamento), nome de comerciante longo tipo "CAMARGO ALUGUEL DE IMOVEIS LTDA" estava SOBREPONDO o valor da transação no mobile, e o seletor de categoria vazava pra fora da tela (cortado). Ícone+descrição agora reivindicam a linha inteira sozinhos, seletor/rótulo+valor descem pra uma segunda linha — testado em 375px, sem sobreposição/corte.
+
+**Um 4º ponto reportado não foi confirmado**: uma modal ("Lançar gasto manual") aparentemente cortada/deslocada no mobile. Reproduzi algo parecido no emulador desta sessão, mas rastreei até um artefato conhecido do PRÓPRIO emulador (zoom/escala pra caber no painel quebra `position: fixed`, efeito clássico de `transform` criando novo containing block) — não consegui confirmar se é um bug real do app ou só da ferramenta de teste. Não marcado como corrigido; fica pendente confirmar num celular de verdade.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
