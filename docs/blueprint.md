@@ -1146,6 +1146,22 @@ Luiz mandou print de 3 problemas de UI:
 
 **Um 4º ponto reportado não foi confirmado**: uma modal ("Lançar gasto manual") aparentemente cortada/deslocada no mobile. Reproduzi algo parecido no emulador desta sessão, mas rastreei até um artefato conhecido do PRÓPRIO emulador (zoom/escala pra caber no painel quebra `position: fixed`, efeito clássico de `transform` criando novo containing block) — não consegui confirmar se é um bug real do app ou só da ferramenta de teste. Não marcado como corrigido; fica pendente confirmar num celular de verdade.
 
+### 7 problemas reais de mobile, com print do celular de verdade (07/09)
+
+Luiz mandou 7 prints do próprio celular (não mais o emulador desta sessão, que tinha limitação conhecida — ver seção anterior). Todos confirmados e corrigidos:
+
+1. **FII/Ação pulando mês na legenda** — `pickTickIndices` (SmoothLineChart) usava arredondamento (`Math.round(i*step)`) que criava saltos IRREGULARES quando o histórico passava de 14 pontos (comum em FII/Ação: até 24 meses de dado). Trocado por passo fixo (`Math.ceil`) — pula sempre de N em N, padrão prevísivel.
+2. **Labels de data encavalando** — número de labels era fixo (`max=14`) pensado só pro desktop. Agora mede a largura REAL do container via `ResizeObserver` e calcula quantas cabem (~68px por label) — mesma causa raiz do ponto 1, resolvido pro caso geral.
+3. **Alocação de investimentos (VerticalBarChart)** — colunas verticais espremiam nome ("Fica E...") em tela estreita. Vira lista item por item em <640px: nome à esquerda (quebra linha, nunca trunca), barra horizontal, % à direita.
+4. **Tabela de parcelas futuras** — exigia scroll horizontal. Vira card por parcela em <640px (Vencimento/Parcela/Cartão/Categoria como linhas rotuladas) — mesma lista de dados, só a apresentação muda via CSS (tabela e cards coexistem no DOM, alternados por media query).
+5. **Logo do header empilhado e cortando** — agora fica do lado da saudação, mesma linha.
+6. **Carrossel "Por mês" ultrapassando a borda** — mostrava sempre `perPage` chips fixos (6, pensado pro desktop). Agora calcula quantos cabem de verdade na largura disponível via `window.innerWidth`, nunca mais que o pedido pelo chamador.
+7. **Gráfico de pizza espremendo a legenda** — em <480px a legenda desce pra baixo (era do lado, cortando valor) e o gráfico cresce de 160px pra 220px.
+
+**Bug de cascata CSS pego durante o teste**: a regra mobile do VerticalBarChart tinha ficado ANTES da regra base no arquivo — mesma especificidade (uma classe só), então a base (depois no arquivo) ganhava e a tela estreita nunca aplicava de verdade, mesmo com a media query batendo. Lição: regra responsiva de mesma especificidade sempre precisa vir DEPOIS da base no arquivo, media query sozinha não garante prioridade. Corrigido movendo pro final do arquivo.
+
+Todos os 7 verificados visualmente em viewport 375px (emulador local) antes do deploy — dessa vez sem o artefato de `position:fixed` que atrapalhou a verificação anterior, já que nenhum dos 7 envolvia elemento fixo.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
