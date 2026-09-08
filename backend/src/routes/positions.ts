@@ -34,6 +34,17 @@ positionsRouter.get("/positions", async (_req, res) => {
   const nowYm = yearMonth(all[0].year, all[0].month);
   const latest = activeSnapshotsAsOf(all, nowYm);
 
+  // Mês anterior por (broker, security) — só usado pra "Conta Corrente" (ver
+  // Patrimonio.tsx), que mostra variação de saldo em vez de rentabilidade
+  // (pedido do Luiz, 08/09: "não existe cotas, preço, investido... registra
+  // isso pela variação"). Calculado pra tudo (é barato, uma segunda passada
+  // já em memória) em vez de só pro tipo certo, pra não duplicar a regra de
+  // "qual snapshot conta" (`activeSnapshotsAsOf`) fora daqui.
+  const previousByKey = new Map<string, number>();
+  for (const s of activeSnapshotsAsOf(all, nowYm - 1)) {
+    previousByKey.set(`${s.brokerId}:${s.securityId}`, s.marketValue);
+  }
+
   const byType = new Map<
     string,
     {
@@ -42,6 +53,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       ticker: string | null;
       investedAmount: number;
       marketValue: number;
+      previousMarketValue: number | null;
       currency: string;
       fxRateToBRL: number | null;
       month: number;
@@ -69,6 +81,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       ticker: s.security.ticker,
       investedAmount: s.investedAmount,
       marketValue: s.marketValue,
+      previousMarketValue: previousByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
       currency: s.security.currency,
       fxRateToBRL: s.fxRateToBRL,
       month: s.month,

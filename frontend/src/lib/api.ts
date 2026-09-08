@@ -368,6 +368,11 @@ export interface Position {
   ticker: string | null
   investedAmount: number
   marketValue: number
+  // Valor do mês anterior da MESMA posição (broker+ativo) — só usado pra
+  // "Conta Corrente" (08/09), que mostra variação de saldo em vez de
+  // rentabilidade (não existe cota/preço/investido pra saldo parado). Null
+  // no primeiro mês que a posição existe (não tem "antes" pra comparar).
+  previousMarketValue: number | null
   currency: string
   fxRateToBRL: number | null
   month: number

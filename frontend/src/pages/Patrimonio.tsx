@@ -22,6 +22,7 @@ import { VerticalBarChart } from '../components/VerticalBarChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
 import { ReturnBadge } from '../components/ReturnBadge'
+import { BalanceChangeBadge } from '../components/BalanceChangeBadge'
 import { Input } from '../components/Input'
 import { ContributionModal } from '../components/ContributionModal'
 import { currency } from '../lib/format'
@@ -385,15 +386,28 @@ export function Patrimonio() {
 
                   <div className={styles.tableWrap} style={{ marginTop: 'var(--space-5)' }}>
                     <table className={styles.table}>
+                      {/* Conta Corrente não tem cota/preço/investido (pedido
+                          do Luiz, 08/09) — colunas próprias: só saldo e
+                          variação desde o mês anterior, sem fingir uma
+                          rentabilidade que não existe pra dinheiro parado. */}
                       <thead>
                         <tr>
                           <th>Ativo</th>
                           <th>Corretora</th>
-                          <th>Cotas/qtd.</th>
-                          <th>Preço unit.</th>
-                          <th>Investido</th>
-                          <th>Valor atual</th>
-                          <th>Rentab.</th>
+                          {group.type === 'Conta Corrente' ? (
+                            <>
+                              <th>Saldo</th>
+                              <th>Variação (mês)</th>
+                            </>
+                          ) : (
+                            <>
+                              <th>Cotas/qtd.</th>
+                              <th>Preço unit.</th>
+                              <th>Investido</th>
+                              <th>Valor atual</th>
+                              <th>Rentab.</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -408,29 +422,45 @@ export function Patrimonio() {
                               </HoverCard>
                             </td>
                             <td>{p.broker}</td>
-                            <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
-                            <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
-                            <td>
-                              R$ {currency(p.investedAmount)}
-                              {p.currency === 'USD' && p.fxRateToBRL && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
-                              )}
-                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
-                              )}
-                            </td>
-                            <td>
-                              R$ {currency(p.marketValue)}
-                              {p.currency === 'USD' && p.fxRateToBRL && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
-                              )}
-                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
-                              )}
-                            </td>
-                            <td>
-                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
-                            </td>
+                            {group.type === 'Conta Corrente' ? (
+                              <>
+                                <td>
+                                  R$ {currency(p.marketValue)}
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  )}
+                                </td>
+                                <td>
+                                  <BalanceChangeBadge current={p.marketValue} previous={p.previousMarketValue} />
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
+                                <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
+                                <td>
+                                  R$ {currency(p.investedAmount)}
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                  )}
+                                  {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                    <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                  )}
+                                </td>
+                                <td>
+                                  R$ {currency(p.marketValue)}
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  )}
+                                  {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                  )}
+                                </td>
+                                <td>
+                                  <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
