@@ -1356,6 +1356,20 @@ Luiz mandou 2 prints: o seletor de ativo da modal listando 80+ linhas idênticas
 
 **Verificado em produção**: lista final tem 10 ativos genuinamente manuais — 7 projetos da INCO (real estate crowdfunding) + 3 títulos da Nomad (bond BRAZIL, ETF AOK, bond NVIDIA). Nada de Sofisa/BTG/C6/99, e a Conta Corrente da Wise não aparece mais (como esperado).
 
+### Patrimônio de Renda Fixa subestimado — campo errado da Pluggy (08/09)
+
+Ao investigar por que "TESOURO DIRETO - LFT" aparecia em vários lotes (seção acima), o Luiz reparou num número: o BTG real mostrava R$58.029,97 de saldo bruto pro Tesouro Selic 2029 (quantidade 2,93, batendo certinho com a nossa soma), mas nosso banco somava R$55.860,54 pros mesmos lotes — **quantidade certa, valor errado**.
+
+Investigado ao vivo, campo por campo que a Pluggy manda pra cada lote: nenhum bate exato, mas `amount` (R$58.000,16) fica pertíssimo do BTG real — a diferença de R$29 é só o rendimento de algumas horas entre a consulta e a conferência do Luiz. O campo que eu usava pra `marketValue`, `balance` (R$55.860,54), fica sistematicamente ABAIXO do `amount` — conferido em toda posição de Renda Fixa ativa (BTG, C6, Sofisa): diferença de 0,6% a 3,6%, sempre no mesmo sentido, subestimando o patrimônio total em ~R$6.500 naquele momento.
+
+**Por que existe essa diferença**: o Luiz levantou a hipótese certa — `balance` é o valor JÁ LÍQUIDO do imposto regressivo provisionado (o que sobraria se resgatasse agora), `amount` é o valor bruto de mercado (antes desse imposto futuro). Debênture/CRA não tinham diferença nenhuma (0%) — não são tributados do mesmo jeito, ou a Pluggy não provisiona imposto pra esse tipo.
+
+**Decisão** (discutida, não só aplicada): ficar com `amount` (bruto), não `balance` (líquido). Motivo principal — consistência: Ações/FIIs/Fundos/Cripto no app já mostram valor de mercado bruto (ninguém desconta o IR sobre ganho de capital que vai ser cobrado na venda); se só Renda Fixa mostrasse líquido de imposto futuro, o "Patrimônio total" ficaria misturando dois critérios contábeis diferentes. É também literalmente o que o BTG chama de "saldo bruto" — o número que ele destaca. Ideia registrada pro futuro: se um dia fizer sentido um "líquido estimado de resgate" (o imposto é regressivo por prazo — varia por lote, não é uma alíquota fixa), isso merece ser um número SEPARADO, não substituir o valor atual.
+
+**Fix** (`pluggySync.ts`): `marketValue` passa a vir de `inv.amount` (fallback pra `inv.balance` se algum dia vier null — nunca visto acontecer). Ação/FII não muda nada (`amount === balance` sempre pra esses, confirmado 05/09).
+
+**Aplicado em produção**: backup do `prod.db` antes, re-sync manual de BTG/C6/Sofisa rodado na hora (sem esperar o sync automático 1x/dia) — Tesouro Selic 2029 confirmado em R$58.000,16 no banco, batendo com o BTG real. Só corrige daqui pra frente — não dá pra recalcular meses passados retroativamente (Pluggy não expõe valor histórico ponto-a-ponto), então a evolução mensal mostra um salto único no mês em que o fix rodou.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
