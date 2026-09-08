@@ -1281,6 +1281,24 @@ Luiz: "99 e Wise precisa voltar para a categoria de Conta-Corrente... deixar ele
 
 Resultado (setembro/2026): "Conta Corrente" soma R$123.079,14 — nova 3ª maior fatia da alocação, atrás só de Renda Fixa (R$208.240,70, ainda o que sobrou de investimento deliberado de verdade) e FII (R$174.161,19). Verificado por soma agregada antes/depois de aplicar (total geral do patrimônio não muda — é só reclassificação, nenhum valor foi somado/subtraído).
 
+### Erro corrigido: CDB real de C6/Sofisa não é Conta Corrente (08/09, mesmo dia)
+
+Luiz corrigiu na hora: *"Sofisa, BTG e C6 tem investimento e conta corrente. Por que você categorizou os CDBs de sofisa e C6 como conta corrente se eles são investimentos? Conta Corrente não tem valor investido, cotas, preço único... é dinheiro que fica na conta corrente."*
+
+Ele tinha razão. Eu tinha criado `CHECKING_ACCOUNT_ONLY_BROKERS = new Set(["C6", "Sofisa"])` baseado só no PADRÃO dos dados (dezenas de securities com nome idêntico, a maioria zerada) — nunca confirmei contra a Pluggy se existia uma fonte de saldo em conta separada de verdade pra esses dois. Checado ao vivo (`GET /accounts`) na hora da correção:
+
+- **C6**: conta BANK com `balance: 0` e `automaticallyInvestedBalance: 0` — nenhum saldo parado agora. O "CDB - BANCO C6 S.A." (R$63.118,66, custo de aquisição real R$52.318,00 em `amountOriginal`) é investimento de verdade.
+- **Sofisa**: mesma coisa, conta BANK zerada. Os CDBs (vários com R$10-22 mil de custo de aquisição real) são investimento de verdade.
+- **BTG**: esse eu tinha acertado — conta BANK dele TEM `automaticallyInvestedBalance: 371,71` de verdade, separado do resto da carteira (`/investments` retorna as ações/FII/Tesouro num payload totalmente separado do `/accounts`).
+
+**Fix**: removida a exceção por corretora de `mapSecurityType()` — `FIXED_INCOME` volta a virar sempre "Renda Fixa", pra qualquer corretora, sem hack. A fatia real de conta corrente (quando existir) já vem coberta pelo mecanismo universal (`automaticallyInvestedBalance` → "Conta Corrente", ver seção acima) — não precisa de exceção nenhuma, ele funciona pra QUALQUER corretora que a Pluggy reportar saldo parado, e simplesmente não cria nada quando o saldo é zero (caso do C6/Sofisa hoje).
+
+**Revertido no banco** (mesmo backup do fix original, sem precisar de um novo): as 81 securities do Sofisa (`pluggy:*`) + a 1 do C6, de volta pra "Renda Fixa". Mantido como "Conta Corrente": `MANUAL:SOFISA:EMERGENCIA` (lançamento manual histórico, mesmo padrão já confirmado certo pro 99/Wise — não é um CDB ao vivo da Pluggy).
+
+**"Conta Corrente" real, depois da correção**: R$3.152,71 (Wise R$139,56 + 99 R$2.711,05 + BTG R$302,10) — bem menor que os R$123 mil errados de antes, e agora reflete literalmente só dinheiro parado, sem cota nem valor investido, exatamente a definição que o Luiz deu. Renda Fixa volta a R$328.167,13.
+
+**Lição registrada**: um padrão estatístico no dado (nomes repetidos, muitos zerados) não é evidência de categoria — precisa confirmar contra a fonte de verdade (aqui, `GET /accounts` da própria Pluggy) antes de generalizar uma regra por corretora inteira.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
