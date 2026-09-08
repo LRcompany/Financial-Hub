@@ -1254,6 +1254,14 @@ Luiz confirmou manter o "+" flutuante (mesmo padrão de Projetos/Orçamento) —
 
 **Removido**: `showAddForm`/`addForm`/`saveNewPosition` e a modal inteira de `Patrimonio.tsx`; `api.addPosition` de `api.ts`; a rota `POST /api/positions` inteira e a const `SECURITY_TYPES` órfã de `positions.ts` (sem outro chamador — confirmado por grep antes de apagar); CSS órfão (`.overlay`/`.sheet`/`.sheetHeader`/`.addForm`) de `Patrimonio.module.css`. Verificado local: FAB abre "Registrar aporte" corretamente, sem erro de console.
 
+### Câmbio USD/BRL travando com 429 da AwesomeAPI (08/09)
+
+Luiz mandou print de `Falha ao buscar cotação USD/BRL: 429` tentando registrar um aporte em dólar (NOMAD AOK) logo depois do fix acima. Confirmado ao vivo: o IP do droplet estava sendo rate-limitado pela AwesomeAPI (gratuita, sem chave, sem SLA) NAQUELE momento — de outro IP (minha máquina) a mesma chamada respondia 200 normal. Não é bug nosso, é dependência externa sem garantia nenhuma travando uma ação básica do app.
+
+Fix (`services/fx.ts`): novo model `FxRateCache` (migration `20260908162422`) — toda vez que a API responde de verdade, o câmbio é gravado ali. Quando a chamada ao vivo falha (qualquer motivo: 429, fora do ar, timeout), `getUsdToBrlRate()` cai pro último valor bom conhecido em vez de travar a ação inteira. Câmbio não pula o suficiente numa janela de poucas horas pra isso distorcer o valor investido de um jeito que importe. Fallback usa TTL curto (5min, contra os 30min do cache normal) — assim que a API voltar, a próxima chamada já tenta ao vivo de novo sozinha.
+
+Como a tabela é nova (zerada) e a API ainda estava 429 no momento do deploy, semeei um valor inicial (5,0906 — bid real buscado de outro IP às 13:20 do mesmo dia) pra o fallback já ter o que servir na primeira tentativa, em vez de falhar uma vez a mais até alguém conseguir uma cotação ao vivo. **Verificado end-to-end em produção** (não só a leitura isolada da tabela): rodei a função real `getUsdToBrlRate()` no servidor com a API ainda 429 de lá — voltou `5.0906` pelo fallback, sem erro.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
