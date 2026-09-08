@@ -655,6 +655,13 @@ export function Orcamento() {
                 <div className={cards.listTitle}>
                   {t.description}
                   {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
+                  {/* Compra parcelada (08/09) — mesmo indicador do modal
+                      "Compras sem categoria", pra não sumir aqui também. */}
+                  {t.totalInstallments != null && (
+                    <span className={cards.installmentPill}>
+                      {t.installmentNumber ?? '?'}/{t.totalInstallments}
+                    </span>
+                  )}
                 </div>
                 <div className={cards.listSub}>
                   {formatDayLabel(t.date.slice(0, 10))}

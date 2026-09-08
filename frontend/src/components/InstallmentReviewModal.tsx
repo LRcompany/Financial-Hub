@@ -104,7 +104,13 @@ function GroupRow({
           className={styles.totalInput}
           disabled={saving}
         />
-        <span className={styles.remainingHint}>{group.count}x restante{group.count > 1 ? 's' : ''}</span>
+        <span className={styles.remainingHint}>
+          {/* Parcela(s) já paga(s) de verdade (Transaction) — 08/09, pedido
+              do Luiz: sem isso parecia que a compra só tinha as futuras,
+              como se a 1ª parcela nunca tivesse acontecido. */}
+          {group.paidCount > 0 && `${group.paidCount} paga${group.paidCount > 1 ? 's' : ''} · `}
+          {group.count}x restante{group.count > 1 ? 's' : ''}
+        </span>
       </td>
       <td className={styles.numCell}>
         {formatDate(group.firstDueDate)}

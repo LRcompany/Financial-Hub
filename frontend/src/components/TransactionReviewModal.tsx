@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type UncategorizedTransactionGroup, type LeafCategoryOption } from '../lib/api'
 import { currency } from '../lib/format'
 import { Select } from './Select'
+import cards from '../styles/cards.module.css'
 import styles from './TransactionReviewModal.module.css'
 
 function formatDate(iso: string): string {
@@ -38,7 +39,17 @@ function GroupRow({
 
   return (
     <tr>
-      <td>{group.description}</td>
+      <td>
+        {group.description}
+        {/* Compra parcelada (08/09, pedido do Luiz: "deixa marcado que é
+            uma compra parcelada") — sem isso a compra aparecia igualzinha
+            a qualquer transação avulsa, só com a opção de categorizar. */}
+        {group.totalInstallments != null && (
+          <span className={cards.installmentPill}>
+            {group.installmentNumber ?? '?'}/{group.totalInstallments}
+          </span>
+        )}
+      </td>
       <td className={styles.numCell}>{group.count}x</td>
       <td className={styles.numCell}>{formatDate(group.lastDate)}</td>
       <td className={styles.numCell}>R$ {currency(group.totalAmount)}</td>

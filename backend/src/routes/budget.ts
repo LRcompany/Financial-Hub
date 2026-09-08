@@ -449,6 +449,22 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
 
   const positions = buildInstallmentPositions(installments);
 
+  // Parcela(s) da MESMA compra que já aconteceu de verdade (Transaction, não
+  // UpcomingInstallment) — pedido do Luiz (08/09: "precisa aparecer na lista
+  // das compras parceladas em orçamento"). Sem isso, a compra some da "já
+  // paguei 1 de 6" — só mostrava as 5 restantes, como se a primeira nunca
+  // tivesse existido. Mesma chave de agrupamento (purchaseBase + valor) já
+  // usada pra tudo aqui.
+  const paidTransactions = await prisma.transaction.findMany({
+    where: { totalInstallments: { not: null } },
+    select: { description: true, amount: true },
+  });
+  const paidCountByKey = new Map<string, number>();
+  for (const t of paidTransactions) {
+    const key = `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`;
+    paidCountByKey.set(key, (paidCountByKey.get(key) ?? 0) + 1);
+  }
+
   const groups = new Map<
     string,
     {
@@ -461,6 +477,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
       ids: string[];
       dueDates: Date[];
       totalInstallments: number | null;
+      paidCount: number;
     }
   >();
   for (const i of installments) {
@@ -485,6 +502,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
         ids: [i.id],
         dueDates: [i.dueDate],
         totalInstallments,
+        paidCount: paidCountByKey.get(key) ?? 0,
       });
     }
   }
@@ -498,6 +516,7 @@ budgetRouter.get("/upcoming-installments/groups", async (_req, res) => {
       categoryId: g.categoryId,
       categoryPath: g.categoryPath,
       count: g.ids.length,
+      paidCount: g.paidCount,
       firstDueDate: g.dueDates.reduce((a, b) => (a < b ? a : b)),
       lastDueDate: g.dueDates.reduce((a, b) => (a > b ? a : b)),
       totalInstallments: g.totalInstallments,

@@ -46,6 +46,10 @@ export interface Transaction {
   // true = lançado manualmente adiantado, ainda esperando o sync da Pluggy
   // confirmar contra a fatura real (ver pluggyTransactionSync.ts).
   awaitingPluggyMatch: boolean
+  // Compra parcelada (08/09) — "parcela 1 de 6" pra ESTA transação
+  // especificamente (a que já aconteceu). Null pra compra à vista.
+  installmentNumber: number | null
+  totalInstallments: number | null
 }
 
 export interface UncategorizedTransactionGroup {
@@ -54,6 +58,8 @@ export interface UncategorizedTransactionGroup {
   totalAmount: number
   lastDate: string
   ids: string[]
+  installmentNumber: number | null
+  totalInstallments: number | null
 }
 
 export type CategoryKind = 'essential' | 'non_essential' | 'investment'
@@ -152,6 +158,10 @@ export interface InstallmentGroup {
   categoryId: string | null
   categoryPath: string | null
   count: number
+  // Quantas parcelas dessa MESMA compra já aconteceram de verdade
+  // (Transaction, não UpcomingInstallment) — 08/09. `count` continua sendo
+  // só as futuras (é o que os botões Salvar/Excluir desse grupo operam).
+  paidCount: number
   firstDueDate: string
   lastDueDate: string
   // Total de parcelas da compra — automático (derivado) ou corrigido à mão

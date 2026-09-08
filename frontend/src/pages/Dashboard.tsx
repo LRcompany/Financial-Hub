@@ -313,6 +313,12 @@ export function Dashboard() {
                     <div className={styles.listTitle}>
                       {t.description}
                       {t.awaitingPluggyMatch && <span className={styles.pendingPill}>pendente</span>}
+                      {/* Compra parcelada (08/09) */}
+                      {t.totalInstallments != null && (
+                        <span className={styles.installmentPill}>
+                          {t.installmentNumber ?? '?'}/{t.totalInstallments}
+                        </span>
+                      )}
                     </div>
                     <div className={styles.listSub}>
                       {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}

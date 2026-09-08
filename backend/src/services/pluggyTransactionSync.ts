@@ -68,6 +68,19 @@ function realAmount(tx: PluggyTransaction): number {
   return tx.amountInAccountCurrency ?? tx.amount;
 }
 
+/** Marca a Transaction como parcela de compra parcelada (pedido do Luiz,
+ * 08/09: "deixa marcado que é uma compra parcelada") — direto do
+ * creditCardMetadata que a Pluggy já manda, sem precisar de nenhum cálculo
+ * extra. `installmentNumber` é especificamente a parcela DESSA transação (a
+ * que já aconteceu); null pra compra à vista. */
+function installmentFields(tx: PluggyTransaction): { installmentNumber: number | null; totalInstallments: number | null } {
+  const meta = tx.creditCardMetadata;
+  return {
+    installmentNumber: meta?.installmentNumber ?? null,
+    totalInstallments: meta?.totalInstallments ?? null,
+  };
+}
+
 // Cobrança que SEMPRE vem acompanhada do estorno correspondente no mesmo
 // ciclo — confirmado com o Luiz (04/09): "Tarifa Anuidade Diferenciada" do
 // C6 é cobrada e estornada todo mês por causa do investimento dele lá, sempre
@@ -223,6 +236,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
               isTransfer,
               categoryId,
               pluggyPending: false,
+              ...installmentFields(tx),
             },
           });
           transactionsReconciled++;
@@ -256,6 +270,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
             externalId,
             awaitingPluggyMatch: false,
             pluggyPending: tx.status === "PENDING",
+            ...installmentFields(tx),
           },
         });
         transactionsReconciled++;
@@ -281,6 +296,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           categoryId,
           brokerId: broker.id,
           pluggyPending: tx.status === "PENDING",
+          ...installmentFields(tx),
         },
       });
       transactionsSynced++;

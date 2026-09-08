@@ -48,7 +48,10 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
     orderBy: { date: "desc" },
   });
 
-  const groups = new Map<string, { description: string; totalAmount: number; ids: string[]; lastDate: Date }>();
+  const groups = new Map<
+    string,
+    { description: string; totalAmount: number; ids: string[]; lastDate: Date; installmentNumber: number | null; totalInstallments: number | null }
+  >();
   for (const t of transactions) {
     const existing = groups.get(t.description);
     if (existing) {
@@ -56,12 +59,31 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
       existing.totalAmount += t.amount;
       if (t.date > existing.lastDate) existing.lastDate = t.date;
     } else {
-      groups.set(t.description, { description: t.description, totalAmount: t.amount, ids: [t.id], lastDate: t.date });
+      // installmentNumber/totalInstallments (08/09: "deixa marcado que é
+      // uma compra parcelada") vêm da transação mais recente do grupo —
+      // uma compra à vista repetida no mesmo comerciante (ex: "Uber") nunca
+      // tem esses campos, então não atrapalha o caso comum.
+      groups.set(t.description, {
+        description: t.description,
+        totalAmount: t.amount,
+        ids: [t.id],
+        lastDate: t.date,
+        installmentNumber: t.installmentNumber,
+        totalInstallments: t.totalInstallments,
+      });
     }
   }
 
   const result = [...groups.values()]
-    .map((g) => ({ description: g.description, count: g.ids.length, totalAmount: g.totalAmount, lastDate: g.lastDate, ids: g.ids }))
+    .map((g) => ({
+      description: g.description,
+      count: g.ids.length,
+      totalAmount: g.totalAmount,
+      lastDate: g.lastDate,
+      ids: g.ids,
+      installmentNumber: g.installmentNumber,
+      totalInstallments: g.totalInstallments,
+    }))
     .sort((a, b) => b.lastDate.getTime() - a.lastDate.getTime());
 
   const leafCategories = await prisma.category.findMany({
