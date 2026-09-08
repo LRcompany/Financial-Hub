@@ -734,13 +734,4 @@ export const api = {
   },
   positionsHistory: (group: string) =>
     request<{ history: { label: string; value: number }[] }>(`/positions/history?group=${encodeURIComponent(group)}`),
-  addPosition: (input: {
-    brokerName: string
-    securityName: string
-    type: string
-    currency: string
-    investedAmount: number
-    marketValue: number
-    ticker?: string
-  }) => request('/positions', { method: 'POST', body: JSON.stringify(input) }),
 }

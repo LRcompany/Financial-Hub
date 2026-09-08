@@ -1241,6 +1241,19 @@ Decisão consciente: o `.toggle` (seta de expandir/recolher categoria-mãe, 20px
 
 **Verificado localmente** (PIN de teste, nunca produção) via `getComputedStyle` em cada variante: Categorias (`default` 28px/12px-radius/fill-muted em "Nova subcategoria"/"Editar"/"Excluir"), header do app (`lg` 40px/12px-radius/ink), modal de categorização (`default` 28px, botão "Fechar"), Projetos (`ghost` transparente em "Pausar", `danger` ícone vermelho transparente em "Cancelar") — todos batendo exatamente com a variante esperada.
 
+### Aposentado o "Adicionar posição manual" (08/09)
+
+Luiz mandou print dessa modal (o "+" flutuante em Patrimônio) confuso sobre `Valor investido`/`Valor atual` — "por que preciso digitar isso de novo toda vez? Se eu invisto 20 USD, ele já soma, não preciso recadastrar o total". Investigado: ele estava certo, e o que ele descreveu **já existia**, só que em outro lugar — essa modal era sobra de ANTES do "Registrar aporte" (`ContributionModal`, 05/09) existir, nunca aposentada depois.
+
+Hoje o app tem 3 mecanismos de posição manual, e só 2 fazem sentido:
+- **"Registrar aporte"** (`ContributionModal`) — escolhe corretora/ativo existente ou cria novo, um único valor com toggle Aporte/Resgate, **soma** (nunca substitui) no `investedAmount` (ver `services/contributions.ts`). Cadastro de ativo novo já nasce com `marketValue = investedAmount` (0% de rentabilidade até atualizar) — exatamente o "vira a base do valor" que o Luiz descreveu.
+- **"Atualizar posições" por corretora** (`ManualPositionsModal`, em Configurações) — atualiza só o `valor atual` (mark-to-market: juros, valorização), nunca mexe no investido, mantém histórico mês a mês.
+- ~~"Adicionar posição manual"~~ (removido) — corretora/ativo em texto livre (sem escolher os já cadastrados), pedia os DOIS valores absolutos toda vez, e o `POST /positions` fazia `upsert` por mês — usar 2x no mesmo mês SOBRESCREVIA silenciosamente. 100% redundante com os outros dois.
+
+Luiz confirmou manter o "+" flutuante (mesmo padrão de Projetos/Orçamento) — só reapontado pra abrir a MESMA `ContributionModal` do botão "+ Registrar aporte" do topo, em vez do formulário próprio.
+
+**Removido**: `showAddForm`/`addForm`/`saveNewPosition` e a modal inteira de `Patrimonio.tsx`; `api.addPosition` de `api.ts`; a rota `POST /api/positions` inteira e a const `SECURITY_TYPES` órfã de `positions.ts` (sem outro chamador — confirmado por grep antes de apagar); CSS órfão (`.overlay`/`.sheet`/`.sheetHeader`/`.addForm`) de `Patrimonio.module.css`. Verificado local: FAB abre "Registrar aporte" corretamente, sem erro de console.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF

@@ -5,8 +5,6 @@ import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/a
 
 export const positionsRouter = Router();
 
-const SECURITY_TYPES = ["FII", "Ação", "Renda Fixa", "Cripto", "Moeda", "Fundo", "Outro"];
-
 // GET /api/fx-rate — cotação USD/BRL atual, pra exibição (converter um total
 // já em BRL de volta pra USD na tela, ex: total de Cripto). Diferente do
 // fxRateToBRL gravado por posição (esse é a taxa histórica de quando aquela
@@ -132,56 +130,3 @@ positionsRouter.get("/positions/history", async (req, res) => {
   res.json({ history });
 });
 
-// POST /api/positions — lançamento manual, só faz sentido pra corretora sem
-// sync automático (Nomad, Wise, Phantom...). Cria o Broker/Security na hora
-// se ainda não existirem. Valores em USD são convertidos pra BRL na hora de
-// gravar (mesma regra do sync da Pluggy) — investedAmount/marketValue no
-// banco são sempre BRL, nunca mistura escala na soma do patrimônio.
-positionsRouter.post("/positions", async (req, res) => {
-  const { brokerName, securityName, type, currency, investedAmount, marketValue, ticker } = req.body ?? {};
-  if (!brokerName || !securityName || !type || typeof investedAmount !== "number" || typeof marketValue !== "number") {
-    return res.status(400).json({ error: "Campos obrigatórios: brokerName, securityName, type, investedAmount, marketValue" });
-  }
-  if (!SECURITY_TYPES.includes(type)) {
-    return res.status(400).json({ error: `type precisa ser um de: ${SECURITY_TYPES.join(", ")}` });
-  }
-
-  const assetCurrency = currency === "USD" ? "USD" : "BRL";
-  let fxRateToBRL: number | null = null;
-  let investedAmountBRL = investedAmount;
-  let marketValueBRL = marketValue;
-  if (assetCurrency === "USD") {
-    try {
-      fxRateToBRL = await getUsdToBrlRate();
-    } catch (err) {
-      return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
-    }
-    investedAmountBRL = investedAmount * fxRateToBRL;
-    marketValueBRL = marketValue * fxRateToBRL;
-  }
-
-  const broker = await prisma.broker.upsert({
-    where: { name: brokerName },
-    update: {},
-    create: { name: brokerName, dataSource: "manual_statement", scope: JSON.stringify(["investments"]) },
-  });
-
-  const securityKey = `manual:${brokerName}:${securityName}`.toUpperCase();
-  const security = await prisma.security.upsert({
-    where: { id: securityKey },
-    update: { name: securityName, ticker: ticker ?? null, type, currency: assetCurrency },
-    create: { id: securityKey, name: securityName, ticker: ticker ?? null, type, currency: assetCurrency },
-  });
-
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-
-  const snapshot = await prisma.positionSnapshot.upsert({
-    where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId: security.id, month, year } },
-    update: { investedAmount: investedAmountBRL, marketValue: marketValueBRL, fxRateToBRL },
-    create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount: investedAmountBRL, marketValue: marketValueBRL, fxRateToBRL },
-  });
-
-  res.status(201).json(snapshot);
-});

@@ -8,7 +8,6 @@ import {
   TrendingDown,
   Layers,
   Plus,
-  X,
   Landmark,
   Building2,
   Bitcoin,
@@ -23,14 +22,10 @@ import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
 import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
-import { Select } from '../components/Select'
 import { ContributionModal } from '../components/ContributionModal'
-import { IconButton } from '../components/IconButton'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
-
-const SECURITY_TYPES = ['FII', 'Ação', 'Renda Fixa', 'Cripto', 'Moeda', 'Fundo', 'Outro']
 
 const TYPE_ICONS: Record<string, typeof PieChart> = {
   'Renda Fixa': Landmark,
@@ -144,17 +139,6 @@ export function Patrimonio() {
   const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
 
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({
-    brokerName: '',
-    securityName: '',
-    type: 'Renda Fixa',
-    currency: 'BRL',
-    investedAmount: '',
-    marketValue: '',
-  })
-  const [savingPosition, setSavingPosition] = useState(false)
-
   const [targetInput, setTargetInput] = useState('')
   const [contributionInput, setContributionInput] = useState('')
   const [savingGoal, setSavingGoal] = useState(false)
@@ -193,29 +177,6 @@ export function Patrimonio() {
   }
 
   useEffect(load, [])
-
-  async function saveNewPosition(e: React.FormEvent) {
-    e.preventDefault()
-    const investedAmount = Number(addForm.investedAmount)
-    const marketValue = Number(addForm.marketValue)
-    if (!addForm.brokerName || !addForm.securityName || !investedAmount || !marketValue) return
-    setSavingPosition(true)
-    try {
-      await api.addPosition({
-        brokerName: addForm.brokerName,
-        securityName: addForm.securityName,
-        type: addForm.type,
-        currency: addForm.currency,
-        investedAmount,
-        marketValue,
-      })
-      setAddForm({ brokerName: '', securityName: '', type: 'Renda Fixa', currency: 'BRL', investedAmount: '', marketValue: '' })
-      setShowAddForm(false)
-      load()
-    } finally {
-      setSavingPosition(false)
-    }
-  }
 
   async function saveGoal(e: React.FormEvent) {
     e.preventDefault()
@@ -622,68 +583,19 @@ export function Patrimonio() {
           </div>
       </div>
 
-      <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
+      {/* Mesmo "+" flutuante que Projetos/Orçamento usam (pedido do Luiz,
+          08/09: "usamos a mesma lógica pra outras telas") — abre a MESMA
+          modal do botão "Registrar aporte" lá em cima, não um formulário
+          próprio. Antes disso existia um "Adicionar posição manual" separado
+          (texto livre de corretora/ativo, pedia valor investido E atual
+          toda vez, sobrescrevia se usado 2x no mês) — 100% redundante com
+          "Registrar aporte" (que já escolhe corretora/ativo existente ou
+          novo, soma em vez de substituir, e já cadastra o valor atual = valor
+          investido na primeira vez) + "Atualizar posições" em Configurações
+          (que cuida do valor atual depois, mês a mês). Removido. */}
+      <button className={cards.fab} aria-label="Registrar aporte" onClick={() => setShowContributionModal(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
-
-      {showAddForm && (
-        <div className={styles.overlay} onClick={() => setShowAddForm(false)}>
-          <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.sheetHeader}>
-              <h3 className={styles.subheading} style={{ margin: 0 }}>
-                Adicionar posição manual
-              </h3>
-              <IconButton onClick={() => setShowAddForm(false)} aria-label="Fechar">
-                <X size={16} strokeWidth={2} />
-              </IconButton>
-            </div>
-            <p className={cards.heroLabel}>
-              Só pra corretoras sem sync automático (Nomad, Wise, Phantom...) — se o banco já está conectado, o aporte
-              entra sozinho no próximo sync.
-            </p>
-            <form className={styles.addForm} onSubmit={saveNewPosition}>
-              <Input
-                placeholder="Corretora (ex: Nomad)"
-                value={addForm.brokerName}
-                onChange={(e) => setAddForm({ ...addForm, brokerName: e.target.value })}
-              />
-              <Input
-                placeholder="Nome do ativo"
-                value={addForm.securityName}
-                onChange={(e) => setAddForm({ ...addForm, securityName: e.target.value })}
-              />
-              <Select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
-                {SECURITY_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
-              <Select value={addForm.currency} onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}>
-                <option value="BRL">BRL</option>
-                <option value="USD">USD</option>
-              </Select>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder={`Valor investido (${addForm.currency})`}
-                value={addForm.investedAmount}
-                onChange={(e) => setAddForm({ ...addForm, investedAmount: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder={`Valor atual (${addForm.currency})`}
-                value={addForm.marketValue}
-                onChange={(e) => setAddForm({ ...addForm, marketValue: e.target.value })}
-              />
-              <button className={cards.saveBtn} type="submit" disabled={savingPosition}>
-                Adicionar
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
