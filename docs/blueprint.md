@@ -1203,6 +1203,15 @@ Fix:
 
 **Limitação que fica registrada, sem solução automática**: o nome "MASTERCARD" pra essa compra da Adidas não é um problema de sincronização (não é o caso de PENDING→POSTED que já existe pro `pluggyPending`) — é literalmente o que a Pluggy manda como `description` já `POSTED` (`pluggyPending: false` confirmado). Parece um financiamento tipo "parcelado lojista" que sai na fatura com nome genérico da bandeira, não do comerciante. O app não tem hoje um jeito do Luiz anotar "essa é a Adidas" numa `Transaction` (o `UpcomingInstallment` já tem esse `note` pra isso — a `Transaction` não). Fica como próxima pendência se ele quiser.
 
+### Nota livre na Transaction (08/09)
+
+Resolvendo a limitação registrada acima: `Transaction` ganhou `note` (migration `20260908141831`) — mesmo campo/mesma ideia do `UpcomingInstallment.note` já existente, só que pra uma compra que já aconteceu. Puramente documental, nunca sobrescreve `description`/categoria/valor.
+
+- `PUT /api/transactions/:id/note` — corpo `{ note }`, `null`/string vazia limpa.
+- Editável direto em **Todas as transações do mês** (Orçamento): um botão discreto ("nota") vira `<Input>` ao clicar, salva sozinho no blur ou Enter (mesmo padrão otimista de update já usado pra trocar categoria ali).
+- Só leitura no Dashboard (edição mora só em Orçamento, que é a página de gestão).
+- Investigado ainda a segunda compra da Adidas ("Parcela de compra lojista MasterCard", R$112,05, C6) que motivou esse pedido: confirmado ao vivo na Pluggy que o `creditCardMetadata` dela só tem `cardNumber` e `billForecastDate` — SEM `installmentNumber`/`totalInstallments` nenhum (diferente do padrão "falta billForecastDate" já documentado pra PEOPLE BIKE SHOP/TOKSTOK). Ainda está `PENDING` do lado da Pluggy — o mecanismo de reconciliação PENDING→POSTED (que eu estendi pra também gravar installment ao confirmar) pode capturar isso sozinho se a Pluggy soltar mais dado quando fechar; não é garantido, já que "parcelado lojista" tende a ser um tipo de financiamento sem granularidade de comerciante mesmo confirmado.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
