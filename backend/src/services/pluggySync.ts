@@ -58,19 +58,18 @@ const KNOWN_FII_PREFIXES = new Set([
   "HGLG", "MXRF", "KNRI", "HGRE", "VISC", "ALZR", "XPLG", "KNCR", "HTMX", "KNSC", "PLRI", "HGPO",
 ]);
 
-// C6 e Sofisa (contas digitais) não separam "conta corrente" de "investimento"
-// — o saldo inteiro que a Pluggy reporta em /investments PRA ESSAS DUAS
-// corretoras é o próprio saldo em conta rendendo sozinho (mesmo produto do
-// "CDB - Liquidez Diária" das outras, só que sem vir marcado como
-// automaticallyInvestedBalance). Pedido do Luiz (08/09): trazer o dinheiro de
-// conta corrente do BTG, Sofisa e C6 pra dentro de "Conta Corrente" — pro BTG
-// isso já é coberto abaixo (ele TEM investimento de verdade misturado junto:
-// ações, FII, Tesouro, CDB Andbank — só a fatia automaticamente investida é
-// conta corrente). C6/Sofisa não têm essa mistura: é tudo conta corrente.
-const CHECKING_ACCOUNT_ONLY_BROKERS = new Set(["C6", "Sofisa"]);
-
-function mapSecurityType(inv: PluggyInvestment, brokerName: string): string {
-  if (CHECKING_ACCOUNT_ONLY_BROKERS.has(brokerName)) return "Conta Corrente";
+// ERRO corrigido (08/09): cheguei a tratar C6 e Sofisa inteiros como "conta
+// corrente" achando que o produto deles não separa saldo parado de
+// investimento — Luiz corrigiu: os dois TÊM investimento de verdade (CDB
+// com custo de aquisição rastreado, `amountOriginal` real) igual qualquer
+// outra corretora. Confirmado ao vivo: a conta BANK dos dois está zerada
+// (`automaticallyInvestedBalance: 0`) — não existe saldo de conta corrente
+// de verdade pra nenhum dos dois agora. Sem exceção por corretora aqui:
+// FIXED_INCOME sempre "Renda Fixa" pra todo mundo; a fatia real de conta
+// corrente (quando existir) já é capturada separadamente mais abaixo, via
+// `accounts.bankData.automaticallyInvestedBalance` — igual funciona pro
+// BTG hoje.
+function mapSecurityType(inv: PluggyInvestment): string {
   const tickerPrefix = inv.code?.replace(/[0-9]+$/, "");
   if (tickerPrefix && KNOWN_FII_PREFIXES.has(tickerPrefix)) return "FII";
   if (inv.subtype === "REAL_ESTATE_FUND") return "FII";
@@ -114,7 +113,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         name: inv.name,
         ticker: inv.code ?? null,
         currency,
-        type: mapSecurityType(inv, broker.name),
+        type: mapSecurityType(inv),
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
         dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
@@ -125,7 +124,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         id: `pluggy:${inv.id}`,
         name: inv.name,
         ticker: inv.code ?? null,
-        type: mapSecurityType(inv, broker.name),
+        type: mapSecurityType(inv),
         currency,
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
