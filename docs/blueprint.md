@@ -1262,6 +1262,25 @@ Fix (`services/fx.ts`): novo model `FxRateCache` (migration `20260908162422`) �
 
 Como a tabela é nova (zerada) e a API ainda estava 429 no momento do deploy, semeei um valor inicial (5,0906 — bid real buscado de outro IP às 13:20 do mesmo dia) pra o fallback já ter o que servir na primeira tentativa, em vez de falhar uma vez a mais até alguém conseguir uma cotação ao vivo. **Verificado end-to-end em produção** (não só a leitura isolada da tabela): rodei a função real `getUsdToBrlRate()` no servidor com a API ainda 429 de lá — voltou `5.0906` pelo fallback, sem erro.
 
+### Nova categoria "Conta Corrente" em Patrimônio — 99, Wise, BTG, Sofisa, C6 (08/09)
+
+Luiz: "99 e Wise precisa voltar para a categoria de Conta-Corrente... deixar ele como renda fixa não está fazendo mais sentido". Investigado: ele tinha razão, e isso já tinha sido identificado antes — comentário de 01/09 no código da Wise já dizia "é liquidez, não investimento", e o ativo dela já tinha sido renomeado de "CDB - Liquidez Diária" pra "Conta Corrente" na época; só o `type` nunca acompanhou porque essa categoria não existia na lista ainda. Confirmado, Luiz pediu pra estender também pro BTG, Sofisa e C6.
+
+**Regra aplicada** (`services/pluggySync.ts`):
+- A fatia `accounts.bankData.automaticallyInvestedBalance` ("CDB - Liquidez Diária", vem de `GET /accounts`, não de `/investments` — ver nota de 25/08 no topo do arquivo) agora grava `type: "Conta Corrente"` em vez de `"Renda Fixa"`. É universal (qualquer broker), então cobre 99 e a fatia equivalente do BTG automaticamente — sem precisar de exceção por corretora, e sem tocar no resto da carteira do BTG (ações, FII, Tesouro, CRA, Debênture, "CDB - BANCO ANDBANK" — esses vêm de `/investments`, caminho separado, intocado).
+- Novo `CHECKING_ACCOUNT_ONLY_BROKERS = new Set(["C6", "Sofisa"])`: essas duas corretoras não separam conta corrente de investimento no produto delas — confirmado pelo padrão de dado (Sofisa tinha ~83 securities `pluggy:*` todas nomeadas idênticas "CDB - BANCO SOFISA S.A." com IDs diferentes, sinal de reinvestimento automático a cada ciclo, não escolha deliberada de comprar CDB de novo toda hora). Pra essas duas, TODO saldo sincronizado ao vivo vira "Conta Corrente".
+- `brokers.ts`: `fixedType` da Wise (usado pelo popup "Atualizar posições") trocado de "Renda Fixa" pra "Conta Corrente".
+- Frontend: "Conta Corrente" adicionado ao início da lista de tipos em `ContributionModal`/`ManualPositionsModal`; ícone `Banknote` no agrupamento de Patrimônio (`TYPE_ICONS`). Sem migration — `Security.type` sempre foi string livre.
+
+**Retag retroativo** (backup do `prod.db` antes, script `.mjs` com dry-run primeiro): 88 `Security` corrigidas de "Renda Fixa" pra "Conta Corrente". Cuidado explícito pra NÃO pegar investimento deliberado de verdade — cada corretora foi auditada individualmente antes de decidir o que entra:
+- **BTG**: só a linha `pluggy:autoinvest:...` ("CDB - Liquidez Diária", ~R$302) mudou. As 14 linhas manuais antigas de taxa nomeada (`MANUAL:BTG:CDB ANBANK 14,15%`, `CDB MASTER 120%`, etc.) e TODA a carteira viva (ações, FII, Tesouro, CRA, Debênture, `CDB - BANCO ANDBANK`) ficaram exatamente como estavam — são investimento de verdade.
+- **99**: a linha ao vivo (`pluggy:autoinvest:...`) + 2 linhas manuais históricas do MESMO conceito (`MANUAL:99:EMERGENCIA`, mesmo nome "CDB - Liquidez Diária"; `MANUAL:99:CC`, literalmente "CC"). `MANUAL:99:CDB` e `MANUAL:99:MONETUS` ficaram de fora — nome ambíguo demais pra assumir que é liquidez sem confirmar com o Luiz.
+- **Sofisa**: as ~83 linhas `pluggy:*` ao vivo (incluindo uma emitida como "CDB - BANCO PINE S/A" — nome de emissor diferente, mesma corretora/produto) + `MANUAL:SOFISA:EMERGENCIA` (histórico, mesmo conceito). As 4 linhas manuais de taxa nomeada (`CDB 15,50%`, `CDB PINE 15.30%`, etc.) ficaram de fora — investimento deliberado antigo de verdade.
+- **C6**: só a 1 linha ao vivo (`CDB - BANCO C6 S.A.`). As 3 linhas manuais de taxa nomeada (`CDB 110%`, `CDB 112%`, etc.) ficaram de fora.
+- **Wise**: só `MANUAL:WISE:EMERGENCIA` (o único ativo real que sobra lá, ver nota de 01/09). `CAD`/`EUR`/`CDB MAXIMA`/`FUNDO` são resíduo congelado desde 03/2023, já excluídos do popup de atualização — não mexidos.
+
+Resultado (setembro/2026): "Conta Corrente" soma R$123.079,14 — nova 3ª maior fatia da alocação, atrás só de Renda Fixa (R$208.240,70, ainda o que sobrou de investimento deliberado de verdade) e FII (R$174.161,19). Verificado por soma agregada antes/depois de aplicar (total geral do patrimônio não muda — é só reclassificação, nenhum valor foi somado/subtraído).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
