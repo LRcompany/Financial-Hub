@@ -6,7 +6,7 @@ import { Select } from './Select'
 import { IconButton } from './IconButton'
 import styles from './ContributionModal.module.css'
 
-const SECURITY_TYPES = ['Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
+const SECURITY_TYPES = ['Conta Corrente', 'Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)

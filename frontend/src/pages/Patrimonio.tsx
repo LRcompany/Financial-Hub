@@ -12,6 +12,7 @@ import {
   Building2,
   Bitcoin,
   DollarSign,
+  Banknote,
 } from 'lucide-react'
 import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
@@ -34,6 +35,7 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
   Fundo: Layers,
   Cripto: Bitcoin,
   Moeda: DollarSign,
+  'Conta Corrente': Banknote,
 }
 
 // "Por corretora" (pizza) não faz sentido pra Cripto — PHANTOM_BTC, PHANTOM_

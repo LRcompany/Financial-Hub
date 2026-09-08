@@ -113,7 +113,10 @@ const MANUAL_POSITION_CONFIG: Record<string, PositionFieldConfig> = {
     showQuantity: false,
     showUnitValue: false,
     showInvestedAmount: false,
-    fixedType: "Renda Fixa",
+    // Era "Renda Fixa" — corrigido (08/09, pedido do Luiz) pra "Conta
+    // Corrente", que é o que já dizia o comentário original: "é liquidez,
+    // não investimento".
+    fixedType: "Conta Corrente",
     // "CDB MAXIMA" e "FUNDO" não são tocados desde 03/2023 — resíduo de uma
     // carteira antiga, não existem mais. Confirmado (01/09): só sobra UM
     // ativo de verdade aqui, o saldo da conta corrente (era "CDB - Liquidez

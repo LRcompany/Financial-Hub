@@ -6,7 +6,7 @@ import { Select } from './Select'
 import { IconButton } from './IconButton'
 import styles from './ManualPositionsModal.module.css'
 
-const SECURITY_TYPES = ['Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
+const SECURITY_TYPES = ['Conta Corrente', 'Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
 
 interface Row {
   securityId?: string

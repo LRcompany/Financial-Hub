@@ -58,7 +58,19 @@ const KNOWN_FII_PREFIXES = new Set([
   "HGLG", "MXRF", "KNRI", "HGRE", "VISC", "ALZR", "XPLG", "KNCR", "HTMX", "KNSC", "PLRI", "HGPO",
 ]);
 
-function mapSecurityType(inv: PluggyInvestment): string {
+// C6 e Sofisa (contas digitais) não separam "conta corrente" de "investimento"
+// — o saldo inteiro que a Pluggy reporta em /investments PRA ESSAS DUAS
+// corretoras é o próprio saldo em conta rendendo sozinho (mesmo produto do
+// "CDB - Liquidez Diária" das outras, só que sem vir marcado como
+// automaticallyInvestedBalance). Pedido do Luiz (08/09): trazer o dinheiro de
+// conta corrente do BTG, Sofisa e C6 pra dentro de "Conta Corrente" — pro BTG
+// isso já é coberto abaixo (ele TEM investimento de verdade misturado junto:
+// ações, FII, Tesouro, CDB Andbank — só a fatia automaticamente investida é
+// conta corrente). C6/Sofisa não têm essa mistura: é tudo conta corrente.
+const CHECKING_ACCOUNT_ONLY_BROKERS = new Set(["C6", "Sofisa"]);
+
+function mapSecurityType(inv: PluggyInvestment, brokerName: string): string {
+  if (CHECKING_ACCOUNT_ONLY_BROKERS.has(brokerName)) return "Conta Corrente";
   const tickerPrefix = inv.code?.replace(/[0-9]+$/, "");
   if (tickerPrefix && KNOWN_FII_PREFIXES.has(tickerPrefix)) return "FII";
   if (inv.subtype === "REAL_ESTATE_FUND") return "FII";
@@ -102,7 +114,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         name: inv.name,
         ticker: inv.code ?? null,
         currency,
-        type: mapSecurityType(inv),
+        type: mapSecurityType(inv, broker.name),
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
         dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
@@ -113,7 +125,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         id: `pluggy:${inv.id}`,
         name: inv.name,
         ticker: inv.code ?? null,
-        type: mapSecurityType(inv),
+        type: mapSecurityType(inv, broker.name),
         currency,
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
@@ -186,6 +198,12 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
   // "CDB de liquidez diária" embutido na conta corrente — não vem em
   // /investments, vem em /accounts (ver nota no topo do arquivo). Cada conta
   // BANK com esse campo > 0 vira sua própria posição "CDB - Liquidez Diária".
+  // Tipo "Conta Corrente" (não "Renda Fixa") — pedido do Luiz (08/09): esse
+  // saldo é dinheiro parado rendendo sozinho, nunca uma escolha de investir
+  // (mesmo raciocínio da Wise, que já tinha o comentário "é liquidez, não
+  // investimento" desde 01/09). Universal — cobre 99 e a fatia "Liquidez
+  // Diária" do BTG (que também TEM investimento de verdade misturado junto,
+  // por isso o resto da carteira dele não muda, só essa linha específica).
   const { results: accounts } = (await getAccounts(itemId)) as { results: PluggyAccount[] };
   let autoInvestCount = 0;
   for (const acc of accounts) {
@@ -196,8 +214,8 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     const currency = acc.currencyCode ?? "BRL";
     const security = await prisma.security.upsert({
       where: { id: securityId },
-      update: { name: "CDB - Liquidez Diária", type: "Renda Fixa", currency },
-      create: { id: securityId, name: "CDB - Liquidez Diária", type: "Renda Fixa", currency },
+      update: { name: "CDB - Liquidez Diária", type: "Conta Corrente", currency },
+      create: { id: securityId, name: "CDB - Liquidez Diária", type: "Conta Corrente", currency },
     });
 
     // A Pluggy só manda o saldo atual, não separa "quanto entrou" de "quanto
