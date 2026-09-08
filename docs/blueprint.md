@@ -1187,6 +1187,22 @@ Luiz mandou print da modal de revisão de categoria (`TransactionReviewModal`) f
 - **Modal larga**: `max-width` era 720px, nunca cabia nome de comerciante longo + 4 colunas numéricas + seletor de 220px de uma vez. Aumentado pra 960px (mesma faixa do `ManualPositionsModal`, 920px).
 - **Seta do `<select>` própria**: a seta nativa varia demais entre navegador/SO — removida (`appearance: none`) e trocada por uma seta SVG via `background-image` no `Input.module.css` COMPARTILHADO (não só nesse modal — todo `<Select>` do app usa a mesma classe `.input`), com cor batendo com `--ink-soft` dos dois temas (não dá pra referenciar variável CSS dentro de um data-URI, por isso hardcoded os dois valores hex).
 
+### Compra parcelada marcada na própria Transaction (08/09)
+
+Luiz viu duas compras parceladas reais aparecerem só com a opção de categorizar, sem nenhum indício de que eram parceladas: "Renato Veloso Assessoria" (C6, R$165) e uma compra da Adidas que — achado pelo próprio Luiz — chegou no sistema com o nome genérico "MASTERCARD" (R$36,11/mês).
+
+Investigado com dado real: as DUAS já estavam corretas no `UpcomingInstallment` (parcelas futuras já projetadas — Renato 2/3 e 3/3, Adidas/MASTERCARD 2 a 6 de 6). O que faltava era a PRIMEIRA parcela — a que já virou `Transaction` de verdade — nunca carregar consigo a informação "isso é parcelado": ela aparecia igual a qualquer compra à vista, com só um dropdown de categoria.
+
+Causa raiz: `pluggyTransactionSync.ts` já recebe `creditCardMetadata.{installmentNumber,totalInstallments}` da Pluggy (usa isso pra disparar a projeção das parcelas futuras), mas descartava os dois valores depois de usar — nunca gravava na própria `Transaction`.
+
+Fix:
+- `Transaction` ganhou `installmentNumber`/`totalInstallments` (migration `20260908135831`), preenchidos direto do `creditCardMetadata` nos 3 pontos de escrita do sync (criação nova, confirmação de PENDING→POSTED, e reconciliação de lançamento manual adiantado).
+- Badge "N/total" no comerciante em **Compras sem categoria** (`TransactionReviewModal`), **Todas as transações do mês** (Orçamento) e no Dashboard — mesmo padrão visual do pill "pendente" já usado pra `awaitingPluggyMatch` (`cards.module.css`, cor neutra/accent em vez de aviso).
+- `/upcoming-installments/groups` (alimenta "Revisar parcelas futuras") ganhou `paidCount` — quantas parcelas da mesma compra já viraram `Transaction` de verdade — exibido como "1 paga · 5x restantes" ao lado do que já existia. Antes a compra não desaparecia da lista (as futuras continuavam lá), mas parecia que só tinha 5 parcelas no total, escondendo a 1ª.
+- Backfill (`installmentNumber`/`totalInstallments` são campo novo, sem dado histórico) rodado em produção contra as 561 transações com `externalId` da Pluggy: deriva parcela/total pela cadeia de `UpcomingInstallment` já projetada da mesma compra (mesmo `purchaseId` do `externalId`, sem precisar recontatar a Pluggy). Corrigiu 12 compras retroativamente, incluindo as duas que o Luiz reportou (Renato 1/3, MASTERCARD/Adidas 1/6) e outras 10 que já estavam capengas do mesmo jeito sem ninguém ter notado ainda (Booking.com, Amazon, Academia Korpus, Pague Menos, etc.).
+
+**Limitação que fica registrada, sem solução automática**: o nome "MASTERCARD" pra essa compra da Adidas não é um problema de sincronização (não é o caso de PENDING→POSTED que já existe pro `pluggyPending`) — é literalmente o que a Pluggy manda como `description` já `POSTED` (`pluggyPending: false` confirmado). Parece um financiamento tipo "parcelado lojista" que sai na fatura com nome genérico da bandeira, não do comerciante. O app não tem hoje um jeito do Luiz anotar "essa é a Adidas" numa `Transaction` (o `UpcomingInstallment` já tem esse `note` pra isso — a `Transaction` não). Fica como próxima pendência se ele quiser.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
