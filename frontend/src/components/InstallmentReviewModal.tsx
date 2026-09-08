@@ -105,10 +105,14 @@ function GroupRow({
           disabled={saving}
         />
         <span className={styles.remainingHint}>
-          {/* Parcela(s) já paga(s) de verdade (Transaction) — 08/09, pedido
-              do Luiz: sem isso parecia que a compra só tinha as futuras,
-              como se a 1ª parcela nunca tivesse acontecido. */}
-          {group.paidCount > 0 && `${group.paidCount} paga${group.paidCount > 1 ? 's' : ''} · `}
+          {/* Parcela(s) que já viraram Transaction (08/09) — sem isso
+              parecia que a compra só tinha as futuras, como se a 1ª nunca
+              tivesse acontecido. "Lançada", não "paga": o Luiz corrigiu
+              (08/09) que não existe parcela paga isoladamente — ele sempre
+              paga a fatura inteira do cartão fechada; a parcela virar
+              Transaction só significa que ela já entrou na fatura desse
+              mês, não que foi quitada à parte. */}
+          {group.paidCount > 0 && `${group.paidCount} já lançada${group.paidCount > 1 ? 's' : ''} · `}
           {group.count}x restante{group.count > 1 ? 's' : ''}
         </span>
       </td>
