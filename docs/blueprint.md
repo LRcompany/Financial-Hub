@@ -1313,6 +1313,13 @@ Duas mudanças em `pluggySync.ts`, na mesma entrada da fatia `automaticallyInves
 
 **Como atualizar o saldo da Wise (pergunta do Luiz)**: já existe e não muda — Configurações → corretora Wise → "Atualizar posições" (`ManualPositionsModal`, ver `MANUAL_POSITION_CONFIG.WISE` em `brokers.ts`). Esse popup já esconde tipo/quantidade/valor unitário/valor investido pra Wise (`showType: false, showQuantity: false, showUnitValue: false, showInvestedAmount: false`) — só pede o valor atual. Grava um `PositionSnapshot` novo do mês, sem sobrescrever o histórico anterior.
 
+**Implementado** ("pode fazer isso da conta corrente"):
+- `positions.ts`: cada posição no `GET /positions` agora vem com `previousMarketValue` — valor do mês anterior da MESMA posição (broker+ativo), resolvido reaproveitando `activeSnapshotsAsOf` (já existente, mesma regra de "o que contava naquele mês" usada em todo o resto do módulo) com `nowYm - 1`. Calculado pra toda posição (é uma segunda passada barata, já em memória), não só Conta Corrente — evita duplicar a regra de "qual snapshot vale" fora desse arquivo.
+- `components/BalanceChangeBadge.tsx`: mesmo padrão visual do `ReturnBadge` (seta colorida, texto sempre neutro), mas mostra o delta em **R$, nunca %** — um saldo que vai de R$10 pra R$5.000 num mês não é "49.900% de rentabilidade", é só um depósito.
+- `Patrimonio.tsx`: a tabela de posições agora tem 2 layouts de coluna por `group.type` — "Saldo" + "Variação (mês)" pra Conta Corrente; "Cotas/qtd." + "Preço unit." + "Investido" + "Valor atual" + "Rentab." pra todo o resto, sem mudança.
+
+Verificado local (posição de teste temporária no BTG, R$300→R$450, apagada depois de conferir): linha mostrou "R$ 450,00" + "+R$ 150,00" corretos; os outros grupos (Renda Fixa, FII, Ação...) continuam com as 7 colunas de sempre, sem regressão.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
