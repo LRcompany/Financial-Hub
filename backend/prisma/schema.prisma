@@ -473,3 +473,18 @@ model WebauthnCredential {
   deviceLabel String // ex: "iPhone do Luiz" — escolhido no cadastro
   createdAt   DateTime @default(now())
 }
+
+// Último câmbio USD/BRL que a AwesomeAPI (gratuita, sem chave, sem SLA)
+// realmente devolveu — achado real (08/09): o IP do droplet levou 429 dela
+// (provavelmente rate-limit por IP compartilhado com os outros apps do
+// mesmo servidor) bem no meio de um "Registrar aporte" em dólar, travando a
+// ação inteira. `services/fx.ts` grava aqui toda vez que a API responde de
+// verdade, e cai pra esse valor (mesmo que com algumas horas de atraso) só
+// quando a chamada ao vivo falha — nunca quando ela funciona. Câmbio não
+// pula o suficiente numa janela de poucas horas pra isso distorcer o valor
+// investido de um jeito que importe.
+model FxRateCache {
+  pair      String   @id // "USD-BRL"
+  rate      Float
+  fetchedAt DateTime
+}
