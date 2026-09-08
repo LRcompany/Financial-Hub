@@ -1170,6 +1170,16 @@ Mesmo sem confirmação 100%, o app é PWA e o padrão bate com um bug conhecido
 
 **Pendente de verdade**: confirmar com o Luiz se isso realmente resolveu no celular dele. Se não resolver, o simulador de iOS (depois do `xcode-select`) seria o próximo passo pra reproduzir com certeza.
 
+### Gráficos travados no período errado — rolling vs calendário (08/09)
+
+Luiz observou que o app é organizado mês a mês/ano a ano, então alguns gráficos não fazem sentido como "rolling" (janela móvel) — têm que travar no calendário. Auditado os 3 que ele citou:
+
+- **"Recebido no ano"** — já estava certo (só `[1º jan, 1º jan+1)` do ano corrente). Confirmado, sem mudança.
+- **"Média mensal" (Projetos)** — estava errado: rolling 12 meses, misturando até 3 meses do ANO PASSADO na média. Corrigido pra só janeiro até o mês atual — `avgMonthly12m` renomeado pra `avgMonthlyThisYear`.
+- **Gráfico "Meta diária de gasto"** (Dashboard + Orçamento) — estava errado: rolling 14 dias, misturando dias do mês anterior no início de cada mês. Corrigido pra só o dia 1 do mês corrente até hoje — `last14Days` renomeado pra `daysThisMonth`. Confirmado com o Luiz que ficar com poucos pontos nos primeiros dias do mês é aceitável (melhor que misturar mês). A comparação "vs. mês anterior" também virou mês-a-mês-corrido (dia 1 ao N contra dia 1 ao N do mês anterior, não mais "14 dias contra os 14 antes desses") — compara sempre o mesmo número de dias dos dois lados, senão um mês em andamento sempre pareceria "menor" que um mês fechado.
+
+Verificado com dado real antes do deploy: `daysThisMonth` com exatamente 8 dias (01–08/set), `monthlyReceived` com 9 meses (jan–set) somando exatamente `receivedThisYear` (R$186.822,48).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
