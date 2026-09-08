@@ -1320,6 +1320,28 @@ Duas mudanças em `pluggySync.ts`, na mesma entrada da fatia `automaticallyInves
 
 Verificado local (posição de teste temporária no BTG, R$300→R$450, apagada depois de conferir): linha mostrou "R$ 450,00" + "+R$ 150,00" corretos; os outros grupos (Renda Fixa, FII, Ação...) continuam com as 7 colunas de sempre, sem regressão.
 
+## Relatório mensal reconstruído (08/09)
+
+Luiz: *"o que você fez ficou muito pobre... não vi nenhum gráfico nele, nem nada. Esse relatório pode ficar fixo em configurações e eu posso escolher qual mês eu quero visualizar... quero ver tudo que tem em orçamento, projeto e patrimônio, tudo comparativo com o mês anterior."*
+
+**Dúvida respondida antes de implementar** — "preciso de um LLM pra ter dicas de melhoria?": não, pra nada do que ele descreveu (maior compra, categoria que mais gastou, comparação com mês anterior — tudo métrica pura: soma, ranking, delta %). LLM só entraria se ele quisesse uma frase de NARRATIVA interpretando o padrão (ex: "gastou mais em X mas compensou investindo em Y") — não implementado, fica como possível camada futura opcional, não pré-requisito.
+
+**O que existia**: `MonthlySummaryModal` — modal disparado só pelo banner do Dashboard, sempre travado no mês anterior (sem navegação nenhuma), 3 seções rasas, praticamente nenhum comparativo com mês anterior apesar do nome "resumo".
+
+**Reconstruído como `MonthlyReport`** — seção fixa em Configurações (`#relatorio-mensal`), com navegação livre de mês (‹ mês/ano ›, mesmo padrão do Orçamento). O banner do Dashboard agora é um `Link` pra lá, não abre mais modal.
+
+Descoberta importante ao migrar: boa parte do dado comparativo **já existia** no backend, só nunca tinha sido puxado pra esse relatório — `BudgetCategory.previousSpent`, `BudgetSummary.previousTotalIncome`, `WealthOverview.previousTotal`/`investedLastMonth`, `ProjectsSummary.receivedLastMonth`. Reaproveitado tudo via o componente `MonthDelta` (seta colorida + % vs. mês anterior) já usado em outras telas — nada de UI novo pra isso.
+
+**Only genuinely new**:
+- `budget.ts`: `biggestPurchase` — maior `Transaction` do tipo expense (não-transferência) do mês, com categoria e data.
+- Cálculo client-side (`MonthlyReport.tsx`): categoria que mais **cresceu** vs. mês anterior (maior delta positivo) — diferente de "quem mais gastou" (uma categoria pode ser sempre a maior sem ter crescido nada esse mês específico).
+- Gráfico de alocação (pizza) na seção Patrimônio — reaproveita `wealth.allocation`, que já existia mas nunca tinha sido plotado aqui.
+- **`wealth.ts` ganhou `month`/`year` opcionais** em `GET /wealth-overview` — sem eles, comportamento de sempre (Dashboard/Patrimônio, que nunca passam esses params, ficam 100% inalterados). Com eles, `nowYm` (o ponto de referência de todo o cálculo — total, `previousTotal`, `movers`, `investedThisMonth`...) desliza pra ver a carteira **como ela estava naquele mês**, não hoje. Sem isso, navegar pra um relatório de um mês passado mostraria o patrimônio de HOJE — errado, e silenciosamente (nenhum erro, só número inconsistente com o resto do relatório daquele mês).
+
+**Removido**: `MonthlySummaryModal.tsx`/`.module.css` (substituído, sem uso restante — confirmado por grep antes de apagar).
+
+Verificado local (PIN de teste, `dev.db`): navegação de mês funciona (testado ago/2026 → jul/2026), as 3 seções carregam com delta correto contra o mês anterior, responsivo em 375px sem overflow (grid de stats vira 2 colunas), sem erro de console.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
