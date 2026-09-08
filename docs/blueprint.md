@@ -1299,6 +1299,20 @@ Ele tinha razão. Eu tinha criado `CHECKING_ACCOUNT_ONLY_BROKERS = new Set(["C6"
 
 **Lição registrada**: um padrão estatístico no dado (nomes repetidos, muitos zerados) não é evidência de categoria — precisa confirmar contra a fonte de verdade (aqui, `GET /accounts` da própria Pluggy) antes de generalizar uma regra por corretora inteira.
 
+### Conta Corrente não tem cota/preço/investido (08/09, mesmo dia)
+
+Luiz aprofundou o modelo: *"Em conta corrente não existe cotas, preço, investido. Ali a dinâmica vai ser diferente. Sempre será atrelado ao histórico da conta... a gente registra isso pela variação. Os nomes do 99 e BTG, não é CDB - Liquidez, chama de conta corrente apenas."*
+
+Duas mudanças em `pluggySync.ts`, na mesma entrada da fatia `automaticallyInvestedBalance` (99 e BTG):
+- **Nome**: "CDB - Liquidez Diária" → "Conta Corrente" (era nome de produto, não faz sentido pra quem só vê saldo parado).
+- **investedAmount sempre = marketValue**: antes herdava um valor congelado do primeiro snapshot (mesma lógica usada pra Renda Fixa/on-chain — "base de custo" que só "rende" com o tempo). Pra conta corrente isso é errado: não existe base de custo, só saldo. Sem esse fix, todo depósito ou saque virava "rentabilidade" falsa no `ReturnBadge` — um saque de R$1.000 apareceria como perda de investimento, quando é só dinheiro saindo. Corrigido retroativo nos 4 snapshots existentes dessas 2 securities (baixo valor, mesmo mecanismo automático — seguro reescrever).
+
+**Não mexido, fica registrado pra confirmar com o Luiz**: `MANUAL:SOFISA:EMERGENCIA` (histórico, R$70-80 mil em 2025/2026) tem uma diferença consistente entre investido e valor atual (3-9% ao longo dos meses) que parece mais com rendimento real de investimento do que com saldo parado simplesmente variando por depósito/saque — pode ser que essa entrada específica não seja "conta corrente" de verdade no sentido que o Luiz está definindo agora, mesmo tendo sido tratada como tal antes. Não reescrevi o histórico dela sem perguntar.
+
+**Em aberto, perguntado pelo Luiz, ainda sem resposta implementada**: se faz sentido continuar mostrando `ReturnBadge` (rentabilidade) na tabela de posições de Patrimônio pra linhas de tipo "Conta Corrente" — como não existe mais gap entre investido/atual pras entradas corrigidas, o badge vai mostrar 0% sempre (inofensivo, mas também inútil ali). Recomendação: esconder a coluna "Valor investido" e o `ReturnBadge` quando `group.type === 'Conta Corrente'`, mostrar só "Saldo" + variação vs. mês anterior. Ainda não implementado — esperando confirmação.
+
+**Como atualizar o saldo da Wise (pergunta do Luiz)**: já existe e não muda — Configurações → corretora Wise → "Atualizar posições" (`ManualPositionsModal`, ver `MANUAL_POSITION_CONFIG.WISE` em `brokers.ts`). Esse popup já esconde tipo/quantidade/valor unitário/valor investido pra Wise (`showType: false, showQuantity: false, showUnitValue: false, showInvestedAmount: false`) — só pede o valor atual. Grava um `PositionSnapshot` novo do mês, sem sobrescrever o histórico anterior.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
