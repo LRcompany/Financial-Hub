@@ -25,6 +25,7 @@ import { ReturnBadge } from '../components/ReturnBadge'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { ContributionModal } from '../components/ContributionModal'
+import { IconButton } from '../components/IconButton'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
@@ -632,9 +633,9 @@ export function Patrimonio() {
               <h3 className={styles.subheading} style={{ margin: 0 }}>
                 Adicionar posição manual
               </h3>
-              <button className={styles.iconBtn} onClick={() => setShowAddForm(false)} aria-label="Fechar">
+              <IconButton onClick={() => setShowAddForm(false)} aria-label="Fechar">
                 <X size={16} strokeWidth={2} />
-              </button>
+              </IconButton>
             </div>
             <p className={cards.heroLabel}>
               Só pra corretoras sem sync automático (Nomad, Wise, Phantom...) — se o banco já está conectado, o aporte

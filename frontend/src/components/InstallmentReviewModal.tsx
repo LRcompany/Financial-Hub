@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type InstallmentGroup, type LeafCategoryOption } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import styles from './InstallmentReviewModal.module.css'
 
 const OTHER = '__other__'
@@ -211,9 +212,9 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
               </p>
             )}
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {!groups && <p className={styles.loading}>Carregando parcelas...</p>}

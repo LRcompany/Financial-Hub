@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type UncategorizedTransactionGroup, type LeafCategoryOption } from '../lib/api'
 import { currency } from '../lib/format'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import cards from '../styles/cards.module.css'
 import styles from './TransactionReviewModal.module.css'
 
@@ -101,9 +102,9 @@ export function TransactionReviewModal({ onClose }: { onClose: () => void }) {
             <h3 className={styles.title}>Compras sem categoria</h3>
             {groups && <p className={styles.subtitle}>{groups.length} comerciante(s) ainda sem categoria</p>}
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {!groups && <p className={styles.loading}>Carregando...</p>}

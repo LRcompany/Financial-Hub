@@ -329,33 +329,6 @@
   gap: var(--space-2);
 }
 
-.iconBtn {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-full);
-  background: none;
-  border: none;
-  color: var(--ink-soft);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.iconBtn:hover {
-  background: var(--fill-muted);
-}
-
-.iconBtnDanger {
-  composes: iconBtn;
-  color: var(--danger);
-}
-
-.iconBtnDanger:hover {
-  background: var(--danger-soft);
-}
-
 .smallBtn {
   display: inline-flex;
   align-items: center;

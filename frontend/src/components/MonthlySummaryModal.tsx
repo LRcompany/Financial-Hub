@@ -3,6 +3,7 @@ import { X, Download } from 'lucide-react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { ClientPieChart } from './ClientPieChart'
+import { IconButton } from './IconButton'
 import styles from './MonthlySummaryModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -66,9 +67,9 @@ export function MonthlySummaryModal({ month, year, onClose }: { month: number; y
               <Download size={13} strokeWidth={2} />
               Baixar PDF
             </button>
-            <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+            <IconButton onClick={onClose} aria-label="Fechar">
               <X size={16} strokeWidth={2} />
-            </button>
+            </IconButton>
           </div>
         </div>
 

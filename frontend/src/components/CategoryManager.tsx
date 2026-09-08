@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import { api, type Category, type CategoryKind } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import styles from './CategoryManager.module.css'
 
 const KIND_LABELS: Record<CategoryKind, string> = {
@@ -137,22 +138,22 @@ function CategoryNode({ category, depth, onChanged }: { category: Category; dept
             )}
             <div className={styles.actions}>
               {canAddChild && (
-                <button className={styles.iconBtn} onClick={() => setMode('addChild')} title="Nova subcategoria" aria-label="Nova subcategoria">
+                <IconButton onClick={() => setMode('addChild')} title="Nova subcategoria" aria-label="Nova subcategoria">
                   <Plus size={13} strokeWidth={2} />
-                </button>
+                </IconButton>
               )}
-              <button className={styles.iconBtn} onClick={() => setMode('edit')} title="Editar" aria-label="Editar">
+              <IconButton onClick={() => setMode('edit')} title="Editar" aria-label="Editar">
                 <Pencil size={13} strokeWidth={2} />
-              </button>
-              <button
-                className={confirmDelete ? styles.iconBtnDangerConfirm : styles.iconBtnDanger}
+              </IconButton>
+              <IconButton
+                variant={confirmDelete ? 'dangerConfirm' : 'default'}
                 onClick={handleDelete}
                 disabled={busy}
                 title="Excluir"
                 aria-label="Excluir"
               >
                 <Trash2 size={13} strokeWidth={2} />
-              </button>
+              </IconButton>
             </div>
           </>
         )}

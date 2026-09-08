@@ -29,6 +29,7 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
+import { IconButton } from '../components/IconButton'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Projetos.module.css'
@@ -452,16 +453,16 @@ function ProjectCard({
               {isActive && (
                 <>
                   {project.status === 'em_andamento' ? (
-                    <button className={styles.iconBtn} onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
+                    <IconButton variant="ghost" onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
                       <Pause size={14} strokeWidth={2} />
-                    </button>
+                    </IconButton>
                   ) : (
-                    <button className={styles.iconBtn} onClick={() => changeStatus('em_andamento')} aria-label="Retomar projeto" title="Retomar projeto">
+                    <IconButton variant="ghost" onClick={() => changeStatus('em_andamento')} aria-label="Retomar projeto" title="Retomar projeto">
                       <Play size={14} strokeWidth={2} />
-                    </button>
+                    </IconButton>
                   )}
-                  <button
-                    className={styles.iconBtnDanger}
+                  <IconButton
+                    variant="danger"
                     onClick={() => {
                       if (confirm(`Cancelar "${project.name}"? Isso não apaga recebimentos já lançados.`)) changeStatus('cancelado')
                     }}
@@ -469,7 +470,7 @@ function ProjectCard({
                     title="Cancelar projeto"
                   >
                     <Trash2 size={14} strokeWidth={2} />
-                  </button>
+                  </IconButton>
                 </>
               )}
             </div>
@@ -580,9 +581,9 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
             )}
           </span>
           <span className={styles.subRowMeta}>{formatDate(r.paymentDate)}</span>
-          <button className={styles.iconBtn} onClick={() => handleDelete(r.id)} aria-label="Remover">
+          <IconButton variant="ghost" onClick={() => handleDelete(r.id)} aria-label="Remover">
             <Trash2 size={12} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
       ))}
     </div>
@@ -911,9 +912,9 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
             <h3 className={styles.modalTitle}>{title}</h3>
             {subtitle && <p className={styles.modalSubtitle}>{subtitle}</p>}
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
         {children}
       </div>

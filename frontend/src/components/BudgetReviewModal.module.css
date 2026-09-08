@@ -59,20 +59,6 @@
   margin: 0;
 }
 
-.iconBtn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  background: var(--fill-muted);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-soft);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
 .listWrap {
   overflow-y: auto;
   flex: 1;

@@ -3,6 +3,7 @@ import { X, Plus, Trash2 } from 'lucide-react'
 import { api, type BrokerPosition, type PositionFieldConfig } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import styles from './ManualPositionsModal.module.css'
 
 const SECURITY_TYPES = ['Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
@@ -138,9 +139,9 @@ export function ManualPositionsModal({
                 : 'nunca atualizado manualmente'}
             </p>
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {loading || !fieldConfig ? (
@@ -217,9 +218,9 @@ export function ManualPositionsModal({
                         <Input type="number" step="0.01" value={r.marketValue} onChange={(e) => updateRow(i, { marketValue: e.target.value })} />
                       </td>
                       <td>
-                        <button className={styles.iconBtn} onClick={() => removeRow(i)} aria-label="Remover linha">
+                        <IconButton onClick={() => removeRow(i)} aria-label="Remover linha">
                           <Trash2 size={13} strokeWidth={2} />
-                        </button>
+                        </IconButton>
                       </td>
                     </tr>
                   ))}

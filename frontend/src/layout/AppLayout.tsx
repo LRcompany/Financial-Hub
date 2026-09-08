@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Home, Receipt, Wallet, Briefcase, SlidersHorizontal, Search, Bell, RefreshCw } from 'lucide-react'
+import { IconButton } from '../components/IconButton'
 import styles from './AppLayout.module.css'
 
 const NAV_ITEMS = [
@@ -70,15 +71,15 @@ export function AppLayout() {
               <span className={styles.hello}>{greeting()}</span>
             </div>
             <div className={styles.headerActions}>
-              <button className={styles.iconBtn} onClick={refreshAll} disabled={refreshing} aria-label="Atualizar dados">
+              <IconButton size="lg" onClick={refreshAll} disabled={refreshing} aria-label="Atualizar dados">
                 <RefreshCw size={14} strokeWidth={2} className={refreshing ? styles.spinning : ''} />
-              </button>
-              <button className={styles.iconBtn} aria-label="Buscar transação">
+              </IconButton>
+              <IconButton size="lg" aria-label="Buscar transação">
                 <Search size={14} strokeWidth={2} />
-              </button>
-              <button className={styles.iconBtn} aria-label="Notificações">
+              </IconButton>
+              <IconButton size="lg" aria-label="Notificações">
                 <Bell size={14} strokeWidth={2} />
-              </button>
+              </IconButton>
             </div>
           </div>
         </header>

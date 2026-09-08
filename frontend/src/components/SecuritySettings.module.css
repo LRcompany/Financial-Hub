@@ -99,20 +99,6 @@
   color: var(--ink-soft);
 }
 
-.iconBtn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-full);
-  background: none;
-  border: none;
-  color: var(--ink-soft);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
 .actionBtn {
   display: inline-flex;
   align-items: center;

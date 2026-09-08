@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type Broker, type LeafCategoryOption } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import styles from './ContributionModal.module.css'
 
 function todayISO(): string {
@@ -76,9 +77,9 @@ export function TransactionModal({ onClose, onSaved }: { onClose: () => void; on
             <h3 className={styles.title}>Lançar gasto manual</h3>
             <p className={styles.subtitle}>Pra compra que não vem automático (ex: Wise) — sempre gasto.</p>
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {loading ? (

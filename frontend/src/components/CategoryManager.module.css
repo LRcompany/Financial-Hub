@@ -82,32 +82,6 @@
   flex-shrink: 0;
 }
 
-.iconBtn,
-.iconBtnDanger,
-.iconBtnDangerConfirm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: var(--r-full);
-  background: var(--fill-muted);
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-
-.iconBtnDangerConfirm {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.iconBtnDanger:disabled,
-.iconBtnDangerConfirm:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .addRootBtn {
   display: inline-flex;
   align-items: center;

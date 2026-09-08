@@ -3,6 +3,7 @@ import { Fingerprint, LogOut, Trash2 } from 'lucide-react'
 import { startRegistration } from '@simplewebauthn/browser'
 import { api, type WebauthnCredentialInfo } from '../lib/api'
 import { Input } from './Input'
+import { IconButton } from './IconButton'
 import styles from './SecuritySettings.module.css'
 
 /** Seção "Segurança" de Configurações — trocar a senha de 6 dígitos,
@@ -126,9 +127,9 @@ export function SecuritySettings() {
                   <span className={styles.deviceLabel}>{c.deviceLabel}</span>
                   <span className={styles.deviceMeta}>cadastrado {new Date(c.createdAt).toLocaleDateString('pt-BR')}</span>
                 </div>
-                <button className={styles.iconBtn} onClick={() => handleDelete(c.id)} aria-label="Remover aparelho">
+                <IconButton variant="ghost" onClick={() => handleDelete(c.id)} aria-label="Remover aparelho">
                   <Trash2 size={13} strokeWidth={2} />
-                </button>
+                </IconButton>
               </div>
             ))}
           </div>

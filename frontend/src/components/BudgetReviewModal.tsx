@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type BudgetReviewCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { Input } from './Input'
+import { IconButton } from './IconButton'
 import styles from './BudgetReviewModal.module.css'
 
 const KIND_LABEL: Record<string, string> = {
@@ -57,9 +58,9 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
           <h3 className={styles.title}>
             Revisar orçamento — {String(month).padStart(2, '0')}/{year}
           </h3>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {!categories && <p className={styles.loading}>Carregando categorias...</p>}

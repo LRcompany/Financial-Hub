@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type Broker, type ContributionAsset } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
+import { IconButton } from './IconButton'
 import styles from './ContributionModal.module.css'
 
 const SECURITY_TYPES = ['Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
@@ -113,9 +114,9 @@ export function ContributionModal({ onClose, onSaved }: { onClose: () => void; o
             <h3 className={styles.title}>Registrar aporte</h3>
             <p className={styles.subtitle}>Dinheiro que entrou (ou saiu) de verdade — soma no valor investido travado do ativo.</p>
           </div>
-          <button className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
+          <IconButton onClick={onClose} aria-label="Fechar">
             <X size={16} strokeWidth={2} />
-          </button>
+          </IconButton>
         </div>
 
         {loading ? (

@@ -1231,7 +1231,15 @@ Luiz apontou (com razão) que vários componentes redefinem o mesmo elemento vis
 - `Projetos.module.css`: 24px, `--r-full`, fundo transparente (sem `--fill-muted`).
 - `AppLayout.module.css`: 40px, `--r-sm` — contexto diferente (header), tamanho maior faz sentido, mas ainda vale herdar a mesma base.
 
-Nenhuma dessas variações parece intencional — é o resultado de eu recriar o elemento a cada componente novo em vez de reaproveitar. Fica registrado como uma pendência de consolidação de verdade (extrair `IconButton` compartilhado com variantes de tamanho, migrar os 11 pontos de uso) — não fiz o refactor ainda porque toca muitos arquivos de uma vez e eu não consigo verificar visualmente contra produção (app trancado com PIN); melhor com o aval do Luiz sobre o escopo antes.
+Nenhuma dessas variações parece intencional — é o resultado de eu recriar o elemento a cada componente novo em vez de reaproveitar. Luiz confirmou fazer a consolidação completa na hora (não só os 6 idênticos).
+
+**Feito**: `components/IconButton.tsx` + `.module.css` — único botão de ícone do app daqui pra frente. API: `size` ('sm' 28px padrão | 'lg' 40px, só header) × `variant` ('default' fundo sempre visível | 'ghost' transparente até hover, ação secundária de lista | 'danger' ícone vermelho persistente | 'dangerConfirm' fundo vermelho suave, 2º clique de "excluir" armado). Padronizado no formato da maioria (`--r-sm`, não `--r-full`) — mesma linguagem visual do `<Input>`/`<Select>`.
+
+Migrados os 20 pontos de uso em 12 arquivos `.tsx` (`BudgetReviewModal`, `InstallmentReviewModal`, `TransactionReviewModal`, `ManualPositionsModal`, `MonthlySummaryModal`, `ContributionModal`, `TransactionModal` — reaproveita o CSS do `ContributionModal` —, `CategoryManager`, `SecuritySettings`, `Projetos`, `Patrimonio`, `AppLayout`), removendo a definição local de `.iconBtn`/`.iconBtnDanger`/`.iconBtnDangerConfirm` de cada um dos 11 `.module.css`. Bundle de CSS de produção encolheu (62,24kB → 60,11kB gzip) — confirma que era duplicação de verdade, não só código parecido.
+
+Decisão consciente: o `.toggle` (seta de expandir/recolher categoria-mãe, 20px, sem fundo nem em hover) NÃO virou `IconButton` — é um controle de disclosure, semântica diferente de um botão de ação, mesmo sendo visualmente parecido. Consolidar só o que É de fato o mesmo componente, não tudo que tem um ícone dentro.
+
+**Verificado localmente** (PIN de teste, nunca produção) via `getComputedStyle` em cada variante: Categorias (`default` 28px/12px-radius/fill-muted em "Nova subcategoria"/"Editar"/"Excluir"), header do app (`lg` 40px/12px-radius/ink), modal de categorização (`default` 28px, botão "Fechar"), Projetos (`ghost` transparente em "Pausar", `danger` ícone vermelho transparente em "Cancelar") — todos batendo exatamente com a variante esperada.
 
 ## Pendências (não travadas ainda)
 
