@@ -1,50 +1,8 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  /* width/height explícitos além do inset (achado real, 07/09: PWA em modo
-     standalone no iOS tem bug conhecido de position:fixed se deslocar/cortar
-     quando o teclado abre, ex: campo de data/número desses modais) — 100dvh
-     acompanha a viewport visual de VERDADE (some o espaço do teclado), 100vh
-     sozinho não. */
-  width: 100vw;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-}
-
-.sheet {
+.root {
   background: var(--surface);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
   padding: var(--space-5);
-  width: 100%;
-  max-width: 520px;
-  max-height: 85vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 640px) {
-  .sheet {
-    border-radius: var(--r-lg);
-  }
-}
-
-.loading {
-  text-align: center;
-  padding: var(--space-6) var(--space-4);
-  color: var(--ink-soft);
-  font-size: 13.5px;
 }
 
 .header {
@@ -52,19 +10,34 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
-.headerActions {
+.monthNav {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.title {
-  font-size: 16px;
+.navBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--fill-muted);
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.monthLabel {
+  font-size: 14px;
   font-weight: 600;
-  margin: 0;
-  text-transform: capitalize;
+  min-width: 64px;
+  text-align: center;
 }
 
 .pdfBtn {
@@ -92,6 +65,13 @@
   display: none;
 }
 
+.loading {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
 .block {
   margin-bottom: var(--space-6);
 }
@@ -114,6 +94,14 @@
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+}
+
+/* Tela estreita: 3 colunas espremia demais (achado real de outras telas do
+   app, mesmo padrão) — 2 por linha respira melhor. */
+@media (max-width: 480px) {
+  .statGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .stat {
@@ -173,16 +161,16 @@
 }
 
 /* ---------- impressão / "baixar PDF" via window.print() ----------
-   Esconde a página inteira (Dashboard por trás do modal) e mostra só o
-   conteúdo do .sheet — sem isso a impressão sairia com a página toda atrás,
-   não só o resumo. */
+   Esconde a página inteira de Configurações por trás e mostra só o
+   relatório — sem isso a impressão sairia com a página toda (Segurança,
+   Categorias, Conexões...), não só o relatório. */
 @media print {
   body * {
     visibility: hidden;
   }
 
-  .sheet,
-  .sheet * {
+  .root,
+  .root * {
     visibility: visible;
   }
 
@@ -190,21 +178,12 @@
     display: none !important;
   }
 
-  .overlay {
-    position: static;
-    background: none;
-    display: block;
-  }
-
-  .sheet {
+  .root {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    box-shadow: none;
-    max-width: 100%;
-    max-height: none;
-    overflow: visible;
+    border: none;
     padding: 0;
   }
 

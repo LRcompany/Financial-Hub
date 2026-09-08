@@ -9,7 +9,12 @@ export const wealthRouter = Router();
 // Tudo calculado em cima de PositionSnapshot (populado pelo sync da Pluggy ou
 // lançamento manual) — sem número fixo. Enquanto não houver snapshot nenhum,
 // retorna hasData: false em vez de zero fake.
-wealthRouter.get("/wealth-overview", async (_req, res) => {
+// `month`/`year` opcionais (08/09, relatório mensal) — sem eles, comportamento
+// de sempre ("agora", usado por Dashboard/Patrimônio). Com eles, todo o
+// resto da conta (`total`, `previousTotal`, `movers`, `investedThisMonth`...)
+// desliza pra ver a carteira COMO ELA ESTAVA naquele mês, não hoje — sem
+// isso, o relatório de um mês passado mostraria o patrimônio de hoje, errado.
+wealthRouter.get("/wealth-overview", async (req, res) => {
   const all = await fetchAllSnapshots();
 
   if (all.length === 0) {
@@ -27,7 +32,9 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     });
   }
 
-  const nowYm = yearMonth(all[0].year, all[0].month);
+  const queryMonth = req.query.month ? Number(req.query.month) : null;
+  const queryYear = req.query.year ? Number(req.query.year) : null;
+  const nowYm = queryMonth && queryYear ? yearMonth(queryYear, queryMonth) : yearMonth(all[0].year, all[0].month);
   const latestSnaps = activeSnapshotsAsOf(all, nowYm);
   const previousSnaps = activeSnapshotsAsOf(all, nowYm - 1);
   const beforePreviousSnaps = activeSnapshotsAsOf(all, nowYm - 2);

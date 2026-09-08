@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
@@ -26,7 +27,6 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
-import { MonthlySummaryModal } from '../components/MonthlySummaryModal'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
@@ -72,7 +72,6 @@ export function Dashboard() {
   const [projects, setProjects] = useState<ProjectsSummary | null>(null)
   const [projectsError, setProjectsError] = useState(false)
 
-  const [showMonthlySummary, setShowMonthlySummary] = useState(false)
   const [uncategorizedCount, setUncategorizedCount] = useState(0)
   const [showTransactionReview, setShowTransactionReview] = useState(false)
 
@@ -133,22 +132,20 @@ export function Dashboard() {
   const showSummaryBanner = now.getDate() <= 5
   const summaryMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const summaryMonth = summaryMonthDate.getMonth() + 1
-  const summaryYear = summaryMonthDate.getFullYear()
 
   return (
     <div className={styles.page}>
       {showSummaryBanner && (
         <div className={styles.banner}>
           <FileText size={16} strokeWidth={2} />
-          <span>Resumo de {MONTH_NAMES[summaryMonth - 1]} pronto.</span>
-          <button className={styles.bannerBtn} onClick={() => setShowMonthlySummary(true)}>
-            Ver resumo
-          </button>
+          <span>Relatório de {MONTH_NAMES[summaryMonth - 1]} pronto.</span>
+          {/* Relatório mensal virou seção fixa em Configurações (pedido do
+              Luiz, 08/09: "pode ficar fixo em configurações"), não modal
+              mais — o link já abre no mês fechado por padrão. */}
+          <Link to="/configuracoes#relatorio-mensal" className={styles.bannerBtn}>
+            Ver relatório
+          </Link>
         </div>
-      )}
-
-      {showMonthlySummary && (
-        <MonthlySummaryModal month={summaryMonth} year={summaryYear} onClose={() => setShowMonthlySummary(false)} />
       )}
 
       {uncategorizedCount > 0 && (

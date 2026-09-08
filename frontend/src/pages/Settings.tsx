@@ -7,6 +7,7 @@ import { Input } from '../components/Input'
 import { ManualPositionsModal } from '../components/ManualPositionsModal'
 import { CategoryManager } from '../components/CategoryManager'
 import { SecuritySettings } from '../components/SecuritySettings'
+import { MonthlyReport } from '../components/MonthlyReport'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
@@ -122,6 +123,12 @@ export function Settings() {
   return (
     <div className={cards.page}>
       <h1 className={styles.pageTitle}>Configurações</h1>
+
+      {/* ---------- Relatório mensal ---------- */}
+      <section id="relatorio-mensal">
+        <h2 className={cards.sectionTitle}>Relatório mensal</h2>
+        <MonthlyReport />
+      </section>
 
       {/* ---------- Segurança ---------- */}
       <section>

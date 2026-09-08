@@ -110,6 +110,23 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const previousTotalIncome = previousIncomeAgg._sum.amount ?? 0;
   const incomeFromProjects = incomeFromProjectsAgg._sum.amount ?? 0;
 
+  // Maior compra do mês — pro relatório mensal (pedido do Luiz, 08/09).
+  // Só gasto de verdade (expense, não transferência) — fatura de cartão
+  // fechando ou pagamento não é "compra".
+  const biggestPurchaseTx = await prisma.transaction.findFirst({
+    where: { type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
+    orderBy: { amount: "desc" },
+    include: { category: { include: { parent: { include: { parent: true } } } } },
+  });
+  const biggestPurchase = biggestPurchaseTx
+    ? {
+        description: biggestPurchaseTx.note || biggestPurchaseTx.description,
+        amount: biggestPurchaseTx.amount,
+        date: biggestPurchaseTx.date,
+        category: categoryPath(biggestPurchaseTx.category),
+      }
+    : null;
+
   // Histórico de entrada por mês (últimos 12, terminando no mês navegado) —
   // pro gráfico "Por mês" dentro do próprio box "Entradas do mês" (pedido do
   // Luiz, 04/09: "quero visualizar isso"). Busca tudo de uma vez (mesmo
@@ -229,6 +246,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     incomeFromProjects,
     incomeByMonth,
     categories,
+    biggestPurchase,
   });
 });
 

@@ -118,6 +118,9 @@ export interface BudgetSummary {
   // mês" dentro do box "Entradas do mês".
   incomeByMonth: { label: string; value: number }[]
   categories: BudgetCategory[]
+  // Maior gasto do mês (08/09, relatório mensal) — null quando não teve
+  // nenhuma compra ainda nesse mês.
+  biggestPurchase: { description: string; amount: number; date: string; category: string | null } | null
 }
 
 export interface CreditCard {
@@ -597,7 +600,10 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<BudgetSummary>(`/budget-summary${query}`)
   },
-  wealthOverview: () => request<WealthOverview>('/wealth-overview'),
+  wealthOverview: (params?: { month: number; year: number }) => {
+    const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
+    return request<WealthOverview>(`/wealth-overview${query}`)
+  },
   setWealthGoal: (input: { targetAmount?: number; monthlyContribution?: number }) =>
     request<WealthGoal>('/wealth-goal', { method: 'PUT', body: JSON.stringify(input) }),
   dailyGoalHistory: () => request<DailyGoalEntry[]>('/daily-goal/history'),
