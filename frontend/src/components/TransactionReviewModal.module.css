@@ -26,7 +26,12 @@
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   padding: var(--space-5);
   width: 100%;
-  max-width: 720px;
+  /* 720px forçava scroll horizontal direto (achado real, 08/09: nome de
+     comerciante longo + 4 colunas numéricas + seletor de 220px nunca cabia).
+     960px é a mesma faixa já usada em outro modal com tabela larga
+     (ManualPositionsModal, 920px) — cresce com o conteúdo em vez de escondê-lo
+     atrás de scroll. */
+  max-width: 960px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
