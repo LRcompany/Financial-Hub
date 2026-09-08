@@ -54,6 +54,18 @@ model Transaction {
   installmentNumber Int?
   totalInstallments Int?
 
+  // Nome real do comerciante às vezes vem ilegível/genérico da Pluggy (ex:
+  // "MASTERCARD", "Parcela de compra lojista MasterCard" — confirmado ao
+  // vivo, 08/09: esse tipo de financiamento "lojista" não manda nem
+  // comerciante nem installmentNumber/totalInstallments, então nem dá pra
+  // marcar como parcelada automaticamente) — `note` é o detalhe que o Luiz
+  // mesmo escreve ("Adidas") pra lembrar o que a compra foi de verdade.
+  // Mesmo campo/mesma ideia do UpcomingInstallment.note, só que pra uma
+  // compra que já aconteceu. Nunca sobrescreve `description` (que continua
+  // batendo com a fatura real). Puramente documental — não afeta categoria,
+  // valor nem nenhum cálculo.
+  note String?
+
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
 

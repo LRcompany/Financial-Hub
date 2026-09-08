@@ -50,6 +50,9 @@ export interface Transaction {
   // especificamente (a que já aconteceu). Null pra compra à vista.
   installmentNumber: number | null
   totalInstallments: number | null
+  // Anotação livre do Luiz pra quando a Pluggy manda nome genérico (ex:
+  // "MASTERCARD" em vez do comerciante real) — puramente documental (08/09).
+  note: string | null
 }
 
 export interface UncategorizedTransactionGroup {
@@ -551,6 +554,8 @@ export const api = {
     ),
   categorizeTransactionGroup: (ids: string[], categoryId: string) =>
     request<{ updated: number }>('/transactions/group', { method: 'PUT', body: JSON.stringify({ ids, categoryId }) }),
+  updateTransactionNote: (id: string, note: string | null) =>
+    request<{ id: string; note: string | null }>(`/transactions/${id}/note`, { method: 'PUT', body: JSON.stringify({ note }) }),
   transactionLeafCategories: () => request<LeafCategoryOption[]>('/transactions/leaf-categories'),
   createTransaction: (input: { date: string; type: 'income' | 'expense'; description: string; amount: number; categoryId?: string; brokerId?: string }) =>
     postJson<Transaction>('/transactions', input),

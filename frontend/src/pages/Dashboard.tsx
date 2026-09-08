@@ -323,6 +323,9 @@ export function Dashboard() {
                     <div className={styles.listSub}>
                       {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
+                      {/* Nota livre (08/09) — só leitura aqui; edição fica
+                          em Orçamento > Todas as transações do mês. */}
+                      {t.note && ` · "${t.note}"`}
                     </div>
                   </div>
                   <div className={styles.listValue}>

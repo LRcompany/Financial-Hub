@@ -98,6 +98,22 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
   res.json({ total: transactions.length, groups: result, categories });
 });
 
+// PUT /api/transactions/:id/note — body { note }. Puramente documental (08/09,
+// "vamos adicionar esse campo apenas para documentar") — pra quando a Pluggy
+// manda um nome genérico ("MASTERCARD", "Parcela de compra lojista
+// MasterCard") sem jeito de saber o comerciante real. Nunca mexe em
+// description/categoria/valor. `note: null`/string vazia limpa a anotação.
+transactionsRouter.put("/transactions/:id/note", async (req, res) => {
+  const { id } = req.params;
+  const { note } = req.body ?? {};
+  const trimmed = typeof note === "string" ? note.trim() : null;
+  const transaction = await prisma.transaction.update({
+    where: { id },
+    data: { note: trimmed || null },
+  });
+  res.json({ id: transaction.id, note: transaction.note });
+});
+
 // PUT /api/transactions/group — body { ids, categoryId }. Aplica em TODAS as
 // transações daquele comerciante de uma vez (mesma lógica de grupo já usada
 // em /upcoming-installments/group).

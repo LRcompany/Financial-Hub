@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp, StickyNote } from 'lucide-react'
 import {
   api,
   type BudgetSummary,
@@ -19,6 +19,7 @@ import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
 import { Select } from '../components/Select'
+import { Input } from '../components/Input'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -107,6 +108,30 @@ export function Orcamento() {
       loadTransactions()
     } finally {
       setSavingTransactionId(null)
+    }
+  }
+
+  // Nota livre por transação (08/09, "vamos adicionar esse campo apenas
+  // para documentar") — pra quando a Pluggy manda nome genérico ("MASTERCARD")
+  // e o Luiz quer lembrar o que a compra foi de verdade. Puramente
+  // documental, não mexe em categoria/valor.
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+
+  function startEditingNote(t: Transaction) {
+    setEditingNoteId(t.id)
+    setNoteDraft(t.note ?? '')
+  }
+
+  async function saveNote(id: string) {
+    const trimmed = noteDraft.trim() || null
+    setEditingNoteId(null)
+    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, note: trimmed } : t)))
+    try {
+      await api.updateTransactionNote(id, trimmed)
+    } catch (err) {
+      alert(`Falha ao salvar nota: ${(err as Error).message}`)
+      loadTransactions()
     }
   }
 
@@ -667,6 +692,28 @@ export function Orcamento() {
                   {formatDayLabel(t.date.slice(0, 10))}
                   {t.broker && ` · ${t.broker.name}`}
                 </div>
+                {/* Nota livre (08/09) — puramente documental, pra quando a
+                    Pluggy manda nome genérico ("MASTERCARD") sem jeito de
+                    saber o comerciante real. */}
+                {editingNoteId === t.id ? (
+                  <Input
+                    autoFocus
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    onBlur={() => saveNote(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                      if (e.key === 'Escape') setEditingNoteId(null)
+                    }}
+                    placeholder="Nota (ex: Adidas)"
+                    className={styles.noteInput}
+                  />
+                ) : (
+                  <button type="button" className={styles.noteButton} onClick={() => startEditingNote(t)}>
+                    <StickyNote size={11} strokeWidth={2} />
+                    {t.note || 'nota'}
+                  </button>
+                )}
               </div>
               {t.isTransfer ? (
                 <span className={`${styles.transactionStaticLabel} ${styles.transactionSecondRow}`}>Transferência — não conta como gasto</span>
