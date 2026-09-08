@@ -194,15 +194,17 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     });
   }
 
-  // "CDB de liquidez diária" embutido na conta corrente — não vem em
-  // /investments, vem em /accounts (ver nota no topo do arquivo). Cada conta
-  // BANK com esse campo > 0 vira sua própria posição "CDB - Liquidez Diária".
-  // Tipo "Conta Corrente" (não "Renda Fixa") — pedido do Luiz (08/09): esse
-  // saldo é dinheiro parado rendendo sozinho, nunca uma escolha de investir
-  // (mesmo raciocínio da Wise, que já tinha o comentário "é liquidez, não
-  // investimento" desde 01/09). Universal — cobre 99 e a fatia "Liquidez
-  // Diária" do BTG (que também TEM investimento de verdade misturado junto,
-  // por isso o resto da carteira dele não muda, só essa linha específica).
+  // Saldo em conta embutido — não vem em /investments, vem em /accounts (ver
+  // nota no topo do arquivo). Cada conta BANK com esse campo > 0 vira sua
+  // própria posição "Conta Corrente" (nome corrigido, 08/09 — antes chamava
+  // "CDB - Liquidez Diária", nome de produto que não existe pra quem usa:
+  // pedido do Luiz, "chama de conta corrente apenas"). Tipo "Conta Corrente"
+  // (não "Renda Fixa") — esse saldo é dinheiro parado, nunca uma escolha de
+  // investir (mesmo raciocínio da Wise, que já tinha o comentário "é
+  // liquidez, não investimento" desde 01/09). Universal — cobre 99 e a
+  // fatia "conta corrente" do BTG (que também TEM investimento de verdade
+  // misturado junto, por isso o resto da carteira dele não muda, só essa
+  // linha específica).
   const { results: accounts } = (await getAccounts(itemId)) as { results: PluggyAccount[] };
   let autoInvestCount = 0;
   for (const acc of accounts) {
@@ -213,23 +215,22 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     const currency = acc.currencyCode ?? "BRL";
     const security = await prisma.security.upsert({
       where: { id: securityId },
-      update: { name: "CDB - Liquidez Diária", type: "Conta Corrente", currency },
-      create: { id: securityId, name: "CDB - Liquidez Diária", type: "Conta Corrente", currency },
+      update: { name: "Conta Corrente", type: "Conta Corrente", currency },
+      create: { id: securityId, name: "Conta Corrente", type: "Conta Corrente", currency },
     });
 
-    // A Pluggy só manda o saldo atual, não separa "quanto entrou" de "quanto
-    // rendeu" — mesma regra do sync on-chain: herda o investido do snapshot
-    // anterior (mantém a base de custo), ou usa o valor de mercado a primeira vez.
-    const previous = await prisma.positionSnapshot.findFirst({
-      where: { brokerId: broker.id, securityId: security.id },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-    });
-    const investedAmount = previous?.investedAmount ?? autoInvested;
-
+    // Conta corrente não tem "quanto investi" separado de "quanto vale hoje"
+    // — não existe cota, preço ou custo de aquisição, só o saldo (pedido do
+    // Luiz, 08/09: "ali a dinâmica vai ser diferente... não existe cotas,
+    // preço, investido"). Por isso investedAmount SEMPRE acompanha o saldo
+    // atual (nunca herda um valor congelado do snapshot anterior, diferente
+    // de Renda Fixa/Ação/FII) — sem isso, todo depósito/saque virava
+    // "rentabilidade" falsa no ReturnBadge, quando na real é só dinheiro
+    // entrando ou saindo, não retorno de investimento.
     await prisma.positionSnapshot.upsert({
       where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId: security.id, month, year } },
-      update: { investedAmount, marketValue: autoInvested },
-      create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount, marketValue: autoInvested },
+      update: { investedAmount: autoInvested, marketValue: autoInvested },
+      create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount: autoInvested, marketValue: autoInvested },
     });
     autoInvestCount++;
   }
