@@ -476,17 +476,20 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   }
   const clientContractValue = [...clientContractMap.entries()].map(([label, value]) => ({ label, value }));
 
-  // média mensal dos últimos 12 meses e série pra gráfico
+  // Média mensal e série pro gráfico — SÓ o ano corrente, de janeiro até o
+  // mês atual (pedido do Luiz, 08/09: antes era rolling 12 meses, que
+  // misturava até 3 meses do ANO PASSADO na média; "Recebido no ano" já
+  // travava certo no ano corrente, isso aqui tinha ficado de fora).
   const monthlyReceived: { label: string; value: number }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  for (let m = 1; m <= month; m++) {
+    const d = new Date(year, m - 1, 1);
     const total = allReceipts
-      .filter((r) => r.paymentDate >= d && r.paymentDate < new Date(d.getFullYear(), d.getMonth() + 1, 1))
+      .filter((r) => r.paymentDate >= d && r.paymentDate < new Date(year, m, 1))
       .reduce((sum, r) => sum + r.amount, 0);
     monthlyReceived.push({ label: d.toLocaleDateString("pt-BR", { month: "short" }), value: total });
   }
   const monthsWithData = monthlyReceived.filter((m) => m.value > 0).length || 1;
-  const avgMonthly12m = monthlyReceived.reduce((sum, m) => sum + m.value, 0) / monthsWithData;
+  const avgMonthlyThisYear = monthlyReceived.reduce((sum, m) => sum + m.value, 0) / monthsWithData;
 
   // saldo a receber = valor de contrato - já recebido, projetos não cancelados
   const openProjects = projects.filter((p) => p.status !== "cancelado");
@@ -567,7 +570,7 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     receivedThisMonth,
     receivedLastMonth: receivedLastMonthAgg._sum.amount ?? 0,
     receivedThisYear: receivedThisYearAgg._sum.amount ?? 0,
-    avgMonthly12m,
+    avgMonthlyThisYear,
     taxPaidThisYear: taxAgg._sum.amountPaid ?? 0,
     outstanding,
     outstandingLastMonth,

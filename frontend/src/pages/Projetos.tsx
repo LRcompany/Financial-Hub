@@ -107,8 +107,8 @@ export function Projetos() {
             </div>
             <div className={cards.statGrid} style={{ marginTop: 'var(--space-3)' }}>
               <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Média mensal (12m)</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.avgMonthly12m)}</span>
+                <span className={cards.heroLabel}>Média mensal (desde jan)</span>
+                <span className={cards.statTileValue}>R$ {currency(summary.avgMonthlyThisYear)}</span>
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Dias trabalhados</span>

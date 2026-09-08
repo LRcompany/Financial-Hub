@@ -129,73 +129,77 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     incomeByMonth.push({ label: bucketStart.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), value });
   }
 
-  // Gasto de hoje e série dos últimos 14 dias — todas as despesas do período,
-  // não só as categorizadas no orçamento (reflete o gasto real do dia a dia).
+  // Gasto de hoje e série do mês corrente — todas as despesas do período,
+  // não só as categorizadas no orçamento (reflete o gasto real do dia a
+  // dia). Pedido do Luiz (08/09): esse gráfico é mês a mês, então trava no
+  // mês-calendário ATUAL de verdade (dia 1 até hoje) — antes era um rolling
+  // de 14 dias, que no início do mês misturava dias do mês ANTERIOR junto
+  // (mesmo problema já corrigido em "Recebido no ano"/"Média mensal" de
+  // Projetos). No dia 1-2 do mês o gráfico fica com poucos pontos mesmo —
+  // aceito, é melhor que misturar mês.
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-  const fourteenDaysAgo = new Date(todayStart.getTime() - 13 * 24 * 60 * 60 * 1000);
-  const twentyEightDaysAgo = new Date(todayStart.getTime() - 27 * 24 * 60 * 60 * 1000);
+  const realMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const dailyPrevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-  const [todayAgg, last28Transactions] = await Promise.all([
+  const [todayAgg, monthToDateTransactions] = await Promise.all([
     prisma.transaction.aggregate({
       where: { type: "expense", isTransfer: false, date: { gte: todayStart, lt: todayEnd } },
       _sum: { amount: true },
     }),
+    // Busca desde o início do MÊS ANTERIOR de uma vez só — cobre a série do
+    // mês corrente e os dias alinhados do mês anterior (comparação abaixo),
+    // sem precisar de 2 queries.
     prisma.transaction.findMany({
-      where: { type: "expense", isTransfer: false, date: { gte: twentyEightDaysAgo, lt: todayEnd } },
+      where: { type: "expense", isTransfer: false, date: { gte: dailyPrevMonthStart, lt: todayEnd } },
       select: { date: true, amount: true },
     }),
   ]);
 
-  const last14Days: { date: string; amount: number; goal: number | null }[] = [];
-  for (let i = 0; i < 14; i++) {
-    const day = new Date(fourteenDaysAgo.getTime() + i * 24 * 60 * 60 * 1000);
+  function sumOnDay(day: Date): number {
     const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const amount = last28Transactions
-      .filter((t) => t.date >= day && t.date < dayEnd)
-      .reduce((sum, t) => sum + t.amount, 0);
-    last14Days.push({ date: day.toISOString().slice(0, 10), amount, goal: goalAt(dailyGoals, day) });
-  }
-  const previous14Days: number[] = [];
-  for (let i = 0; i < 14; i++) {
-    const day = new Date(twentyEightDaysAgo.getTime() + i * 24 * 60 * 60 * 1000);
-    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const amount = last28Transactions
-      .filter((t) => t.date >= day && t.date < dayEnd)
-      .reduce((sum, t) => sum + t.amount, 0);
-    previous14Days.push(amount);
+    return monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
   }
 
-  const monthlyAvgDailySpend = last14Days.reduce((sum, d) => sum + d.amount, 0) / 14;
-  const previousMonthlyAvgDailySpend = previous14Days.reduce((sum, v) => sum + v, 0) / 14;
+  const daysThisMonth: { date: string; amount: number; goal: number | null }[] = [];
+  for (let day = new Date(realMonthStart); day <= todayStart; day.setDate(day.getDate() + 1)) {
+    daysThisMonth.push({ date: day.toISOString().slice(0, 10), amount: sumOnDay(day), goal: goalAt(dailyGoals, day) });
+  }
+  // Comparação "vs. mês anterior" mês-a-mês-corrido: mesmo NÚMERO de dias
+  // (dia 1 ao dia 1, dia 2 ao dia 2...), não o mês anterior inteiro — senão
+  // um mês em andamento (poucos dias) compararia contra um mês fechado
+  // (todos os dias), sempre parecendo "abaixo" só pela metade do tempo.
+  const previousMonthAligned: number[] = [];
+  for (let i = 0; i < daysThisMonth.length; i++) {
+    const day = new Date(dailyPrevMonthStart);
+    day.setDate(day.getDate() + i);
+    previousMonthAligned.push(sumOnDay(day));
+  }
+
+  const monthlyAvgDailySpend = daysThisMonth.reduce((sum, d) => sum + d.amount, 0) / daysThisMonth.length;
+  const previousMonthlyAvgDailySpend = previousMonthAligned.reduce((sum, v) => sum + v, 0) / previousMonthAligned.length;
 
   // A Pluggy sincroniza com atraso — "hoje" (e às vezes ontem também) quase
   // sempre aparece com R$0 só porque a transação de verdade ainda não
   // chegou, não porque o dia foi de gasto zero de verdade. Pedido do Luiz
   // (04/09): em vez de mostrar "gasto de hoje" (quase sempre R$0, engana),
   // mostra o ÚLTIMO DIA que realmente tem gasto lançado — varre de trás pra
-  // frente dentro dos últimos 14 dias e para no primeiro com amount > 0.
-  // `null` só no caso raro de nenhum gasto nos últimos 14 dias inteiros.
+  // frente dentro do mês corrente e para no primeiro com amount > 0. `null`
+  // só no caso raro de nenhum gasto o mês inteiro (ex: dia 1 do mês).
   let lastDayWithSpend: { date: string; amount: number } | null = null;
-  for (let i = last14Days.length - 1; i >= 0; i--) {
-    if (last14Days[i].amount > 0) {
-      lastDayWithSpend = { date: last14Days[i].date, amount: last14Days[i].amount };
+  for (let i = daysThisMonth.length - 1; i >= 0; i--) {
+    if (daysThisMonth[i].amount > 0) {
+      lastDayWithSpend = { date: daysThisMonth[i].date, amount: daysThisMonth[i].amount };
       break;
     }
   }
 
   // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
-  // mês-calendário ATUAL de verdade (`now`), não o mês navegado em Orçamento
-  // nem os últimos 14 dias — mesmo critério já usado em `dailyGoal` acima.
+  // mês-calendário ATUAL de verdade (`now`), não o mês navegado em Orçamento.
   // Conta do dia 1 até HOJE (dia futuro não tem gasto lançado ainda, não é
   // "acima" nem "abaixo", só ainda não aconteceu). Dia sem meta cadastrada
   // (goal null) fica de fora dos dois números — não dá pra avaliar
   // cumprimento sem meta.
-  const realMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthToDateTransactions = await prisma.transaction.findMany({
-    where: { type: "expense", isTransfer: false, date: { gte: realMonthStart, lt: todayEnd } },
-    select: { date: true, amount: true },
-  });
   let daysUnderGoalThisMonth = 0;
   let daysWithGoalThisMonth = 0;
   for (let day = new Date(realMonthStart); day <= todayStart; day = new Date(day.getTime() + 24 * 60 * 60 * 1000)) {
@@ -217,7 +221,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     previousMonthlyAvgDailySpend,
     daysUnderGoalThisMonth,
     daysWithGoalThisMonth,
-    last14Days,
+    daysThisMonth,
     totalPlanned,
     totalSpent,
     totalIncome,

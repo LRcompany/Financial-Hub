@@ -211,14 +211,14 @@ export function Orcamento() {
   // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
   // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
   // "hoje" no dia em que o dado de hoje já chegou de verdade.
-  const todayBucket = budget.last14Days[budget.last14Days.length - 1]
+  const todayBucket = budget.daysThisMonth[budget.daysThisMonth.length - 1]
   const lastSpendDay = budget.lastDayWithSpend
   const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
   const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
   const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
-  // Posição do "último dia com gasto" dentro de last14Days — bolinha fixa no
+  // Posição do "último dia com gasto" dentro de daysThisMonth — bolinha fixa no
   // gráfico marcando "a gente se encontra ali" (pedido do Luiz, 04/09).
-  const lastSpendDayIndex = !isShowingToday && lastSpendDay ? budget.last14Days.findIndex((d) => d.date === lastSpendDay.date) : -1
+  const lastSpendDayIndex = !isShowingToday && lastSpendDay ? budget.daysThisMonth.findIndex((d) => d.date === lastSpendDay.date) : -1
   const markedDayIndex = lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
   const diff = budget.dailyGoal != null ? budget.dailyGoal - displaySpend : null
 
@@ -380,10 +380,10 @@ export function Orcamento() {
             <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
           </div>
           <div style={{ marginTop: 'var(--space-5)' }}>
-            <h4 className={styles.chartLabel}>Últimos 14 dias</h4>
+            <h4 className={styles.chartLabel}>Neste mês</h4>
             <SmoothLineChart
-              values={budget.last14Days.map((d) => d.amount)}
-              labels={budget.last14Days.map((d) => formatDayLabel(d.date))}
+              values={budget.daysThisMonth.map((d) => d.amount)}
+              labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
               threshold={budget.dailyGoal ?? undefined}
               gradientId="orcamentoDailyGradient"
               className={cards.evolutionChart}

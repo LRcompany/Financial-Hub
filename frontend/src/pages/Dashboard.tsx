@@ -109,18 +109,18 @@ export function Dashboard() {
   // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
   // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
   // "hoje" no dia em que o dado de hoje já chegou de verdade.
-  const todayBucket = budget?.last14Days[budget.last14Days.length - 1]
+  const todayBucket = budget?.daysThisMonth[budget.daysThisMonth.length - 1]
   const lastSpendDay = budget?.lastDayWithSpend ?? null
   const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
   const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
   const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
   const diff = budget?.dailyGoal != null ? budget.dailyGoal - displaySpend : null
-  // Posição do "último dia com gasto" dentro de last14Days — pra desenhar a
+  // Posição do "último dia com gasto" dentro de daysThisMonth — pra desenhar a
   // bolinha fixa no gráfico marcando "a gente se encontra ali" (pedido do
   // Luiz, 04/09). undefined quando é literalmente hoje (a bolinha do último
   // ponto já cobre esse caso, não precisa duplicar).
   const lastSpendDayIndex =
-    !isShowingToday && lastSpendDay ? budget?.last14Days.findIndex((d) => d.date === lastSpendDay.date) : undefined
+    !isShowingToday && lastSpendDay ? budget?.daysThisMonth.findIndex((d) => d.date === lastSpendDay.date) : undefined
   const markedDayIndex = lastSpendDayIndex != null && lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
 
   const wealthGoal = wealth?.wealthGoal ?? null
@@ -217,15 +217,15 @@ export function Dashboard() {
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
                 <SmoothLineChart
-                  values={budget.last14Days.map((d) => d.amount)}
-                  labels={budget.last14Days.map((d) => formatDayLabel(d.date))}
+                  values={budget.daysThisMonth.map((d) => d.amount)}
+                  labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
                   threshold={budget.dailyGoal ?? undefined}
                   gradientId="dailySpendGradient"
                   className={styles.evolutionChart}
                   markedIndex={markedDayIndex}
                 />
                 <div className={styles.chartMeta}>
-                  <span>últimos 14 dias</span>
+                  <span>neste mês</span>
                   {budget.dailyGoal != null && <span>linha tracejada = meta de R$ {budget.dailyGoal}</span>}
                 </div>
                 {budget.daysWithGoalThisMonth > 0 && (
@@ -540,8 +540,8 @@ export function Dashboard() {
                   R$ {currency(projects.receivedThisYear)}
                 </div>
                 <div className={styles.chartMeta}>
-                  <span>Média mensal (últimos 12 meses)</span>
-                  <span className={styles.statValue}>R$ {currency(projects.avgMonthly12m)}</span>
+                  <span>Média mensal (desde janeiro)</span>
+                  <span className={styles.statValue}>R$ {currency(projects.avgMonthlyThisYear)}</span>
                 </div>
                 <SmoothLineChart
                   values={projects.monthlyReceived.map((m) => m.value)}

@@ -83,20 +83,23 @@ export interface BudgetSummary {
   year: number
   dailyGoal: number | null
   todaySpent: number
-  // Último dia (dentro dos últimos 14) com gasto de verdade lançado — a
+  // Último dia (dentro do mês corrente) com gasto de verdade lançado — a
   // Pluggy sincroniza com atraso, então "hoje" quase sempre aparece R$0
-  // sem ser gasto zero de verdade. Null só se não teve gasto nenhum nos
-  // últimos 14 dias.
+  // sem ser gasto zero de verdade. Null só se não teve gasto nenhum ainda
+  // esse mês (ex: dia 1).
   lastDayWithSpend: { date: string; amount: number } | null
   monthlyAvgDailySpend: number
   previousMonthlyAvgDailySpend: number
   // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
-  // mês-calendário atual de verdade, do dia 1 até hoje (não os últimos 14
-  // dias, não o mês navegado em Orçamento). daysWithGoalThisMonth é o
-  // denominador (dia sem meta cadastrada não entra em nenhum dos dois).
+  // mês-calendário atual de verdade, do dia 1 até hoje. daysWithGoalThisMonth
+  // é o denominador (dia sem meta cadastrada não entra em nenhum dos dois).
   daysUnderGoalThisMonth: number
   daysWithGoalThisMonth: number
-  last14Days: { date: string; amount: number; goal: number | null }[]
+  // Mês-calendário ATUAL de verdade, do dia 1 até hoje (pedido do Luiz,
+  // 08/09) — antes era um rolling de 14 dias, que no início do mês
+  // misturava dias do mês anterior. Poucos pontos no início do mês é
+  // esperado (dia 2 do mês = só 2 pontos), não é bug.
+  daysThisMonth: { date: string; amount: number; goal: number | null }[]
   totalPlanned: number
   totalSpent: number
   totalIncome: number
@@ -216,7 +219,9 @@ export interface ProjectsSummary {
   receivedThisMonth: number
   receivedLastMonth: number
   receivedThisYear: number
-  avgMonthly12m: number
+  // Média mensal do ano corrente (janeiro até o mês atual) — nunca mistura
+  // mês do ano passado, mesmo critério de receivedThisYear.
+  avgMonthlyThisYear: number
   taxPaidThisYear: number
   outstanding: number
   outstandingLastMonth: number
