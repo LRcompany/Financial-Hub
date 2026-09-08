@@ -152,7 +152,18 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     // investido do snapshot anterior em vez de resetar — mesma regra já
     // usada pro CDB embutido de conta corrente e pra cripto on-chain.
     const hasRealInvestedAmount = inv.type === "FIXED_INCOME" && inv.amountOriginal != null;
-    const marketValue = convert(inv.balance);
+    // `balance`, não `amount`, era o que eu usava aqui até 08/09 — bug real
+    // confirmado pelo Luiz comparando com o app de verdade do BTG: o Tesouro
+    // Selic 2029 mostrava R$55.860 pra nós (soma de `balance`), R$58.029,97
+    // no BTG (bate com `amount`, R$58.000 — a diferença é só o rendimento de
+    // algumas horas entre a conferência dele e minha consulta). Conferido em
+    // TODA posição de Renda Fixa ativa de BTG/C6/Sofisa: `balance` fica
+    // sistematicamente abaixo de `amount` (0,6% a 3,6%, sempre no mesmo
+    // sentido — subestimando o patrimônio em ~R$6.500 no total daquele dia).
+    // Pra Ação/FII `amount` já era sempre === `balance` (comentário acima,
+    // 05/09), então trocar aqui não muda nada pra eles — só corrige Renda
+    // Fixa, que é onde `balance` e `amount` de fato divergiam.
+    const marketValue = convert(inv.amount ?? inv.balance);
     let investedAmount: number;
     if (hasRealInvestedAmount) {
       investedAmount = convert(inv.amountOriginal!);
