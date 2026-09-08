@@ -1342,6 +1342,20 @@ Descoberta importante ao migrar: boa parte do dado comparativo **já existia** n
 
 Verificado local (PIN de teste, `dev.db`): navegação de mês funciona (testado ago/2026 → jul/2026), as 3 seções carregam com delta correto contra o mês anterior, responsivo em 375px sem overflow (grid de stats vira 2 colunas), sem erro de console.
 
+### Dropdown de "Registrar aporte" com dezenas de duplicatas (08/09)
+
+Luiz mandou 2 prints: o seletor de ativo da modal listando 80+ linhas idênticas "Sofisa — CDB - BANCO SOFISA S.A." e o mesmo pro Tesouro Direto do BTG ("BTG — TESOURO DIRETO - LFT" repetido dezenas de vezes) — "como resolver isso? eu não sei do que se trata".
+
+**Causa raiz**: a Pluggy dá um ID próprio pra cada lote/certificado individual — cada Tesouro comprado numa data diferente, cada CDB renovado automaticamente na Sofisa (produto dela é 100% auto-CDB, reinveste sozinho) — então um broker sincronizado de verdade acumula dezenas de `Security` distintas com o MESMO nome de produto, visualmente indistinguíveis numa lista plana. E pior: nem faz sentido aportar manualmente ali — o sync automático (`pluggySync.ts`) já traz o `investedAmount` real de cada uma via `amountOriginal` da própria Pluggy, então um "aporte" manual nesse fluxo seria redundante (na melhor das hipóteses) ou duplicaria o dinheiro (na pior).
+
+**Fix** (`contributions.ts`, `GET /contributions/assets`): a lista agora exclui:
+- Qualquer `securityId` de origem automática (prefixo `pluggy:` ou `onchain:`) — cobre TODO broker com sync de verdade (99, BTG, C6, Sofisa, Phantom), não só os dois do print.
+- Tipo "Conta Corrente" (mesmo sendo manual, ex: Wise) — desde o fix de mais cedo hoje (`investedAmount == marketValue` sempre pra esse tipo, sem gap de rentabilidade), um aporte aqui só somaria no `investedAmount` sem tocar `marketValue` (`applyContribution` só mexe num campo por padrão) — quebraria exatamente essa igualdade que acabou de ser corrigida. Atualização de saldo de Conta Corrente continua exclusivamente via "Atualizar posições".
+
+"Registrar aporte" existe especificamente pra corretora SEM dado automático de investido — Nomad, Wise (só pro tipo diferente de Conta Corrente, hoje não tem nenhum), Inco, e qualquer manual futura.
+
+**Verificado em produção**: lista final tem 10 ativos genuinamente manuais — 7 projetos da INCO (real estate crowdfunding) + 3 títulos da Nomad (bond BRAZIL, ETF AOK, bond NVIDIA). Nada de Sofisa/BTG/C6/99, e a Conta Corrente da Wise não aparece mais (como esperado).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
