@@ -1180,6 +1180,13 @@ Luiz observou que o app é organizado mês a mês/ano a ano, então alguns gráf
 
 Verificado com dado real antes do deploy: `daysThisMonth` com exatamente 8 dias (01–08/set), `monthlyReceived` com 9 meses (jan–set) somando exatamente `receivedThisYear` (R$186.822,48).
 
+### Modal "Compras sem categoria" larga + seta do &lt;select&gt; própria (08/09)
+
+Luiz mandou print da modal de revisão de categoria (`TransactionReviewModal`) forçando scroll horizontal, e reparou que a seta do dropdown ficava "esmagada no canto".
+
+- **Modal larga**: `max-width` era 720px, nunca cabia nome de comerciante longo + 4 colunas numéricas + seletor de 220px de uma vez. Aumentado pra 960px (mesma faixa do `ManualPositionsModal`, 920px).
+- **Seta do `<select>` própria**: a seta nativa varia demais entre navegador/SO — removida (`appearance: none`) e trocada por uma seta SVG via `background-image` no `Input.module.css` COMPARTILHADO (não só nesse modal — todo `<Select>` do app usa a mesma classe `.input`), com cor batendo com `--ink-soft` dos dois temas (não dá pra referenciar variável CSS dentro de um data-URI, por isso hardcoded os dois valores hex).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
