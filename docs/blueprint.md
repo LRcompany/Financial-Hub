@@ -1212,6 +1212,27 @@ Resolvendo a limitação registrada acima: `Transaction` ganhou `note` (migratio
 - Só leitura no Dashboard (edição mora só em Orçamento, que é a página de gestão).
 - Investigado ainda a segunda compra da Adidas ("Parcela de compra lojista MasterCard", R$112,05, C6) que motivou esse pedido: confirmado ao vivo na Pluggy que o `creditCardMetadata` dela só tem `cardNumber` e `billForecastDate` — SEM `installmentNumber`/`totalInstallments` nenhum (diferente do padrão "falta billForecastDate" já documentado pra PEOPLE BIKE SHOP/TOKSTOK). Ainda está `PENDING` do lado da Pluggy — o mecanismo de reconciliação PENDING→POSTED (que eu estendi pra também gravar installment ao confirmar) pode capturar isso sozinho se a Pluggy soltar mais dado quando fechar; não é garantido, já que "parcelado lojista" tende a ser um tipo de financiamento sem granularidade de comerciante mesmo confirmado.
 
+### PWA não recarregava sozinho num deploy novo (08/09)
+
+Luiz mandou print da tela de Categorias em Configurações sem o fix de wrap mobile de uma correção anterior desta sessão — mas reproduzindo local em 375px, o código JÁ estava certo (badge + 3 botões de ação aparecem e quebram linha normalmente). Causa real: **stale cache de PWA instalado**, não um bug de CSS.
+
+`registerType: 'autoUpdate'` (vite.config.ts) já faz o novo service worker assumir sozinho em segundo plano a cada deploy, mas isso não força a ABA JÁ ABERTA a recarregar — um PWA standalone no iOS raramente "fecha" de verdade (o usuário só resume o processo já em memória pela home screen), então o JS antigo continua rodando indefinidamente até um reload de verdade acontecer. Um fix já deployado podia nunca chegar em quem só resume o app.
+
+Fix (`main.tsx`): escuta o evento `controllerchange` do `navigator.serviceWorker` e recarrega a página uma única vez quando isso dispara (exatamente o momento em que o novo SW assume) — fecha essa lacuna pra qualquer deploy futuro, não só esse.
+
+**Verificado localmente** (`npm run dev` no backend + frontend, PIN de teste local — nunca produção): tela de Categorias em 375px renderiza corretamente com o código atual (chevron, nome, badge de tipo e os 3 botões de ação todos visíveis, quebrando pra 2ª linha como esperado).
+
+### Auditoria de duplicação de componente — `.iconBtn`/chevron/pill (08/09)
+
+Luiz apontou (com razão) que vários componentes redefinem o mesmo elemento visual do zero em vez de usar algo compartilhado, citando `.iconBtn` como exemplo. Confirmado por grep: **11 arquivos `.module.css` diferentes definem sua própria `.iconBtn`**, e não é só duplicação — é INCONSISTÊNCIA real:
+
+- 6 modais (`BudgetReviewModal`, `InstallmentReviewModal`, `TransactionReviewModal`, `ManualPositionsModal`, `MonthlySummaryModal`, `ContributionModal`) + `Patrimonio.module.css`: idênticos, 28px, `--r-sm`, `--fill-muted`/`--ink-soft` — copiados um do outro.
+- `CategoryManager.module.css`: 26px, `--r-full` (redondo, não quadrado arredondado).
+- `Projetos.module.css`: 24px, `--r-full`, fundo transparente (sem `--fill-muted`).
+- `AppLayout.module.css`: 40px, `--r-sm` — contexto diferente (header), tamanho maior faz sentido, mas ainda vale herdar a mesma base.
+
+Nenhuma dessas variações parece intencional — é o resultado de eu recriar o elemento a cada componente novo em vez de reaproveitar. Fica registrado como uma pendência de consolidação de verdade (extrair `IconButton` compartilhado com variantes de tamanho, migrar os 11 pontos de uso) — não fiz o refactor ainda porque toca muitos arquivos de uma vez e eu não consigo verificar visualmente contra produção (app trancado com PIN); melhor com o aval do Luiz sobre o escopo antes.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
