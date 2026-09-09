@@ -1370,6 +1370,17 @@ Investigado ao vivo, campo por campo que a Pluggy manda pra cada lote: nenhum ba
 
 **Aplicado em produção**: backup do `prod.db` antes, re-sync manual de BTG/C6/Sofisa rodado na hora (sem esperar o sync automático 1x/dia) — Tesouro Selic 2029 confirmado em R$58.000,16 no banco, batendo com o BTG real. Só corrige daqui pra frente — não dá pra recalcular meses passados retroativamente (Pluggy não expõe valor histórico ponto-a-ponto), então a evolução mensal mostra um salto único no mês em que o fix rodou.
 
+**Pendência levantada na mesma conversa**: sync de investimento (`syncBrokerInvestments`) não está no agendador automático — só o de transação de cartão roda 1x/dia sozinho (`services/scheduler.ts`). Uma compra nova de Tesouro/CDB/ação só aparece depois de clicar "Sincronizar" manualmente em Configurações. Luiz perguntou se isso deveria mudar; ainda não implementado, esperando decisão.
+
+### Instância demo atualizada + banco fake regenerado (09/09)
+
+Luiz pediu pra atualizar a demo (`demo.luizrodrigues.com`) e gerar base de dados fake nova, pra mostrar pra um amigo — ela estava parada desde 02/09, sem nenhuma das mudanças de schema/UI de hoje (nem Conta Corrente, nem relatório mensal, nem o `note`/`installmentNumber` da Transaction, nada).
+
+- **Banco**: `demo.db` antigo tinha schema desatualizado (faltavam todas as migrations de hoje) — backup, apagado, recriado do zero via `prisma migrate deploy` direto pro `demo.db` (schema atual completo), depois repopulado com `tmp-import/seed-demo.cjs` (script gitignored que já existia, reaproveitado sem mudança — ainda funciona igual com o schema novo, os campos novos são todos opcionais). 117 transações fake, categorias, 2 corretoras fake + 5 ativos + 6 meses de posição, 8 projetos + recebimentos, DAS de cliente estrangeiro — mesmo conteúdo de sempre, PIN recriado via `POST /auth/setup` (123456).
+- **Frontend**: rebuildado com `vite build --mode demo` (lê `.env.demo`, `VITE_DISPLAY_NAME=Convidado`) e sincronizado pra `/var/www/demo.luizrodrigues.com` — antes ainda tinha o bundle de 02/09, sem NENHUMA das telas novas de hoje. Rebuildado de novo em modo padrão depois, pra `frontend/dist` local não ficar no modo demo por engano num próximo deploy do app real.
+- **Achado no meio da verificação**: `/api/fx-rate` dava 502 na demo (Patrimônio tem ativo fake em USD, que busca câmbio pra converter na tela) — mesma causa da AwesomeAPI ainda rate-limitada pro IP do droplet (ver fix de mais cedo hoje), só que o `FxRateCache` da demo estava vazio (banco novo, nunca teve um fetch bem-sucedido pra gravar) — sem fallback nenhum pra cair. Semeei um valor inicial (5,09) direto no banco, mesma lógica do bootstrap feito no `prod.db` hoje mais cedo.
+- **Verificado end-to-end** (Browser pane, PIN 123456): Dashboard, Patrimônio (pizza de alocação + evolução com dado fake), Relatório mensal (Configurações — comparativo, maior compra, categoria que mais gastou, tudo funcionando com dado fake), zero erro de console depois do fix do câmbio.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
