@@ -1381,6 +1381,24 @@ Luiz pediu pra atualizar a demo (`demo.luizrodrigues.com`) e gerar base de dados
 - **Achado no meio da verificação**: `/api/fx-rate` dava 502 na demo (Patrimônio tem ativo fake em USD, que busca câmbio pra converter na tela) — mesma causa da AwesomeAPI ainda rate-limitada pro IP do droplet (ver fix de mais cedo hoje), só que o `FxRateCache` da demo estava vazio (banco novo, nunca teve um fetch bem-sucedido pra gravar) — sem fallback nenhum pra cair. Semeei um valor inicial (5,09) direto no banco, mesma lógica do bootstrap feito no `prod.db` hoje mais cedo.
 - **Verificado end-to-end** (Browser pane, PIN 123456): Dashboard, Patrimônio (pizza de alocação + evolução com dado fake), Relatório mensal (Configurações — comparativo, maior compra, categoria que mais gastou, tudo funcionando com dado fake), zero erro de console depois do fix do câmbio.
 
+### Chevron de Categorias "colado na base" — wrap sem breakpoint (09/09)
+
+Luiz mandou 2 prints seguidos: nome de categoria comprido ("Roupas & Calçados") cortado na borda direita da linha (badge/botões nem apareciam), e "os chevrons estão colados na base". O fix anterior (07/09) só ligava `flex-wrap` dentro de `@media (max-width:480px)` — nome+badge+3 botões não cabem nem em telas um pouco mais largas que isso, e como `.list` tem `overflow:hidden`, o conteúdo simplesmente sumia cortado em vez de quebrar linha.
+
+Fix (`CategoryManager.module.css`): `flex-wrap:wrap` sempre ligado no `.row` (sem gate de breakpoint — quando cabe tudo numa linha não muda nada, quando não cabe quebra sozinho, em qualquer largura, sem precisar acertar um pixel mágico). `align-items` de `center` pra `flex-start` — com wrap ativo, `center` alinhava a seta pelo meio das DUAS linhas (nome+badge em cima, ações embaixo), exatamente o "colado na base" que o Luiz descreveu; `flex-start` alinha pelo topo, ao lado do nome, nas duas situações. `.actions` trocou `flex-basis:100%` (preso a breakpoint) por `margin-left:auto` (empurra pro fim da linha em que cair, funciona em qualquer largura). Verificado via `getComputedStyle` em 340px e 550px — alinhado no topo, sem overflow, sem corte de texto nos dois.
+
+### Relatório mensal: controle + modal (09/09)
+
+Luiz: *"pra não me confundir, em configurações não precisa exibir as infos do relatório, só deixe o mês, visualizar numa modal e baixar pdf"* — a seção fixa inline (construída mais cedo hoje) misturava visualmente com o resto de Configurações.
+
+Reestruturado: `MonthlyReport.tsx` virou só o controle (seletor de mês + botões "Visualizar"/"Baixar PDF", sem fetch de dado nenhum); todo o conteúdo antigo foi pra `MonthlyReportModal.tsx` (novo — recebe `month`/`year` já resolvidos, mostra numa modal overlay/sheet, com "Baixar PDF" e fechar no header, mesmo padrão do extinto `MonthlySummaryModal`). "Baixar PDF" do controle abre a modal já com `autoPrint`, disparando `window.print()` sozinho assim que os dados carregam — não precisa clicar "Visualizar" primeiro. Verificado local: Configurações mostra só mês + 2 botões, "Visualizar" abre a modal completa, zero erro de console.
+
+### Altura das barras de progresso padronizada em 8px (09/09)
+
+Luiz: *"padronize o tamanho das barras em todo o site. Use uma altura para todas"* — print mostrando a barra "TOTAL DO MÊS" visivelmente mais grossa que as de categoria logo abaixo.
+
+Auditoria encontrou 3 alturas diferentes: `.progressTrack` (8px, a maioria — meta diária, orçamento por categoria, meta de patrimônio), `.totalTrack` (14px, só "Total do mês" no Dashboard) e o `.track` duplicado do `RankedBarList` (6px — componente não usado em lugar nenhum hoje, corrigido por consistência mesmo assim). Padronizado tudo em 8px. `.totalTrack` manteve o fundo diferente (`--surface`, não `--fill-muted`) de propósito — essa barra fica dentro do `.totalRow`, que já É `--fill-muted`, então usar o mesmo tom faria a trilha desaparecer contra o próprio fundo do card. `RankedBarList` parou de duplicar `.track`/`.fill` — reaproveita `cards.progressTrack`/`progressFill` como qualquer outra barra do app. Verificado via `getComputedStyle` no Dashboard: todas as barras visíveis em exatos 8px.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
