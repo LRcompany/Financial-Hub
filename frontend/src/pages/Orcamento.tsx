@@ -352,7 +352,10 @@ export function Orcamento() {
             R$ {currency(budget.totalSpent)} <span className={styles.ofPlanned}>/ R$ {currency(budget.totalPlanned)} planejado</span>
           </div>
           <div className={cards.chartMeta}>
-            <span>{budget.categories.length} categorias com meta</span>
+            <span>
+              {budget.categories.length} categorias com meta
+              {budget.totalProjected > 0 && ` · dos quais R$ ${currency(budget.totalProjected)} são parcelas projetadas`}
+            </span>
           </div>
           {pieData.length > 0 ? (
             <div style={{ marginTop: 'var(--space-5)' }}>
@@ -415,6 +418,15 @@ export function Orcamento() {
               markedIndex={markedDayIndex}
             />
           </div>
+          {/* Dia com parcela futura comprometida (ainda não confirmada pela
+              Pluggy) já entra na barra do dia certo — marca aqui pra não
+              parecer gasto "do nada" (pedido do Luiz, 09/09: "no dia 3 tem
+              a parcela da bike pra cair"). */}
+          {budget.daysThisMonth.some((d) => d.projected > 0) && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>Inclui parcela(s) de cartão já comprometida(s), ainda não confirmada(s) pela Pluggy</span>
+            </div>
+          )}
           {budget.daysWithGoalThisMonth > 0 && (
             <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
               <span>
@@ -788,6 +800,7 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
   const [open, setOpen] = useState(false)
   const planned = items.reduce((s, c) => s + c.planned, 0)
   const spent = items.reduce((s, c) => s + c.spent, 0)
+  const spentProjected = items.reduce((s, c) => s + c.spentProjected, 0)
   const isOver = planned > 0 && spent > planned
 
   return (
@@ -797,6 +810,7 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
         <span className={styles.accordionName}>
           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {parentName}
+          {spentProjected > 0 && <span className={cards.installmentPill}>projetado</span>}
         </span>
         <span className={styles.categoryRowValues}>
           <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(spent)}</span>
@@ -818,7 +832,7 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
 /** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é só
  * leitura (nome, gasto/meta, comparação com mês anterior). Sem barra — dentro
  * da meta fica silenciosa, só ganha destaque (ícone + fundo) quando estoura. */
-function CategoryRow({ item }: { item: { categoryId: string; name: string; planned: number; spent: number; previousSpent: number } }) {
+function CategoryRow({ item }: { item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number } }) {
   const isOver = item.planned > 0 && item.spent > item.planned
   return (
     <div className={`${styles.categoryRow} ${isOver ? styles.categoryRowOver : ''}`}>
@@ -826,6 +840,10 @@ function CategoryRow({ item }: { item: { categoryId: string; name: string; plann
         <span className={styles.categoryRowName}>
           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {item.name}
+          {/* Parcela futura já comprometida, contando no gasto sem a Pluggy
+              ter confirmado ainda (09/09) — marca visualmente que uma fatia
+              desse valor ainda não é dado real. */}
+          {item.spentProjected > 0 && <span className={cards.installmentPill}>projetado</span>}
         </span>
         <span className={styles.categoryRowValues}>
           <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(item.spent)}</span>

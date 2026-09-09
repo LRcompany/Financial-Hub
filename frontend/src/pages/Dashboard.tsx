@@ -44,16 +44,17 @@ function formatDayLabel(iso: string): string {
 /** Agrega as ~80 folhas por categoria-mãe — Dashboard mostra visão geral
  * (Moradia, Transporte...), o detalhe por folha fica na página Orçamento. */
 function groupByParent(categories: BudgetCategory[]) {
-  const groups = new Map<string, { parentName: string; planned: number; spent: number; previousSpent: number }>()
+  const groups = new Map<string, { parentName: string; planned: number; spent: number; spentProjected: number; previousSpent: number }>()
   for (const c of categories) {
     const key = c.parentName ?? 'Outras'
     const existing = groups.get(key)
     if (existing) {
       existing.planned += c.planned
       existing.spent += c.spent
+      existing.spentProjected += c.spentProjected
       existing.previousSpent += c.previousSpent
     } else {
-      groups.set(key, { parentName: key, planned: c.planned, spent: c.spent, previousSpent: c.previousSpent })
+      groups.set(key, { parentName: key, planned: c.planned, spent: c.spent, spentProjected: c.spentProjected, previousSpent: c.previousSpent })
     }
   }
   return [...groups.values()].sort((a, b) => b.spent - a.spent)
@@ -268,7 +269,10 @@ export function Dashboard() {
                 {groupByParent(budget.categories).map((group) => (
                   <div key={group.parentName} className={styles.progressRow}>
                     <div className={styles.progressLabel}>
-                      <span>{group.parentName}</span>
+                      <span>
+                        {group.parentName}
+                        {group.spentProjected > 0 && <span className={styles.installmentPill}>projetado</span>}
+                      </span>
                       <span>
                         R$ {currency(group.spent)} / R$ {currency(group.planned)}
                       </span>

@@ -74,7 +74,12 @@ export interface BudgetCategory {
   parentId: string | null
   parentName: string | null
   planned: number
+  // Já inclui a parcela futura comprometida (UpcomingInstallment) que vence
+  // dentro do mês, mesmo sem a Pluggy ter confirmado ainda (09/09: "a
+  // parcela que fiz... é assim a lógica correta"). `spentProjected` é só a
+  // fatia dela dentro do total, pra marcar "projetado" na tela.
   spent: number
+  spentProjected: number
   previousSpent: number
 }
 
@@ -108,9 +113,10 @@ export interface BudgetSummary {
   // 08/09) — antes era um rolling de 14 dias, que no início do mês
   // misturava dias do mês anterior. Poucos pontos no início do mês é
   // esperado (dia 2 do mês = só 2 pontos), não é bug.
-  daysThisMonth: { date: string; amount: number; goal: number | null }[]
+  daysThisMonth: { date: string; amount: number; projected: number; goal: number | null }[]
   totalPlanned: number
   totalSpent: number
+  totalProjected: number
   totalIncome: number
   previousTotalIncome: number
   incomeFromProjects: number

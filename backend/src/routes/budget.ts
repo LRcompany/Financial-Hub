@@ -29,7 +29,38 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const prevMonthStart = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
   const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
 
-  const [targets, dailyGoals] = await Promise.all([
+  // Parcela futura comprometida (UpcomingInstallment) que vence dentro do
+  // período — conta como "gasto" da categoria/dia mesmo sem a Pluggy ter
+  // confirmado ainda (pedido do Luiz, 09/09: "a parcela que fiz... todo mês
+  // eu vou pagar 100 reais... é assim a lógica correta"). Dedup contra
+  // Transaction real do MESMO período pela mesma chave já usada em
+  // /upcoming-installments/groups (purchaseBase+valor) — evita contar duas
+  // vezes quando a compra finalmente é confirmada pela Pluggy dentro do
+  // próprio mês (ver nota em pluggyTransactionSync.ts sobre parcela manual
+  // tipo "PEOPLE BIKE SHOP", criada à mão por falta de billForecastDate).
+  async function projectedSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
+    const [installments, transactions] = await Promise.all([
+      prisma.upcomingInstallment.findMany({
+        where: { dueDate: { gte: start, lt: end } },
+        select: { amount: true, description: true, categoryId: true },
+      }),
+      prisma.transaction.findMany({
+        where: { type: "expense", isTransfer: false, date: { gte: start, lt: end } },
+        select: { amount: true, description: true },
+      }),
+    ]);
+    const postedKeys = new Set(transactions.map((t) => `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`));
+    const map = new Map<string, number>();
+    for (const i of installments) {
+      if (!i.categoryId) continue;
+      const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
+      if (postedKeys.has(key)) continue;
+      map.set(i.categoryId, (map.get(i.categoryId) ?? 0) + i.amount);
+    }
+    return map;
+  }
+
+  const [targets, dailyGoals, projectedThisMonth, projectedPrevMonth] = await Promise.all([
     // Só categoria de despesa — meta de receita (Salário, projetos) é
     // "quanto espero receber", não "quanto posso gastar", não faz sentido
     // misturar na mesma lista de progresso de gasto por categoria. Também
@@ -42,6 +73,8 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       include: { category: { include: { parent: { include: { parent: true } } } } },
     }),
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
+    projectedSpendByCategory(monthStart, monthEnd),
+    projectedSpendByCategory(prevMonthStart, prevMonthEnd),
   ]);
 
   const categories = await Promise.all(
@@ -71,6 +104,11 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       // exibir em accordion, em vez de listar as ~80 folhas soltas.
       const parent = target.category.parent;
       const parentName = parent?.parent?.name ?? parent?.name ?? null;
+      // `spent`/`previousSpent` já vêm com a parcela futura comprometida
+      // somada (spentProjected é só a fatia dela, pro front marcar
+      // "projetado" — não é um valor à parte, já está dentro do total).
+      const spentProjected = projectedThisMonth.get(target.categoryId) ?? 0;
+      const previousSpentProjected = projectedPrevMonth.get(target.categoryId) ?? 0;
       return {
         categoryId: target.categoryId,
         name: target.category.name,
@@ -78,14 +116,16 @@ budgetRouter.get("/budget-summary", async (req, res) => {
         parentId: (parent?.parent?.id ?? parent?.id) ?? null,
         parentName,
         planned: target.plannedAmount,
-        spent: spentAgg._sum.amount ?? 0,
-        previousSpent: previousSpentAgg._sum.amount ?? 0,
+        spent: (spentAgg._sum.amount ?? 0) + spentProjected,
+        spentProjected,
+        previousSpent: (previousSpentAgg._sum.amount ?? 0) + previousSpentProjected,
       };
     })
   );
 
   const totalPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
   const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
+  const totalProjected = categories.reduce((sum, c) => sum + c.spentProjected, 0);
 
   // Entradas do mês — Projetos virou o principal gerador de receita real
   // (cada recebimento já cria uma Transaction de entrada), então o Orçamento
@@ -159,28 +199,44 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const realMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const dailyPrevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-  const [todayAgg, monthToDateTransactions] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { type: "expense", isTransfer: false, date: { gte: todayStart, lt: todayEnd } },
-      _sum: { amount: true },
-    }),
+  const [monthToDateTransactions, monthToDateInstallments] = await Promise.all([
     // Busca desde o início do MÊS ANTERIOR de uma vez só — cobre a série do
     // mês corrente e os dias alinhados do mês anterior (comparação abaixo),
     // sem precisar de 2 queries.
     prisma.transaction.findMany({
       where: { type: "expense", isTransfer: false, date: { gte: dailyPrevMonthStart, lt: todayEnd } },
-      select: { date: true, amount: true },
+      select: { date: true, amount: true, description: true },
+    }),
+    // Parcela futura comprometida com vencimento no mesmo período — mesma
+    // lógica de merge/dedup de projectedSpendByCategory, só que por DIA em
+    // vez de por categoria (pro gráfico "gasto diário" mostrar o dia real em
+    // que ela cai, ex: "dia 03, parcela da bike").
+    prisma.upcomingInstallment.findMany({
+      where: { dueDate: { gte: dailyPrevMonthStart, lt: todayEnd } },
+      select: { dueDate: true, amount: true, description: true },
     }),
   ]);
+  const postedKeysDaily = new Set(monthToDateTransactions.map((t) => `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`));
+  const projectedInstallmentsDaily = monthToDateInstallments.filter(
+    (i) => !postedKeysDaily.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
+  );
+
+  function projectedOnDay(day: Date): number {
+    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+    return projectedInstallmentsDaily
+      .filter((i) => i.dueDate >= day && i.dueDate < dayEnd)
+      .reduce((sum, i) => sum + i.amount, 0);
+  }
 
   function sumOnDay(day: Date): number {
     const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    return monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
+    const real = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
+    return real + projectedOnDay(day);
   }
 
-  const daysThisMonth: { date: string; amount: number; goal: number | null }[] = [];
+  const daysThisMonth: { date: string; amount: number; projected: number; goal: number | null }[] = [];
   for (let day = new Date(realMonthStart); day <= todayStart; day.setDate(day.getDate() + 1)) {
-    daysThisMonth.push({ date: day.toISOString().slice(0, 10), amount: sumOnDay(day), goal: goalAt(dailyGoals, day) });
+    daysThisMonth.push({ date: day.toISOString().slice(0, 10), amount: sumOnDay(day), projected: projectedOnDay(day), goal: goalAt(dailyGoals, day) });
   }
   // Comparação "vs. mês anterior" mês-a-mês-corrido: mesmo NÚMERO de dias
   // (dia 1 ao dia 1, dia 2 ao dia 2...), não o mês anterior inteiro — senão
@@ -223,16 +279,14 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     const goal = goalAt(dailyGoals, day);
     if (goal == null) continue;
     daysWithGoalThisMonth++;
-    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const spent = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
-    if (spent <= goal) daysUnderGoalThisMonth++;
+    if (sumOnDay(day) <= goal) daysUnderGoalThisMonth++;
   }
 
   res.json({
     month,
     year,
     dailyGoal: goalAt(dailyGoals, now),
-    todaySpent: todayAgg._sum.amount ?? 0,
+    todaySpent: sumOnDay(todayStart),
     lastDayWithSpend,
     monthlyAvgDailySpend,
     previousMonthlyAvgDailySpend,
@@ -241,6 +295,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     daysThisMonth,
     totalPlanned,
     totalSpent,
+    totalProjected,
     totalIncome,
     previousTotalIncome,
     incomeFromProjects,
