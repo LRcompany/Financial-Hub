@@ -1,5 +1,6 @@
 import { currency } from '../lib/format'
 import { HoverCard, HoverRow } from './HoverCard'
+import cards from '../styles/cards.module.css'
 import styles from './RankedBarList.module.css'
 
 interface Item {
@@ -42,8 +43,8 @@ export function RankedBarList({ data, max = 8 }: { data: Item[]; max?: number })
               R$ {currency(item.value)} <span className={styles.pct}>({((item.value / total) * 100).toFixed(0)}%)</span>
             </span>
           </div>
-          <div className={styles.track}>
-            <div className={styles.fill} style={{ width: `${(item.value / topValue) * 100}%` }} />
+          <div className={cards.progressTrack}>
+            <div className={cards.progressFill} style={{ width: `${(item.value / topValue) * 100}%`, background: 'var(--accent)' }} />
           </div>
         </div>
       ))}

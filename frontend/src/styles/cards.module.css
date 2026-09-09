@@ -321,8 +321,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Altura igual à de .progressTrack (8px, padrão único do app — pedido do
+   Luiz, 09/09: "padronize o tamanho das barras em todo o site") — só o
+   fundo continua diferente (--surface, não --fill-muted) de propósito: essa
+   barra fica dentro do .totalRow, que já É --fill-muted, então usar o mesmo
+   tom faria a trilha desaparecer contra o próprio fundo. */
 .totalTrack {
-  height: 14px;
+  height: 8px;
   background: var(--surface);
   border-radius: var(--r-full);
   overflow: hidden;
