@@ -26,9 +26,20 @@
   border-top: none;
 }
 
+/* flex-wrap sempre ligado (achado real, 09/09: preso a @media max-width:480px
+   antes, mas nome longo tipo "Roupas & Calçados" + badge + 3 botões não cabe
+   nem em telas um pouco mais largas que isso — sem o breakpoint bater
+   direito, o conteúdo simplesmente sumia cortado pelo overflow:hidden do
+   .list, sem nem tentar quebrar linha). Sem gate de tamanho: quando cabe
+   tudo numa linha só, flex-wrap não muda nada; quando não cabe, quebra
+   sozinho, em qualquer largura. align-items:flex-start (não center) — com
+   wrap, "center" alinha a seta pelo meio das DUAS linhas (nome+badge em
+   cima, ações embaixo), fazendo ela parecer "colada na base" em vez de ao
+   lado do nome. */
 .row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: 10px var(--space-4);
   min-height: 44px;
@@ -76,10 +87,16 @@
   background: var(--accent-soft);
 }
 
+/* margin-left:auto (não flex-basis:100% preso a breakpoint) — empurra as
+   ações pro fim da linha em que elas realmente caírem, seja a mesma do
+   nome (cabe tudo) ou uma linha própria (não coube, flex-wrap do .row
+   empurrou sozinho) — funciona em qualquer largura, sem precisar acertar
+   um número de pixel que cobre todo nome de categoria possível. */
 .actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .addRootBtn {
@@ -151,17 +168,3 @@
   font-size: 12.5px;
 }
 
-/* Nome + badge + 3 botões de ação espremidos numa linha só em tela estreita
-   (pedido do Luiz, 07/09) — mesmo padrão já usado na linha de corretora em
-   Configurações: ações vão pra linha de baixo, nome/badge ganham a linha de
-   cima só pra eles. */
-@media (max-width: 480px) {
-  .row {
-    flex-wrap: wrap;
-  }
-  .actions {
-    flex-basis: 100%;
-    justify-content: flex-end;
-    margin-top: 4px;
-  }
-}
