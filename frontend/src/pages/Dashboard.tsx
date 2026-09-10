@@ -14,6 +14,7 @@ import {
   Activity,
   Briefcase,
   FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import {
   api,
@@ -28,6 +29,7 @@ import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
+import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
@@ -44,7 +46,10 @@ function formatDayLabel(iso: string): string {
 /** Agrega as ~80 folhas por categoria-mãe — Dashboard mostra visão geral
  * (Moradia, Transporte...), o detalhe por folha fica na página Orçamento. */
 function groupByParent(categories: BudgetCategory[]) {
-  const groups = new Map<string, { parentName: string; planned: number; spent: number; spentProjected: number; previousSpent: number }>()
+  const groups = new Map<
+    string,
+    { parentName: string; planned: number; spent: number; spentProjected: number; previousSpent: number; categoryIds: string[] }
+  >()
   for (const c of categories) {
     const key = c.parentName ?? 'Outras'
     const existing = groups.get(key)
@@ -53,8 +58,16 @@ function groupByParent(categories: BudgetCategory[]) {
       existing.spent += c.spent
       existing.spentProjected += c.spentProjected
       existing.previousSpent += c.previousSpent
+      existing.categoryIds.push(c.categoryId)
     } else {
-      groups.set(key, { parentName: key, planned: c.planned, spent: c.spent, spentProjected: c.spentProjected, previousSpent: c.previousSpent })
+      groups.set(key, {
+        parentName: key,
+        planned: c.planned,
+        spent: c.spent,
+        spentProjected: c.spentProjected,
+        previousSpent: c.previousSpent,
+        categoryIds: [c.categoryId],
+      })
     }
   }
   return [...groups.values()].sort((a, b) => b.spent - a.spent)
@@ -75,6 +88,9 @@ export function Dashboard() {
 
   const [uncategorizedCount, setUncategorizedCount] = useState(0)
   const [showTransactionReview, setShowTransactionReview] = useState(false)
+  // Categoria-mãe clicada em "Orçamento do mês" → modal "o que está incluso
+  // nesse montante" (pedido do Luiz, 10/09).
+  const [breakdown, setBreakdown] = useState<{ title: string; categoryIds: string[]; planned: number } | null>(null)
 
   function loadUncategorizedCount() {
     api.uncategorizedTransactionGroups().then((r) => setUncategorizedCount(r.total)).catch(() => {})
@@ -170,6 +186,17 @@ export function Dashboard() {
         />
       )}
 
+      {breakdown && budget && (
+        <CategoryBreakdownModal
+          title={breakdown.title}
+          categoryIds={breakdown.categoryIds}
+          planned={breakdown.planned}
+          month={budget.month}
+          year={budget.year}
+          onClose={() => setBreakdown(null)}
+        />
+      )}
+
       {/* ---------- Orçamento ---------- */}
       <section>
         <h1 className={styles.sectionTitle}>Orçamento</h1>
@@ -249,48 +276,65 @@ export function Dashboard() {
 
             {!budgetError && budget && budget.categories.length > 0 && (
               <>
-                <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
-                  <div className={styles.totalLabel}>
-                    <span>Total do mês</span>
-                    <span>
-                      R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
-                    </span>
-                  </div>
-                  <div className={styles.totalTrack}>
-                    <div
-                      className={styles.totalFill}
-                      style={{
-                        width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`,
-                        background: 'var(--accent)',
-                      }}
-                    />
-                  </div>
-                </div>
-                {groupByParent(budget.categories).map((group) => (
-                  <div key={group.parentName} className={styles.progressRow}>
-                    <div className={styles.progressLabel}>
-                      <span>
-                        {group.parentName}
-                        {group.spentProjected > 0 && <span className={styles.installmentPill}>projetado</span>}
-                      </span>
-                      <span>
-                        R$ {currency(group.spent)} / R$ {currency(group.planned)}
-                      </span>
+                {(() => {
+                  const totalOver = budget.totalPlanned > 0 && budget.totalSpent > budget.totalPlanned
+                  return (
+                    <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
+                      <div className={styles.totalLabel}>
+                        <span>Total do mês</span>
+                        <span style={totalOver ? { color: 'var(--danger)' } : undefined}>
+                          {totalOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
+                          R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
+                        </span>
+                      </div>
+                      <div className={styles.totalTrack}>
+                        <div
+                          className={styles.totalFill}
+                          style={{
+                            width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`,
+                            background: totalOver ? 'var(--danger)' : 'var(--accent)',
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className={styles.progressTrack}>
-                      <div
-                        className={styles.progressFill}
-                        style={{
-                          width: `${group.planned > 0 ? Math.min((group.spent / group.planned) * 100, 100) : 0}%`,
-                          background: 'var(--accent)',
-                        }}
-                      />
-                    </div>
-                    <div className={styles.deltaRow}>
-                      <MonthDelta current={group.spent} previous={group.previousSpent} higherIsBetter={false} />
-                    </div>
-                  </div>
-                ))}
+                  )
+                })()}
+                {groupByParent(budget.categories).map((group) => {
+                  const isOver = group.planned > 0 && group.spent > group.planned
+                  return (
+                    <button
+                      type="button"
+                      key={group.parentName}
+                      className={`${styles.progressRowButton} ${isOver ? styles.progressRowOver : ''}`}
+                      onClick={() =>
+                        setBreakdown({ title: group.parentName, categoryIds: group.categoryIds, planned: group.planned })
+                      }
+                    >
+                      <div className={styles.progressLabel}>
+                        <span>
+                          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
+                          {group.parentName}
+                          {group.spentProjected > 0 && <span className={styles.installmentPill}>projetado</span>}
+                        </span>
+                        <span>
+                          R$ {currency(group.spent)} / R$ {currency(group.planned)}
+                        </span>
+                      </div>
+                      <div className={styles.progressTrack}>
+                        <div
+                          className={styles.progressFill}
+                          style={{
+                            width: `${group.planned > 0 ? Math.min((group.spent / group.planned) * 100, 100) : 0}%`,
+                            background: isOver ? 'var(--danger)' : 'var(--accent)',
+                          }}
+                        />
+                      </div>
+                      <div className={styles.deltaRow}>
+                        <MonthDelta current={group.spent} previous={group.previousSpent} higherIsBetter={false} />
+                      </div>
+                    </button>
+                  )
+                })}
               </>
             )}
           </div>

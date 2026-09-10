@@ -18,6 +18,7 @@ import { Carousel } from '../components/Carousel'
 import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
+import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { Select } from '../components/Select'
 import { Input } from '../components/Input'
 import { currency } from '../lib/format'
@@ -69,6 +70,9 @@ export function Orcamento() {
   const [showReview, setShowReview] = useState(false)
   const [showInstallmentReview, setShowInstallmentReview] = useState(false)
   const [showAddTransaction, setShowAddTransaction] = useState(false)
+  // Categoria clicada na lista → modal "o que está incluso nesse montante"
+  // (pedido do Luiz, 10/09).
+  const [breakdown, setBreakdown] = useState<{ title: string; categoryIds: string[]; planned: number } | null>(null)
   const [copying, setCopying] = useState(false)
   const [syncingTx, setSyncingTx] = useState(false)
 
@@ -247,10 +251,19 @@ export function Orcamento() {
   const markedDayIndex = lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
   const diff = budget.dailyGoal != null ? budget.dailyGoal - displaySpend : null
 
-  // Pizza mostra só onde o dinheiro REALMENTE foi esse mês — categoria sem
-  // gasto nenhum não vira fatia (fatia de R$0 não ajuda a ver "onde estou
-  // gastando", só polui o gráfico).
-  const pieData = budget.categories.filter((c) => c.spent > 0).map((c) => ({ label: c.name, value: c.spent }))
+  // Pizza mostra só onde o dinheiro REALMENTE foi esse mês, agregado por
+  // categoria-MÃE (Moradia, Transporte...) — não a folha (05/09→10/09,
+  // "aqui eu só quero ver as categorias pai, não as subs"): ~30 fatias de
+  // folha era ilegível, e várias folhas repetem nome entre pais diferentes
+  // (Aluguel em Moradia E em Transporte > Carro). Categoria sem gasto nenhum
+  // não vira fatia (fatia de R$0 só polui o gráfico).
+  const pieByParent = new Map<string, number>()
+  for (const c of budget.categories) {
+    if (c.spent <= 0) continue
+    const key = c.parentName ?? 'Outras' // mesmo rótulo do accordion de categorias
+    pieByParent.set(key, (pieByParent.get(key) ?? 0) + c.spent)
+  }
+  const pieData = [...pieByParent.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear()
   const showReviewBanner = isCurrentMonth && now.getDate() <= 5 && budget.categories.length === 0
@@ -672,7 +685,7 @@ export function Orcamento() {
                   </div>
                 )}
                 {sortedGroups.map(([parentName, groupItems]) => (
-                  <ParentAccordion key={parentName} parentName={parentName} items={groupItems} />
+                  <ParentAccordion key={parentName} parentName={parentName} items={groupItems} onOpen={setBreakdown} />
                 ))}
               </div>
             )
@@ -788,6 +801,17 @@ export function Orcamento() {
           }}
         />
       )}
+
+      {breakdown && (
+        <CategoryBreakdownModal
+          title={breakdown.title}
+          categoryIds={breakdown.categoryIds}
+          planned={breakdown.planned}
+          month={month}
+          year={year}
+          onClose={() => setBreakdown(null)}
+        />
+      )}
     </div>
   )
 }
@@ -796,7 +820,17 @@ export function Orcamento() {
  * o total agregado das filhas, aberta lista cada uma. Fechado por padrão:
  * ~80 folhas juntas listadas de uma vez era ilegível, aqui só abre quem
  * interessa no momento. */
-function ParentAccordion({ parentName, items }: { parentName: string; items: BudgetCategory[] }) {
+type BreakdownSel = { title: string; categoryIds: string[]; planned: number }
+
+function ParentAccordion({
+  parentName,
+  items,
+  onOpen,
+}: {
+  parentName: string
+  items: BudgetCategory[]
+  onOpen: (sel: BreakdownSel) => void
+}) {
   const [open, setOpen] = useState(false)
   const planned = items.reduce((s, c) => s + c.planned, 0)
   const spent = items.reduce((s, c) => s + c.spent, 0)
@@ -821,7 +855,7 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
       {open && (
         <div className={styles.accordionBody}>
           {items.map((item) => (
-            <CategoryRow key={item.categoryId} item={item} />
+            <CategoryRow key={item.categoryId} item={item} onOpen={onOpen} />
           ))}
         </div>
       )}
@@ -832,10 +866,20 @@ function ParentAccordion({ parentName, items }: { parentName: string; items: Bud
 /** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é só
  * leitura (nome, gasto/meta, comparação com mês anterior). Sem barra — dentro
  * da meta fica silenciosa, só ganha destaque (ícone + fundo) quando estoura. */
-function CategoryRow({ item }: { item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number } }) {
+function CategoryRow({
+  item,
+  onOpen,
+}: {
+  item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number }
+  onOpen: (sel: BreakdownSel) => void
+}) {
   const isOver = item.planned > 0 && item.spent > item.planned
   return (
-    <div className={`${styles.categoryRow} ${isOver ? styles.categoryRowOver : ''}`}>
+    <button
+      type="button"
+      className={`${styles.categoryRow} ${styles.categoryRowButton} ${isOver ? styles.categoryRowOver : ''}`}
+      onClick={() => onOpen({ title: item.name, categoryIds: [item.categoryId], planned: item.planned })}
+    >
       <div className={styles.categoryRowTop}>
         <span className={styles.categoryRowName}>
           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
@@ -854,6 +898,6 @@ function CategoryRow({ item }: { item: { categoryId: string; name: string; plann
       <div className={cards.deltaRow}>
         <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
       </div>
-    </div>
+    </button>
   )
 }

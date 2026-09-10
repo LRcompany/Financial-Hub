@@ -240,6 +240,28 @@
   margin-top: var(--space-2);
 }
 
+/* Linha vira botão pra abrir "o que está incluso nesse montante" (10/09) —
+   sem cara de botão até o hover. */
+.categoryRowButton {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+
+.categoryRowButton:hover {
+  background: var(--fill-muted);
+}
+
+.categoryRowButton.categoryRowOver:hover {
+  background: var(--danger-soft);
+}
+
 .categoryRowOver {
   background: var(--danger-soft);
   border-radius: var(--r-sm);

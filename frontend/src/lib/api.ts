@@ -83,6 +83,22 @@ export interface BudgetCategory {
   previousSpent: number
 }
 
+export interface CategoryBreakdownRow {
+  id: string
+  date: string
+  description: string
+  rawDescription: string | null
+  amount: number
+  category: string | null
+  installmentNumber?: number | null
+  totalInstallments?: number | null
+}
+
+export interface CategoryBreakdown {
+  transactions: CategoryBreakdownRow[]
+  projected: CategoryBreakdownRow[]
+}
+
 export interface BudgetReviewCategory {
   categoryId: string
   name: string
@@ -606,6 +622,10 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<BudgetSummary>(`/budget-summary${query}`)
   },
+  budgetCategoryBreakdown: (categoryIds: string[], month: number, year: number) =>
+    request<CategoryBreakdown>(
+      `/budget-summary/category-breakdown?month=${month}&year=${year}&categoryIds=${categoryIds.join(',')}`
+    ),
   wealthOverview: (params?: { month: number; year: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<WealthOverview>(`/wealth-overview${query}`)

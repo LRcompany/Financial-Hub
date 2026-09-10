@@ -282,6 +282,44 @@
   margin-top: 6px;
 }
 
+/* Linha de categoria clicável ("o que está incluso nesse montante", 10/09) —
+   botão que embrulha a mesma estrutura visual do .progressRow, sem parecer
+   um botão até o hover. */
+.progressRowButton {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: var(--space-2);
+  margin: 0 calc(var(--space-2) * -1);
+  border-radius: var(--r-sm);
+}
+
+.progressRowButton + .progressRowButton {
+  margin-top: calc(var(--space-4) - var(--space-2));
+}
+
+.progressRowButton:hover {
+  background: var(--fill-muted);
+}
+
+/* Estourou o planejado — número em vermelho + ícone de alerta (mesma
+   linguagem visual do accordion de categorias na página Orçamento). */
+.progressRowOver .progressLabel span:last-child {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.progressOverIcon {
+  color: var(--danger);
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
 /* ---------- linha "Total do mês" em destaque ---------- */
 /* Separada visualmente do resto da lista (fundo próprio, texto maior) —
    pra bater o olho e ver a diferença entre o total e as categorias sem

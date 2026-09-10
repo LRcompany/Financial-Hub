@@ -305,6 +305,70 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   });
 });
 
+// GET /api/budget-summary/category-breakdown?month&year&categoryIds=a,b,c
+// "O que está incluso nesse montante" (pedido do Luiz, 10/09) — ao clicar
+// numa categoria (folha) ou num grupo-mãe (várias folhas) do Orçamento,
+// lista as transações reais + parcelas projetadas que somam aquele valor.
+// Recebe os `categoryIds` já resolvidos pelo front (as folhas daquele grupo
+// que TÊM meta no mês) — assim o total da modal bate exatamente com a barra
+// clicada, que também só soma folha com meta.
+budgetRouter.get("/budget-summary/category-breakdown", async (req, res) => {
+  const now = new Date();
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const year = req.query.year ? Number(req.query.year) : now.getFullYear();
+  const ids = String(req.query.categoryIds ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (ids.length === 0) return res.json({ transactions: [], projected: [] });
+
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
+
+  const [transactions, installments, monthExpenses] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { categoryId: { in: ids }, type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
+      orderBy: { date: "desc" },
+      include: { category: { include: { parent: { include: { parent: true } } } } },
+    }),
+    prisma.upcomingInstallment.findMany({
+      where: { categoryId: { in: ids }, dueDate: { gte: monthStart, lt: monthEnd } },
+      orderBy: { dueDate: "asc" },
+      include: { category: { include: { parent: { include: { parent: true } } } } },
+    }),
+    // Dedup igual ao projectedSpendByCategory: parcela cuja compra já virou
+    // Transaction real no mês (qualquer categoria) não aparece de novo aqui.
+    prisma.transaction.findMany({
+      where: { type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true, description: true },
+    }),
+  ]);
+  const postedKeys = new Set(monthExpenses.map((t) => `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`));
+
+  res.json({
+    transactions: transactions.map((t) => ({
+      id: t.id,
+      date: t.date,
+      description: t.note || t.description,
+      rawDescription: t.note ? t.description : null,
+      amount: t.amount,
+      category: categoryPath(t.category),
+      installmentNumber: t.installmentNumber,
+      totalInstallments: t.totalInstallments,
+    })),
+    projected: installments
+      .filter((i) => !postedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`))
+      .map((i) => ({
+        id: i.id,
+        date: i.dueDate,
+        description: i.note || i.description,
+        rawDescription: i.note ? i.description : null,
+        amount: i.amount,
+        category: categoryPath(i.category),
+      })),
+  });
+});
+
 // GET /api/daily-goal/history — histórico completo, mais recente primeiro
 budgetRouter.get("/daily-goal/history", async (_req, res) => {
   const goals = await prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "desc" } });
