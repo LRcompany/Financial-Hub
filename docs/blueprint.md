@@ -1409,6 +1409,18 @@ Front (Orçamento + Dashboard): badge "projetado" (mesmo estilo pill do `install
 
 Verificação: rodei a mesma lógica de `projectedSpendByCategory` num script isolado contra uma CÓPIA local do `prod.db` (nunca toquei produção) — confirmou que a parcela da bike passa a somar R$1.159 em "Bicicleta > Compra" (antes R$0 de gasto real ali) e aparece no dia 03/09 sem duplicar as `Transaction` reais desse mesmo dia (Mercadinho, Hortifruti — compras não relacionadas). Testado visualmente também local (`dev.db`): badges "projetado" aparecem certos no grupo-pai (ex: "Empresa — R$506,62/R$316,38") e na folha correspondente ("Equipamentos — R$506,62/R$0,00"), nota do gráfico diário aparece quando há parcela projetada no período.
 
+### Pizza por categoria-mãe + marca de estouro + modal de detalhamento (10/09)
+
+Três pedidos em sequência sobre a mesma tela ("onde meu dinheiro foi" / "Orçamento do mês"):
+
+1. **Pizza só de categoria-mãe** — *"aqui eu só quero ver as categorias pai, não as subs"*. `pieData` em `Orcamento.tsx` era `budget.categories` folha a folha (~30 fatias, ilegível, e folhas repetem nome entre pais — Aluguel em Moradia E em Transporte>Carro). Agora agrega por `parentName ?? 'Outras'` (mesmo rótulo do accordion). "Outros" que aparece grande é categoria REAL top-level (id `f912c1cf...`), não o fallback.
+
+2. **Marca de estouro no Dashboard** — *"aqui precisa marcar de alguma forma que ultrapassei o limite"* (print do card "Orçamento do mês" com Moradia em 851% da meta, sem nenhum destaque). A página Orçamento já marcava (`isOver` → vermelho + `AlertTriangle` no accordion/folha); o Dashboard não. Adicionado: preenchimento da barra vira `var(--danger)`, ícone de alerta antes do nome, valor `spent/planned` em vermelho — na linha de cada categoria-mãe E na linha "Total do mês". Classes novas em `cards.module.css` (`.progressRowButton`, `.progressRowOver`, `.progressOverIcon`).
+
+3. **Clicar na categoria abre modal "o que está incluso nesse montante"** — *"quando eu clicar na categoria, abre uma modal para eu saber o que está incluso nesse montante"*. Novo endpoint `GET /budget-summary/category-breakdown?month&year&categoryIds=a,b,c` — recebe as folhas já resolvidas pelo front (as que TÊM meta no mês, pra o total bater com a barra) e devolve `{ transactions, projected }`: `Transaction` reais + `UpcomingInstallment` do mês daquelas categorias, com o MESMO dedup de `projectedSpendByCategory` (parcela cuja compra já virou Transaction real no mês não aparece). `CategoryBreakdownModal.tsx` mostra total, faixa "Ultrapassou o planejado em R$X" quando `planned>0 && total>planned`, e duas listas ("Gastos confirmados" / "Parcelas projetadas" com tag `projetado`), cada linha com nota+descrição-crua, vencimento/data, caminho da categoria e valor. Ligado no Dashboard (clica na barra da mãe → todas as folhas do grupo) e no Orçamento (clica na folha dentro do accordion → categoria única). O header do accordion continua só expandindo, não abre modal.
+
+Verificado local (`dev.db`): barra "Transporte" (R$1.577,83 / R$1.050,00) com preenchimento vermelho + ícone; modal abre com faixa "Ultrapassou em R$527,83", R$8,00 confirmado + R$1.569,83 projetado (bike x3, Unidas, Movida, capacete x3) = total da barra. Folha "Itens de Casa" (R$2.708,03, meta R$0) abre modal com as parcelas projetadas somando exatamente o valor da linha, sem faixa de estouro (meta 0 = "sem opinião", mesma convenção `isOver` do resto do app).
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
