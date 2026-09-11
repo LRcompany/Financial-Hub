@@ -1,0 +1,259 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  /* width/height explícitos além do inset (achado real, 07/09: PWA em modo
+     standalone no iOS tem bug conhecido de position:fixed se deslocar/cortar
+     quando o teclado abre, ex: campo de data/número desses modais) — 100dvh
+     acompanha a viewport visual de VERDADE (some o espaço do teclado), 100vh
+     sozinho não. */
+  width: 100vw;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .overlay {
+    align-items: center;
+  }
+}
+
+.sheet {
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--space-5);
+  width: 100%;
+  max-width: 860px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 640px) {
+  .sheet {
+    border-radius: var(--r-lg);
+  }
+}
+
+.loading {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 4px 0 0;
+}
+
+.listWrap {
+  overflow-y: auto;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.unconfiguredRow {
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+
+.numCell {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.amountInput {
+  width: 100px !important;
+  height: 32px;
+}
+
+.totalInput {
+  width: 56px !important;
+  height: 32px;
+  text-align: center;
+}
+
+.remainingHint {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.cardSelect {
+  width: 130px !important;
+  height: 32px;
+}
+
+.categorySelect {
+  width: 220px !important;
+  height: 32px;
+}
+
+.noteInput {
+  width: 160px !important;
+  height: 32px;
+}
+
+.customCardInput {
+  width: 110px !important;
+  height: 32px;
+  margin-top: 4px;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 6px;
+}
+
+.saveBtn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deleteBtn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--danger);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveBtn:disabled,
+.deleteBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cards {
+  display: none;
+}
+
+/* Tabela vira card por compra em tela estreita (pedido do Luiz, 11/09) —
+   mesmo padrão/breakpoint de toda tabela do projeto. */
+@media (max-width: 640px) {
+  .table {
+    display: none;
+  }
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.unconfiguredCard {
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+
+.cardTop {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.cardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.cardLabel {
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.cardInlineField {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cardField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.cardActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.cardActions button {
+  flex: 1;
+}

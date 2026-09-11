@@ -1,5 +1,7 @@
 import { currency } from '../lib/format'
 import { HoverCard, HoverRow } from './HoverCard'
+import { Money } from './Money'
+import cards from '../styles/cards.module.css'
 import styles from './RankedBarList.module.css'
 
 interface Item {
@@ -32,18 +34,18 @@ export function RankedBarList({ data, max = 8 }: { data: Item[]; max?: number })
             <HoverCard
               content={
                 item.breakdown && item.breakdown.length > 1
-                  ? item.breakdown.map((b) => <HoverRow key={b.label} label={b.label} value={`R$ ${currency(b.value)}`} />)
+                  ? item.breakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
                   : null
               }
             >
               <span className={styles.label}>{item.label}</span>
             </HoverCard>
             <span className={styles.value}>
-              R$ {currency(item.value)} <span className={styles.pct}>({((item.value / total) * 100).toFixed(0)}%)</span>
+              <Money>R$ {currency(item.value)}</Money> <span className={styles.pct}>({((item.value / total) * 100).toFixed(0)}%)</span>
             </span>
           </div>
-          <div className={styles.track}>
-            <div className={styles.fill} style={{ width: `${(item.value / topValue) * 100}%` }} />
+          <div className={cards.progressTrack}>
+            <div className={cards.progressFill} style={{ width: `${(item.value / topValue) * 100}%`, background: 'var(--accent)' }} />
           </div>
         </div>
       ))}

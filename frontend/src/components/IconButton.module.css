@@ -1,0 +1,64 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  /* --r-sm em vez de --r-full (achado real, 08/09: 3 dos 11 lugares
+     copiados usavam redondo, sem motivo aparente) — padronizado no formato
+     da maioria, mesma linguagem visual do <Input>/<Select> do app. */
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sm {
+  width: 28px;
+  height: 28px;
+}
+
+/* Só o header do app (AppLayout) — alvo de toque maior, mesmo padrão que já
+   existia lá antes da consolidação. */
+.lg {
+  width: 40px;
+  height: 40px;
+}
+
+.default {
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+}
+
+/* Header pede um pouco mais de contraste que uma ação secundária de modal —
+   mesmo tom que o AppLayout já usava antes. */
+.lg.default {
+  color: var(--ink);
+}
+
+.ghost {
+  background: none;
+  color: var(--ink-soft);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--fill-muted);
+}
+
+.danger {
+  background: none;
+  color: var(--danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+/* 2º clique de "excluir" (confirmação armada) — ver CategoryManager. */
+.dangerConfirm {
+  background: var(--danger-soft);
+  color: var(--danger);
+}

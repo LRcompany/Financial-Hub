@@ -5,8 +5,6 @@ import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/a
 
 export const positionsRouter = Router();
 
-const SECURITY_TYPES = ["FII", "Ação", "Renda Fixa", "Cripto", "Moeda", "Fundo", "Outro"];
-
 // GET /api/fx-rate — cotação USD/BRL atual, pra exibição (converter um total
 // já em BRL de volta pra USD na tela, ex: total de Cripto). Diferente do
 // fxRateToBRL gravado por posição (esse é a taxa histórica de quando aquela
@@ -36,6 +34,39 @@ positionsRouter.get("/positions", async (_req, res) => {
   const nowYm = yearMonth(all[0].year, all[0].month);
   const latest = activeSnapshotsAsOf(all, nowYm);
 
+  // Mês anterior por (broker, security) — só usado pra "Conta Corrente" (ver
+  // Patrimonio.tsx), que mostra variação de saldo em vez de rentabilidade
+  // (pedido do Luiz, 08/09: "não existe cotas, preço, investido... registra
+  // isso pela variação"). Calculado pra tudo (é barato, uma segunda passada
+  // já em memória) em vez de só pro tipo certo, pra não duplicar a regra de
+  // "qual snapshot conta" (`activeSnapshotsAsOf`) fora daqui.
+  const previousByKey = new Map<string, number>();
+  for (const s of activeSnapshotsAsOf(all, nowYm - 1)) {
+    previousByKey.set(`${s.brokerId}:${s.securityId}`, s.marketValue);
+  }
+
+  // Provento por (broker, security) do mês EXATO — mês atual e anterior (11/09,
+  // seta tipo MonthDelta na coluna "Proventos"). Vem de `DividendPayment`
+  // (não de `PositionSnapshot.dividends`) pelo mesmo motivo de `wealth.ts`:
+  // dividendo é um FLUXO ligado à data real da transação, não ao mês em que
+  // por acaso já existe snapshot daquela posição — `activeSnapshotsAsOf`
+  // arrastaria pra frente o provento de um mês antigo e mostraria como se
+  // fosse do mês atual. Só entra no map quando aquele mês exato TEM
+  // pagamento registrado — vira `undefined` no lookup senão, e o front sabe
+  // que não tem dado real daquele mês (não mostra R$0 ou seta fingindo).
+  async function dividendsByExactMonth(ym: number): Promise<Map<string, number>> {
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const payments = await prisma.dividendPayment.findMany({ where: { year, month } });
+    const map = new Map<string, number>();
+    for (const p of payments) {
+      map.set(`${p.brokerId}:${p.securityId}`, p.amount);
+    }
+    return map;
+  }
+  const currentDividendsByKey = await dividendsByExactMonth(nowYm);
+  const previousDividendsByKey = await dividendsByExactMonth(nowYm - 1);
+
   const byType = new Map<
     string,
     {
@@ -44,6 +75,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       ticker: string | null;
       investedAmount: number;
       marketValue: number;
+      previousMarketValue: number | null;
       currency: string;
       fxRateToBRL: number | null;
       month: number;
@@ -55,6 +87,8 @@ positionsRouter.get("/positions", async (_req, res) => {
       dueDate: string | null;
       fixedAnnualRate: number | null;
       ratePeriodicity: string | null;
+      dividends: number | null;
+      previousDividends: number | null;
     }[]
   >();
   for (const s of latest) {
@@ -71,6 +105,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       ticker: s.security.ticker,
       investedAmount: s.investedAmount,
       marketValue: s.marketValue,
+      previousMarketValue: previousByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
       currency: s.security.currency,
       fxRateToBRL: s.fxRateToBRL,
       month: s.month,
@@ -82,12 +117,20 @@ positionsRouter.get("/positions", async (_req, res) => {
       dueDate: s.security.dueDate ? s.security.dueDate.toISOString() : null,
       fixedAnnualRate: s.security.fixedAnnualRate,
       ratePeriodicity: s.security.ratePeriodicity,
+      // Proventos do mês EXATO (11/09) — só Ação/FII têm valor real (ver
+      // pluggySync.ts); vem de `currentDividendsByKey`, não de `s.dividends`
+      // direto, pelo mesmo motivo do comentário acima (flow, não estado
+      // arrastável). null = "não se aplica" pra esse tipo de ativo, "ainda
+      // não sincronizado esse mês", ou corretora sem provento esse mês —
+      // nunca 0 fake.
+      dividends: currentDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
+      previousDividends: previousDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
     });
     byType.set(groupKey, list);
   }
 
   const standaloneBrokerNames = new Set(
-    (await prisma.broker.findMany({ where: { standalone: true }, select: { name: true } })).map((b) => b.name)
+    (await prisma.broker.findMany({ where: { standalone: true, archivedAt: null }, select: { name: true } })).map((b) => b.name)
   );
 
   const result = [...byType.entries()]
@@ -132,56 +175,3 @@ positionsRouter.get("/positions/history", async (req, res) => {
   res.json({ history });
 });
 
-// POST /api/positions — lançamento manual, só faz sentido pra corretora sem
-// sync automático (Nomad, Wise, Phantom...). Cria o Broker/Security na hora
-// se ainda não existirem. Valores em USD são convertidos pra BRL na hora de
-// gravar (mesma regra do sync da Pluggy) — investedAmount/marketValue no
-// banco são sempre BRL, nunca mistura escala na soma do patrimônio.
-positionsRouter.post("/positions", async (req, res) => {
-  const { brokerName, securityName, type, currency, investedAmount, marketValue, ticker } = req.body ?? {};
-  if (!brokerName || !securityName || !type || typeof investedAmount !== "number" || typeof marketValue !== "number") {
-    return res.status(400).json({ error: "Campos obrigatórios: brokerName, securityName, type, investedAmount, marketValue" });
-  }
-  if (!SECURITY_TYPES.includes(type)) {
-    return res.status(400).json({ error: `type precisa ser um de: ${SECURITY_TYPES.join(", ")}` });
-  }
-
-  const assetCurrency = currency === "USD" ? "USD" : "BRL";
-  let fxRateToBRL: number | null = null;
-  let investedAmountBRL = investedAmount;
-  let marketValueBRL = marketValue;
-  if (assetCurrency === "USD") {
-    try {
-      fxRateToBRL = await getUsdToBrlRate();
-    } catch (err) {
-      return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
-    }
-    investedAmountBRL = investedAmount * fxRateToBRL;
-    marketValueBRL = marketValue * fxRateToBRL;
-  }
-
-  const broker = await prisma.broker.upsert({
-    where: { name: brokerName },
-    update: {},
-    create: { name: brokerName, dataSource: "manual_statement", scope: JSON.stringify(["investments"]) },
-  });
-
-  const securityKey = `manual:${brokerName}:${securityName}`.toUpperCase();
-  const security = await prisma.security.upsert({
-    where: { id: securityKey },
-    update: { name: securityName, ticker: ticker ?? null, type, currency: assetCurrency },
-    create: { id: securityKey, name: securityName, ticker: ticker ?? null, type, currency: assetCurrency },
-  });
-
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-
-  const snapshot = await prisma.positionSnapshot.upsert({
-    where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId: security.id, month, year } },
-    update: { investedAmount: investedAmountBRL, marketValue: marketValueBRL, fxRateToBRL },
-    create: { brokerId: broker.id, securityId: security.id, month, year, investedAmount: investedAmountBRL, marketValue: marketValueBRL, fxRateToBRL },
-  });
-
-  res.status(201).json(snapshot);
-});

@@ -14,12 +14,28 @@ body,
   height: 100%;
 }
 
+/* Rede de segurança GLOBAL contra scroll horizontal (pedido do Luiz, 11/09:
+   "em orçamento estamos com esse problema de scroll horizontal... aqui
+   também", em duas telas diferentes) — achado real por trás disso: sem essa
+   regra, um único elemento largo demais pro mobile (ex: o carrossel "Por
+   mês" antes de o `perPage` responsivo terminar de calcular) faz o VIEWPORT
+   INTEIRO crescer pra caber ele (`window.innerWidth` chegava a reportar 993
+   num emulador de 375px), empurrando a página inteira de lado. Isso nunca
+   deveria acontecer em lugar nenhum do app — cada tela cuida de não
+   estourar a própria largura, mas essa regra garante que, mesmo se algo
+   escapar, ninguém vê barra de rolagem lateral. */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: 'proxima-nova', 'Inter', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  width: 100%;
 }
 
 button,

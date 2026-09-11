@@ -1,0 +1,594 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.monthNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.monthLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  min-width: 80px;
+  text-align: center;
+}
+
+.todayBtn {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.reviewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reviewBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.reviewBannerBtn {
+  margin-left: auto;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chartLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-4);
+}
+
+.upcomingDisclaimer {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: var(--space-2) 0 0;
+  line-height: 1.4;
+}
+
+.groupTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 var(--space-4);
+}
+
+.kindSummary {
+  display: flex;
+  gap: var(--space-5);
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  /* Mesmo padding padrão do .upcomingMonthChip (04/09) — é o mesmo "tile"
+   * label+valor, só que com 2 valores lado a lado em vez de 1 por chip. */
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.kindSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kindSummaryLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.kindSummaryValue {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- accordion por categoria-mãe ---------- */
+.accordion {
+  border-radius: var(--r-md);
+  margin-bottom: var(--space-1);
+}
+
+.accordionOpen {
+  background: var(--accent-soft);
+}
+
+.accordionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  /* Sem gate de breakpoint (mesma lição do chevron de CategoryManager,
+     09/09): nome+badge cabendo numa linha não muda nada; não cabendo (ex:
+     "Empresa" + tag PROJETADO + valor no mobile), a barra INTEIRA de valor
+     quebra pra linha de baixo em vez de espremer "R$X / R$Y" dentro de uma
+     coluna estreita (achado real, 11/09). */
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+}
+
+.accordionToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-full);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.accordionOpen .accordionToggle {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.accordionName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.accordionBody {
+  /* indent alinha embaixo do nome da categoria-mãe: espaço à esquerda do
+     header (var(--space-4)) + largura do círculo do toggle (22px) + gap
+     até o nome (var(--space-3)) */
+  padding: 0 var(--space-4) var(--space-3) calc(22px + var(--space-4) + var(--space-3));
+}
+
+.categoryColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .categoryColumns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- linha de categoria (sem barra — só destaca quando estoura) ---------- */
+.categoryRow + .categoryRow {
+  margin-top: var(--space-1);
+}
+
+/* Linha vira botão pra abrir "o que está incluso nesse montante" (10/09) —
+   sem cara de botão até o hover. */
+.categoryRowButton {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 calc(var(--space-3) * -1);
+}
+
+.categoryRowButton:hover {
+  background: var(--fill-muted);
+}
+
+.categoryRowTop {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.categoryRowName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.categoryRowValues {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* ---------- cartões de crédito ---------- */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .cardsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.creditCardTile {
+  background: var(--fill-muted);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
+}
+
+.creditCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.creditCardName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.creditCardBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.creditCardBrand {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estimatedTag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estimatedNote {
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.4;
+  margin: var(--space-2) 0 0;
+}
+
+.creditCardFooter {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-top: var(--space-2);
+}
+
+/* ---------- parcelas futuras ---------- */
+.upcomingByMonth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.upcomingMonthChip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  /* Padding padrão de "tile" (label em cima, valor em baixo) — mesmo valor
+   * usado em .kindSummary (Orçamento) e .statTile (cards.module.css,
+   * Dashboard/Projetos). Aumentado a pedido do Luiz (04/09, referência: o
+   * chip do carrossel "Por mês") e replicado nos outros pra ficar
+   * padronizado — é o mesmo tipo de box em vários lugares da interface. */
+  padding: var(--space-4);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+.upcomingMonthChip strong {
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chip do carrossel "Por mês" é um <button> (clicável) — reseta os estilos
+ * padrão de botão pra ficar igual ao chip <div> de "Por cartão". */
+button.upcomingMonthChip {
+  border: 1px solid transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  align-items: flex-start;
+  /* Só o chip do carrossel (o de "Por cartão" é <div> num flex-wrap — largura
+   * 100% quebraria aquele lado a lado) — aqui cada chip é sua própria coluna
+   * do grid (repeat(perPage,...) no Carousel.tsx), preenche o "slide" inteiro. */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button.upcomingMonthChip:hover {
+  border-color: var(--accent-hover);
+}
+
+.upcomingMonthChipActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.upcomingMonthChipActive span {
+  color: var(--ink);
+}
+
+/* ---------- tabela ---------- */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.installmentCards {
+  display: none;
+}
+
+/* Tabela vira card por linha em tela estreita (pedido do Luiz, 07/09) — "não
+   por colunas e linhas, assim não precisamos do scroll" horizontal. */
+@media (max-width: 640px) {
+  .tableWrap {
+    display: none;
+  }
+  .installmentCards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.installmentCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.installmentCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.installmentCardValue {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.installmentCardRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.installmentCardLabel {
+  color: var(--ink-soft);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.installmentRawName {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: normal;
+  margin-top: 2px;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.spinningIcon {
+  animation: orcamentoSpin 0.8s linear infinite;
+}
+
+.transactionsHelperText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-3);
+}
+
+/* Seletor de categoria dentro da linha da lista de transações — largura fixa
+   pra não empurrar o valor pra fora em descrição longa, mas com espaço
+   suficiente pra caminho de categoria de 3 níveis não cortar o texto. */
+.transactionCategorySelect {
+  flex-shrink: 0;
+  width: 220px;
+  font-size: 12.5px;
+  height: 34px;
+}
+
+/* Nota livre por transação (08/09) — puramente documental (ex: "Adidas"
+   quando a Pluggy manda "MASTERCARD"). Botão discreto quando vazia/exibindo,
+   vira Input ao clicar (ver noteInput). */
+.noteButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.noteButton:hover {
+  color: var(--ink-soft);
+}
+
+.noteInput {
+  margin-top: 4px;
+  height: 28px;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Transferência (fatura/anuidade) e receita de projeto — categoria não é
+   editável aqui (já vem certa de outro lugar, ou não conta como gasto de
+   qualquer forma), só um rótulo explicando o porquê. */
+.transactionStaticLabel {
+  flex-shrink: 0;
+  width: 220px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* Tela estreita (pedido do Luiz, 07/09 — achou nome de comerciante longo
+   SOBREPONDO o valor): nome/descrição precisa da linha inteira pra si,
+   então o seletor/rótulo + valor descem pra uma segunda linha, lado a
+   lado, em vez de brigar por espaço na mesma linha do ícone+nome. */
+@media (max-width: 640px) {
+  .transactionRow {
+    flex-wrap: wrap;
+  }
+  /* Ícone + descrição reivindicam a linha inteira sozinhos — sem isso o
+     seletor/valor tentavam espremer nessa mesma linha antes de quebrar. */
+  .transactionBody {
+    flex-basis: 100%;
+  }
+  .transactionCategorySelect,
+  .transactionStaticLabel {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .transactionSecondRow {
+    order: 3;
+  }
+}
+
+@keyframes orcamentoSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

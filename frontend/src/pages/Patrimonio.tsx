@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   LineChart,
   PieChart,
@@ -6,32 +6,31 @@ import {
   Flag,
   TrendingUp,
   TrendingDown,
-  Trash2,
   Layers,
   Plus,
-  X,
   Landmark,
   Building2,
   Bitcoin,
   DollarSign,
-  FileUp,
+  Banknote,
+  Coins,
 } from 'lucide-react'
-import { api, type WealthOverview, type PositionsByType, type Position, type Broker } from '../lib/api'
+import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { VerticalBarChart } from '../components/VerticalBarChart'
+import { DividendsByMonthChart } from '../components/DividendsByMonthChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
-import { StatementUploadModal } from '../components/StatementUploadModal'
 import { ReturnBadge } from '../components/ReturnBadge'
+import { BalanceChangeBadge } from '../components/BalanceChangeBadge'
 import { Input } from '../components/Input'
-import { Select } from '../components/Select'
+import { ContributionModal } from '../components/ContributionModal'
+import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
-
-const SECURITY_TYPES = ['FII', 'Ação', 'Renda Fixa', 'Cripto', 'Moeda', 'Fundo', 'Outro']
 
 const TYPE_ICONS: Record<string, typeof PieChart> = {
   'Renda Fixa': Landmark,
@@ -40,6 +39,7 @@ const TYPE_ICONS: Record<string, typeof PieChart> = {
   Fundo: Layers,
   Cripto: Bitcoin,
   Moeda: DollarSign,
+  'Conta Corrente': Banknote,
 }
 
 // "Por corretora" (pizza) não faz sentido pra Cripto — PHANTOM_BTC, PHANTOM_
@@ -115,7 +115,7 @@ const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
  * tudo que falta). Usa o `HoverCard` genérico do projeto — mesmo padrão em
  * qualquer lista com detalhe extra pra mostrar no hover do nome do item. */
 function assetHoverContent(p: Position) {
-  const rows: { label: string; value: string }[] = []
+  const rows: { label: string; value: ReactNode }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
   if (p.fixedAnnualRate != null) {
     // Taxa fixa numérica (CDB via Pluggy) — periodicidade é só um detalhe a mais.
@@ -128,10 +128,24 @@ function assetHoverContent(p: Position) {
   if (p.dueDate) rows.push({ label: 'Vencimento', value: new Date(p.dueDate).toLocaleDateString('pt-BR') })
   if (p.isin) rows.push({ label: 'ISIN', value: p.isin })
   if (p.quantity != null && p.unitValue != null) {
-    rows.push({ label: 'Posição', value: `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a R$ ${currency(p.unitValue)}` })
+    rows.push({
+      label: 'Posição',
+      value: (
+        <>
+          {p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a <Money>R$ {currency(p.unitValue)}</Money>
+        </>
+      ),
+    })
   }
   if (p.currency === 'USD' && p.fxRateToBRL) {
-    rows.push({ label: 'Valor em USD', value: `US$ ${currency(p.marketValue / p.fxRateToBRL)} (câmbio R$ ${p.fxRateToBRL.toFixed(2)})` })
+    rows.push({
+      label: 'Valor em USD',
+      value: (
+        <>
+          <Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money> (câmbio <Money>R$ {p.fxRateToBRL.toFixed(2)}</Money>)
+        </>
+      ),
+    })
   }
   if (rows.length === 0) return null
   return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)
@@ -144,29 +158,12 @@ export function Patrimonio() {
   const [positions, setPositions] = useState<PositionsByType[]>([])
   const [groupHistories, setGroupHistories] = useState<Record<string, { label: string; value: number }[]>>({})
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
-  const [brokers, setBrokers] = useState<Broker[]>([])
-  const [uploadTarget, setUploadTarget] = useState<{ id: string; name: string } | null>(null)
-
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({
-    brokerName: '',
-    securityName: '',
-    type: 'Renda Fixa',
-    currency: 'BRL',
-    investedAmount: '',
-    marketValue: '',
-  })
-  const [savingPosition, setSavingPosition] = useState(false)
 
   const [targetInput, setTargetInput] = useState('')
-  const [savingTarget, setSavingTarget] = useState(false)
+  const [contributionInput, setContributionInput] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
 
-  const [yearForm, setYearForm] = useState({
-    year: String(new Date().getFullYear()),
-    savingsTarget: '',
-    annualReturnAssumptionPct: '',
-  })
-  const [savingYear, setSavingYear] = useState(false)
+  const [showContributionModal, setShowContributionModal] = useState(false)
 
   function load() {
     api
@@ -174,6 +171,7 @@ export function Patrimonio() {
       .then((w) => {
         setWealth(w)
         setTargetInput(w.wealthGoal ? String(w.wealthGoal.targetAmount) : '')
+        setContributionInput(w.wealthGoal ? String(w.wealthGoal.monthlyContribution) : '')
       })
       .catch(() => setError(true))
     api
@@ -196,69 +194,22 @@ export function Patrimonio() {
       .fxRate()
       .then((r) => setUsdToBrl(r.usdToBrl))
       .catch(() => {})
-    api
-      .brokers()
-      .then(setBrokers)
-      .catch(() => {})
   }
 
   useEffect(load, [])
 
-  async function saveNewPosition(e: React.FormEvent) {
+  async function saveGoal(e: React.FormEvent) {
     e.preventDefault()
-    const investedAmount = Number(addForm.investedAmount)
-    const marketValue = Number(addForm.marketValue)
-    if (!addForm.brokerName || !addForm.securityName || !investedAmount || !marketValue) return
-    setSavingPosition(true)
+    const targetAmount = Number(targetInput)
+    const monthlyContribution = Number(contributionInput)
+    if (!targetAmount || targetAmount <= 0) return
+    setSavingGoal(true)
     try {
-      await api.addPosition({
-        brokerName: addForm.brokerName,
-        securityName: addForm.securityName,
-        type: addForm.type,
-        currency: addForm.currency,
-        investedAmount,
-        marketValue,
-      })
-      setAddForm({ brokerName: '', securityName: '', type: 'Renda Fixa', currency: 'BRL', investedAmount: '', marketValue: '' })
-      setShowAddForm(false)
+      await api.setWealthGoal({ targetAmount, monthlyContribution: monthlyContribution || 0 })
       load()
     } finally {
-      setSavingPosition(false)
+      setSavingGoal(false)
     }
-  }
-
-  async function saveTarget(e: React.FormEvent) {
-    e.preventDefault()
-    const value = Number(targetInput)
-    if (!value || value <= 0) return
-    setSavingTarget(true)
-    try {
-      await api.setWealthGoalTarget(value)
-      load()
-    } finally {
-      setSavingTarget(false)
-    }
-  }
-
-  async function saveYear(e: React.FormEvent) {
-    e.preventDefault()
-    const year = Number(yearForm.year)
-    const savingsTarget = Number(yearForm.savingsTarget)
-    const annualReturnAssumptionPct = Number(yearForm.annualReturnAssumptionPct)
-    if (!year || !savingsTarget || !annualReturnAssumptionPct) return
-    setSavingYear(true)
-    try {
-      await api.setWealthGoalYearly(year, savingsTarget, annualReturnAssumptionPct)
-      setYearForm({ year: String(year + 1), savingsTarget: '', annualReturnAssumptionPct: '' })
-      load()
-    } finally {
-      setSavingYear(false)
-    }
-  }
-
-  async function removeYear(year: number) {
-    await api.deleteWealthGoalYearly(year)
-    load()
   }
 
   if (error) {
@@ -271,6 +222,15 @@ export function Patrimonio() {
   const total = wealth.total ?? 0
   const goalProgress = wealth.wealthGoal ? Math.min((total / wealth.wealthGoal.targetAmount) * 100, 100) : 0
 
+  // Quanto JÁ deveria ter sido aportado desde janeiro até agora (não o ano
+  // inteiro) — é a base de comparação correta pro `realContribution` da
+  // linha do ano corrente. O `contribution` daquela mesma linha na tabela é
+  // outra coisa (quanto ainda falta aportar dali até dezembro, pra projeção
+  // futura) — comparar `realContribution` com ELE seria comparar períodos
+  // diferentes (jan-agora vs. agora-dezembro), por isso a base separada aqui.
+  const monthsElapsedThisYear = new Date().getMonth() + 1
+  const plannedContributionSoFarThisYear = wealth.wealthGoal ? wealth.wealthGoal.monthlyContribution * monthsElapsedThisYear : null
+
   // Mesma regra das boxes abaixo: corretora única vira o nome dela em vez do
   // tipo genérico ("Moeda" não é onde eu invisto, é só classificação do ativo).
   const allocationData = positions.map((group) => {
@@ -281,7 +241,22 @@ export function Patrimonio() {
 
   return (
     <div className={cards.page}>
-      <h1 className={styles.pageTitle}>Patrimônio</h1>
+      <div className={styles.titleRow}>
+        <h1 className={cards.pageTitle}>Patrimônio</h1>
+        <button className={styles.addContributionBtn} onClick={() => setShowContributionModal(true)}>
+          + Registrar aporte
+        </button>
+      </div>
+
+      {showContributionModal && (
+        <ContributionModal
+          onClose={() => setShowContributionModal(false)}
+          onSaved={() => {
+            setShowContributionModal(false)
+            load()
+          }}
+        />
+      )}
 
       <div className={cards.grid}>
         {!wealth.hasData && (
@@ -297,7 +272,7 @@ export function Patrimonio() {
             <div className={`${cards.card} ${cards.fullWidth}`}>
               <CardHeader icon={LineChart} title="Evolução do patrimônio" />
               <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
-                R$ {currency(total)}
+                <Money>R$ {currency(total)}</Money>
               </div>
               <div className={cards.chartMeta}>
                 <span>Patrimônio total</span>
@@ -328,8 +303,8 @@ export function Patrimonio() {
               <CardHeader icon={Activity} title="Destaques do mês" />
               {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
               {wealth.movers.map((m, i) => (
-                <div key={`${m.ticker}-${i}`} className={cards.moverRow}>
-                  <span className={cards.moverTicker}>{m.ticker}</span>
+                <div key={`${m.category}-${i}`} className={cards.moverRow}>
+                  <span className={cards.moverTicker}>{m.category}</span>
                   <span className={cards.moverChange}>
                     {m.changePct >= 0 ? (
                       <TrendingUp size={14} className={cards.dirIn} />
@@ -341,6 +316,40 @@ export function Patrimonio() {
                   </span>
                 </div>
               ))}
+            </div>
+
+            {/* Full-width, embaixo de Alocação+Destaques (pedido do Luiz,
+                11/09: "Alocação + Destaque do mês em uma linha e os
+                proventos em outra linha") — antes ficava ENTRE os dois,
+                quebrando a linha dos dois cards normais sem precisar. */}
+            <div className={`${cards.card} ${cards.fullWidth}`}>
+              <CardHeader icon={Coins} title="Proventos recebidos" />
+              {/* Dividendo/JCP/rendimento — dado real via Pluggy (11/09), só
+                  existe pra Ação/FII (Renda Fixa/Fundo/Cripto não têm esse
+                  conceito, ficam de fora da conta). null = ainda sem dado
+                  coletado (posição sem Ação/FII, ou sync mais antigo que a
+                  feature) — nunca mostra R$0,00 fingindo que já sincronizou.
+                  Box ocupa a linha inteira (pedido do Luiz, 11/09) porque
+                  agora carrega um gráfico mês a mês, não só um número. */}
+              {wealth.dividendsThisMonth != null ? (
+                <>
+                  <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+                    <Money>R$ {currency(wealth.dividendsThisMonth)}</Money>
+                  </div>
+                  <div className={cards.chartMeta}>
+                    <span>Recebido este mês</span>
+                    {wealth.dividendsLastMonth != null && wealth.dividendsLastMonth > 0 && (
+                      <MonthDelta current={wealth.dividendsThisMonth} previous={wealth.dividendsLastMonth} />
+                    )}
+                  </div>
+                  {wealth.dividendsByMonth.length > 0 && <DividendsByMonthChart data={wealth.dividendsByMonth} />}
+                  <div className={cards.chartMeta}>
+                    <span><Money>R$ {currency(wealth.dividendsThisYear ?? 0)}</Money> recebido no ano</span>
+                  </div>
+                </>
+              ) : (
+                <div className={cards.emptyState}>Sem provento coletado ainda pra Ação/FII.</div>
+              )}
             </div>
 
             {/* ---------- uma box por tipo de ativo, com gráficos específicos ---------- */}
@@ -369,32 +378,18 @@ export function Patrimonio() {
               const history = groupHistories[group.type]
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
+              // Proventos só existem de verdade pra Ação/FII (11/09) — ver
+              // fetchMonthlyDividends em pluggySync.ts.
+              const showDividends = group.type === 'Ação' || group.type === 'FII'
               const usdTotal = groupUsdTotal(group, usdToBrl)
-              // Upload de extrato é específico do formato Nomad/Apex Clearing
-              // (parseNomadStatement) — não é genérico pra qualquer corretora
-              // manual_statement (INCO também é standalone+manual, mas não
-              // tem PDF nesse formato; usaria o parser errado).
-              const broker = group.isBroker ? brokers.find((b) => b.name === group.type) : undefined
-              const supportsStatementUpload = broker?.name === 'NOMAD'
 
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
-                  <CardHeader
-                    icon={Icon}
-                    title={title}
-                    action={
-                      supportsStatementUpload && broker ? (
-                        <button className={styles.uploadBtn} onClick={() => setUploadTarget({ id: broker.id, name: broker.name })}>
-                          <FileUp size={13} strokeWidth={2} />
-                          Atualizar por extrato
-                        </button>
-                      ) : undefined
-                    }
-                  />
+                  <CardHeader icon={Icon} title={title} />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-                    R$ {currency(group.total)}
+                    <Money>R$ {currency(group.total)}</Money>
                   </div>
-                  {usdTotal != null && <div className={styles.usdSecondary}>US$ {currency(usdTotal)}</div>}
+                  {usdTotal != null && <div className={styles.cellNote}><Money>US$ {currency(usdTotal)}</Money></div>}
                   <div className={cards.chartMeta}>
                     <span>
                       {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
@@ -445,15 +440,47 @@ export function Patrimonio() {
 
                   <div className={styles.tableWrap} style={{ marginTop: 'var(--space-5)' }}>
                     <table className={styles.table}>
+                      {/* Conta Corrente não tem cota/preço/investido (pedido
+                          do Luiz, 08/09) — colunas próprias: só saldo e
+                          variação desde o mês anterior, sem fingir uma
+                          rentabilidade que não existe pra dinheiro parado.
+                          Corretora standalone (NOMAD, INCO — `isBroker`) TEM
+                          rentabilidade, mas não tem cota/qtd./preço unitário
+                          de verdade (é uma posição única por ativo, não um
+                          papel com preço de mercado por cota) — mostrar "—"
+                          nessas colunas só poluía a tabela sem informar nada
+                          (pedido do Luiz, 11/09: "não temos campos de cotas e
+                          preço unitário em Nomad, por que estamos exibindo
+                          isso?"). */}
                       <thead>
                         <tr>
                           <th>Ativo</th>
                           <th>Corretora</th>
-                          <th>Cotas/qtd.</th>
-                          <th>Preço unit.</th>
-                          <th>Investido</th>
-                          <th>Valor atual</th>
-                          <th>Rentab.</th>
+                          {group.type === 'Conta Corrente' ? (
+                            <>
+                              <th>Saldo</th>
+                              <th>Variação (mês)</th>
+                            </>
+                          ) : group.isBroker ? (
+                            <>
+                              <th>Investido</th>
+                              <th>Valor atual</th>
+                              <th>Rentab.</th>
+                            </>
+                          ) : (
+                            <>
+                              <th>Cotas/qtd.</th>
+                              <th>Preço unit.</th>
+                              <th>Investido</th>
+                              <th>Valor atual</th>
+                              <th>Rentab.</th>
+                              {/* Só Ação/FII recebem provento de verdade
+                                  (11/09) — mesmo princípio de "só mostra
+                                  coluna que faz sentido pra esse tipo",
+                                  igual já vale pra Conta Corrente/standalone. */}
+                              {showDividends && <th>Proventos (mês)</th>}
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -468,33 +495,158 @@ export function Patrimonio() {
                               </HoverCard>
                             </td>
                             <td>{p.broker}</td>
-                            <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
-                            <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
-                            <td>
-                              R$ {currency(p.investedAmount)}
-                              {p.currency === 'USD' && p.fxRateToBRL && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
-                              )}
-                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
-                              )}
-                            </td>
-                            <td>
-                              R$ {currency(p.marketValue)}
-                              {p.currency === 'USD' && p.fxRateToBRL && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
-                              )}
-                              {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
-                              )}
-                            </td>
-                            <td>
-                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
-                            </td>
+                            {group.type === 'Conta Corrente' ? (
+                              <>
+                                <td>
+                                  <Money>R$ {currency(p.marketValue)}</Money>
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
+                                  )}
+                                </td>
+                                <td>
+                                  <BalanceChangeBadge current={p.marketValue} previous={p.previousMarketValue} />
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                {!group.isBroker && (
+                                  <>
+                                    <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
+                                    <td>{p.unitValue != null ? <Money>{`R$ ${currency(p.unitValue)}`}</Money> : '—'}</td>
+                                  </>
+                                )}
+                                <td>
+                                  <Money>R$ {currency(p.investedAmount)}</Money>
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / p.fxRateToBRL)}</Money></div>
+                                  )}
+                                  {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / usdToBrl)}</Money></div>
+                                  )}
+                                </td>
+                                <td>
+                                  <Money>R$ {currency(p.marketValue)}</Money>
+                                  {p.currency === 'USD' && p.fxRateToBRL && (
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
+                                  )}
+                                  {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / usdToBrl)}</Money></div>
+                                  )}
+                                </td>
+                                <td>
+                                  <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
+                                </td>
+                                {showDividends && (
+                                  <td>
+                                    {p.dividends != null ? <Money>{`R$ ${currency(p.dividends)}`}</Money> : '—'}
+                                    {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
+                                      <div className={styles.cellNote}>
+                                        <MonthDelta current={p.dividends} previous={p.previousDividends} />
+                                      </div>
+                                    )}
+                                  </td>
+                                )}
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Tela estreita: tabela vira um card por posição — mesmo
+                      padrão já usado em "Comprometido em parcelas futuras"
+                      no Orçamento (07/09), agora replicado aqui (pedido do
+                      Luiz, 11/09: "toda célula numa table vira um card...
+                      não rola termos tabela no mobile"). */}
+                  <div className={styles.positionCards} style={{ marginTop: 'var(--space-5)' }}>
+                    {group.positions.map((p, i) => (
+                      <div key={`${p.broker}-${p.name}-${i}`} className={styles.positionCard}>
+                        <div className={styles.positionCardTop}>
+                          <span className={styles.assetName}>
+                            {displayName(p, group.type)}
+                            {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                          </span>
+                        </div>
+                        <div className={styles.positionCardRow}>
+                          <span className={styles.positionCardLabel}>Corretora</span>
+                          <span>{p.broker}</span>
+                        </div>
+                        {group.type === 'Conta Corrente' ? (
+                          <>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Saldo</span>
+                              <span>
+                                <Money>R$ {currency(p.marketValue)}</Money>
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Variação (mês)</span>
+                              <BalanceChangeBadge current={p.marketValue} previous={p.previousMarketValue} />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {!group.isBroker && (
+                              <>
+                                <div className={styles.positionCardRow}>
+                                  <span className={styles.positionCardLabel}>Cotas/qtd.</span>
+                                  <span>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</span>
+                                </div>
+                                <div className={styles.positionCardRow}>
+                                  <span className={styles.positionCardLabel}>Preço unit.</span>
+                                  <span>{p.unitValue != null ? <Money>{`R$ ${currency(p.unitValue)}`}</Money> : '—'}</span>
+                                </div>
+                              </>
+                            )}
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Investido</span>
+                              <span>
+                                <Money>R$ {currency(p.investedAmount)}</Money>
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / p.fxRateToBRL)}</Money></div>
+                                )}
+                                {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / usdToBrl)}</Money></div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Valor atual</span>
+                              <span>
+                                <Money>R$ {currency(p.marketValue)}</Money>
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
+                                )}
+                                {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / usdToBrl)}</Money></div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Rentab.</span>
+                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
+                            </div>
+                            {showDividends && (
+                              <div className={styles.positionCardRow}>
+                                <span className={styles.positionCardLabel}>Proventos (mês)</span>
+                                <span>
+                                  {p.dividends != null ? <Money>{`R$ ${currency(p.dividends)}`}</Money> : '—'}
+                                  {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
+                                    <div className={styles.cellNote}>
+                                      <MonthDelta current={p.dividends} previous={p.previousDividends} />
+                                    </div>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -505,8 +657,12 @@ export function Patrimonio() {
         {/* ---------- Primeira Milhão ---------- */}
           <div className={`${cards.card} ${cards.fullWidth}`}>
             <CardHeader icon={Flag} title="Primeira Milhão" />
+            <p className={styles.helperText}>
+              Meta simples: quanto falta, e em quanto tempo eu chego lá se continuar do jeito que estou. O retorno usado
+              na conta é a média real da minha carteira nos últimos meses — não um chute.
+            </p>
 
-            <form className={styles.targetForm} onSubmit={saveTarget}>
+            <form className={styles.targetForm} onSubmit={saveGoal}>
               <Input
                 label="Meta geral (R$)"
                 type="number"
@@ -515,8 +671,16 @@ export function Patrimonio() {
                 value={targetInput}
                 onChange={(e) => setTargetInput(e.target.value)}
               />
-              <button className={cards.saveBtn} type="submit" disabled={savingTarget}>
-                Salvar meta
+              <Input
+                label="Quanto pretendo investir por mês (R$)"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={contributionInput}
+                onChange={(e) => setContributionInput(e.target.value)}
+              />
+              <button className={cards.saveBtn} type="submit" disabled={savingGoal}>
+                Salvar
               </button>
             </form>
 
@@ -524,25 +688,39 @@ export function Patrimonio() {
               <>
                 <div className={cards.dailyGoalTop} style={{ marginTop: 'var(--space-5)' }}>
                   <div>
-                    <div className={cards.heroLabel}>Progresso até R$ {currency(wealth.wealthGoal.targetAmount)}</div>
+                    <div className={cards.heroLabel}>Progresso até <Money>R$ {currency(wealth.wealthGoal.targetAmount)}</Money></div>
                     <div className={cards.heroValue}>{goalProgress.toFixed(0)}%</div>
                   </div>
                   <div className={cards.dailyGoalMeta}>
                     <span className={cards.heroLabel}>Faltam</span>
                     <span style={{ fontWeight: 600 }}>
-                      R$ {currency(Math.max(0, wealth.wealthGoal.targetAmount - total))}
+                      <Money>R$ {currency(Math.max(0, wealth.wealthGoal.targetAmount - total))}</Money>
                     </span>
                   </div>
                 </div>
                 <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
                   <div className={cards.progressFill} style={{ width: `${goalProgress}%`, background: 'var(--accent)' }} />
                 </div>
-                <div className={cards.chartMeta}>
-                  {wealth.wealthGoalYearly.length === 0 && (
-                    <span>adicione pelo menos uma meta anual abaixo pra ver a projeção de data</span>
+
+                <div className={styles.returnNote}>
+                  {wealth.avgMonthlyReturnPct === null ? (
+                    <span>ainda não tenho pelo menos 2 meses de histórico real pra calcular o retorno da carteira</span>
+                  ) : (
+                    <span>
+                      retorno médio real: {wealth.avgMonthlyReturnPct >= 0 ? '+' : ''}
+                      {wealth.avgMonthlyReturnPct.toFixed(2)}% ao mês (~
+                      {(((1 + wealth.avgMonthlyReturnPct / 100) ** 12 - 1) * 100).toFixed(1)}% ao ano), média dos
+                      últimos {wealth.evolution.length} meses de dado real
+                    </span>
                   )}
-                  {wealth.wealthGoalYearly.length > 0 && wealth.projection === null && (
-                    <span>no ritmo das metas anuais configuradas, a meta não é alcançada nos próximos 50 anos</span>
+                </div>
+
+                <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+                  {wealth.projection === null && (
+                    <span>
+                      no ritmo atual (retorno real + aporte mensal), a meta não é alcançada nos próximos 50 anos —
+                      considere aumentar o aporte mensal
+                    </span>
                   )}
                   {wealth.projection && wealth.projection.monthsToGoal === 0 && <span>Meta já alcançada 🎉</span>}
                   {wealth.projection && wealth.projection.monthsToGoal > 0 && (
@@ -553,66 +731,11 @@ export function Patrimonio() {
                         year: 'numeric',
                       })}{' '}
                       (~{Math.floor(wealth.projection.monthsToGoal / 12)} anos e {wealth.projection.monthsToGoal % 12} meses)
-                      {wealth.projection.usedExtrapolation && ' — usando a meta do último ano configurado pra frente'}
                     </span>
                   )}
                 </div>
               </>
             )}
-
-            <h3 className={styles.subheading}>Meta por ano</h3>
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Ano</th>
-                    <th>Aporte no ano</th>
-                    <th>Retorno assumido</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wealth.wealthGoalYearly.map((row) => (
-                    <tr key={row.year}>
-                      <td>{row.year}</td>
-                      <td>R$ {currency(row.savingsTarget)}</td>
-                      <td>{row.annualReturnAssumptionPct}% a.a.</td>
-                      <td>
-                        <button className={styles.iconBtn} onClick={() => removeYear(row.year)} aria-label={`Remover meta de ${row.year}`}>
-                          <Trash2 size={13} strokeWidth={2} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <form className={styles.yearForm} onSubmit={saveYear}>
-              <Input
-                type="number"
-                placeholder="Ano"
-                value={yearForm.year}
-                onChange={(e) => setYearForm({ ...yearForm, year: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Aporte no ano (R$)"
-                value={yearForm.savingsTarget}
-                onChange={(e) => setYearForm({ ...yearForm, savingsTarget: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Retorno assumido (% a.a.)"
-                value={yearForm.annualReturnAssumptionPct}
-                onChange={(e) => setYearForm({ ...yearForm, annualReturnAssumptionPct: e.target.value })}
-              />
-              <button className={cards.saveBtn} type="submit" disabled={savingYear}>
-                Adicionar/atualizar ano
-              </button>
-            </form>
 
             {wealth.yearlyBreakdown.length > 0 && (
               <>
@@ -623,104 +746,111 @@ export function Patrimonio() {
                       <tr>
                         <th>Ano</th>
                         <th>Saldo inicial</th>
-                        <th>Aporte no ano</th>
+                        <th>Aporte planejado</th>
+                        <th>Aportado real</th>
                         <th>Saldo final</th>
                       </tr>
                     </thead>
                     <tbody>
                       {wealth.yearlyBreakdown.map((row) => (
                         <tr key={row.year}>
+                          <td>{row.year}</td>
+                          <td><Money>R$ {currency(row.startBalance)}</Money></td>
+                          <td><Money>R$ {currency(row.contribution)}</Money></td>
+                          {/* Só o ano corrente tem "real" (histórico ainda
+                           * não existe pros anos futuros da projeção). Base de
+                           * comparação é "planejado de janeiro até agora"
+                           * (`plannedContributionSoFarThisYear`), NÃO a coluna
+                           * "Aporte planejado" ao lado — aquela é o restante
+                           * do ano (agora até dezembro), período diferente do
+                           * "real" (janeiro até agora); comparar os dois seria
+                           * comparar janelas de tempo que não se sobrepõem
+                           * (pedido do Luiz, 04/09: "eu fiz isso?"). */}
                           <td>
-                            {row.year}
-                            {row.extrapolated && <span className={styles.extrapolatedTag}>estimado</span>}
+                            {row.realContribution != null ? (
+                              <>
+                                <Money>R$ {currency(row.realContribution)}</Money>
+                                {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                                  <span className={styles.realContributionPct}>
+                                    {' '}
+                                    ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}% da meta até agora)
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              '—'
+                            )}
                           </td>
-                          <td>R$ {currency(row.startBalance)}</td>
-                          <td>R$ {currency(row.contribution)}</td>
-                          <td>R$ {currency(row.endBalance)}</td>
+                          <td><Money>R$ {currency(row.endBalance)}</Money></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Tela estreita: mesma conversão tabela→card das posições
+                    acima (pedido do Luiz, 11/09). */}
+                <div className={styles.positionCards}>
+                  {wealth.yearlyBreakdown.map((row) => (
+                    <div key={row.year} className={styles.positionCard}>
+                      <div className={styles.positionCardTop}>{row.year}</div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Saldo inicial</span>
+                        <span><Money>R$ {currency(row.startBalance)}</Money></span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Aporte planejado</span>
+                        <span><Money>R$ {currency(row.contribution)}</Money></span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Aportado real</span>
+                        <span>
+                          {row.realContribution != null ? (
+                            <>
+                              <Money>R$ {currency(row.realContribution)}</Money>
+                              {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                                <span className={styles.realContributionPct}>
+                                  {' '}
+                                  ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Saldo final</span>
+                        <span><Money>R$ {currency(row.endBalance)}</Money></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className={styles.helperText}>
+                  "Aporte planejado" do ano corrente é só o que falta aportar dele pra frente (base da projeção) — "Aportado
+                  real" é o que já entrou desde janeiro. São dois períodos diferentes do mesmo ano, não o mesmo valor visto
+                  de duas formas.
+                </p>
               </>
             )}
           </div>
       </div>
 
-      <button className={cards.fab} aria-label="Adicionar posição" onClick={() => setShowAddForm(true)}>
+      {/* Mesmo "+" flutuante que Projetos/Orçamento usam (pedido do Luiz,
+          08/09: "usamos a mesma lógica pra outras telas") — abre a MESMA
+          modal do botão "Registrar aporte" lá em cima, não um formulário
+          próprio. Antes disso existia um "Adicionar posição manual" separado
+          (texto livre de corretora/ativo, pedia valor investido E atual
+          toda vez, sobrescrevia se usado 2x no mês) — 100% redundante com
+          "Registrar aporte" (que já escolhe corretora/ativo existente ou
+          novo, soma em vez de substituir, e já cadastra o valor atual = valor
+          investido na primeira vez) + "Atualizar posições" em Configurações
+          (que cuida do valor atual depois, mês a mês). Removido. */}
+      <button className={cards.fab} aria-label="Registrar aporte" onClick={() => setShowContributionModal(true)}>
         <Plus size={22} strokeWidth={2} />
       </button>
-
-      {uploadTarget && (
-        <StatementUploadModal
-          brokerId={uploadTarget.id}
-          brokerName={uploadTarget.name}
-          onClose={() => setUploadTarget(null)}
-          onSaved={() => {
-            setUploadTarget(null)
-            load()
-          }}
-        />
-      )}
-
-      {showAddForm && (
-        <div className={styles.overlay} onClick={() => setShowAddForm(false)}>
-          <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.sheetHeader}>
-              <h3 className={styles.subheading} style={{ margin: 0 }}>
-                Adicionar posição manual
-              </h3>
-              <button className={styles.iconBtn} onClick={() => setShowAddForm(false)} aria-label="Fechar">
-                <X size={16} strokeWidth={2} />
-              </button>
-            </div>
-            <p className={cards.heroLabel}>
-              Só pra corretoras sem sync automático (Nomad, Wise, Phantom...) — se o banco já está conectado, o aporte
-              entra sozinho no próximo sync.
-            </p>
-            <form className={styles.addForm} onSubmit={saveNewPosition}>
-              <Input
-                placeholder="Corretora (ex: Nomad)"
-                value={addForm.brokerName}
-                onChange={(e) => setAddForm({ ...addForm, brokerName: e.target.value })}
-              />
-              <Input
-                placeholder="Nome do ativo"
-                value={addForm.securityName}
-                onChange={(e) => setAddForm({ ...addForm, securityName: e.target.value })}
-              />
-              <Select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}>
-                {SECURITY_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
-              <Select value={addForm.currency} onChange={(e) => setAddForm({ ...addForm, currency: e.target.value })}>
-                <option value="BRL">BRL</option>
-                <option value="USD">USD</option>
-              </Select>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder={`Valor investido (${addForm.currency})`}
-                value={addForm.investedAmount}
-                onChange={(e) => setAddForm({ ...addForm, investedAmount: e.target.value })}
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder={`Valor atual (${addForm.currency})`}
-                value={addForm.marketValue}
-                onChange={(e) => setAddForm({ ...addForm, marketValue: e.target.value })}
-              />
-              <button className={cards.saveBtn} type="submit" disabled={savingPosition}>
-                Adicionar
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,0 +1,68 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.items {
+  flex: 1;
+  display: grid;
+  /* grid-template-columns real vem inline (Carousel.tsx, repeat(perPage,...))
+   * — repeat(auto-fill,...) direto aqui tem bug conhecido do Chromium
+   * dentro de item flex (calcula altura como se só 1 coluna coubesse).
+   * Isso aqui é só um fallback caso o inline não seja aplicado por algum
+   * motivo. */
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  /* Espaço antes do que vem depois do carrossel (ex: o próximo título de
+   * seção) — sem isso ficava tudo grudado (pedido do Luiz, 04/09). */
+  margin-bottom: var(--space-3);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--fill-muted);
+  cursor: pointer;
+}
+
+.dotActive {
+  background: var(--accent);
+  width: 16px;
+  border-radius: var(--r-full);
+}

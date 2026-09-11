@@ -1,0 +1,176 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.loading {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* Sem borda/radius próprios (11/09) — a lista já vive dentro do
+   `cards.card` (ver CategoryManager.tsx), que já tem borda+radius+sombra;
+   repetir isso aqui criava uma caixa dentro da caixa (achado real do
+   Luiz: "remove esse border radius de categorias, remove a borda também"). */
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.node {
+  border-top: 1px solid var(--border);
+}
+
+.node:first-child {
+  border-top: none;
+}
+
+/* flex-wrap sempre ligado (achado real, 09/09: preso a @media max-width:480px
+   antes, mas nome longo tipo "Roupas & Calçados" + badge + 3 botões não cabe
+   nem em telas um pouco mais largas que isso — sem o breakpoint bater
+   direito, o conteúdo simplesmente sumia cortado pelo overflow:hidden do
+   .list, sem nem tentar quebrar linha). Sem gate de tamanho: quando cabe
+   tudo numa linha só, flex-wrap não muda nada; quando não cabe, quebra
+   sozinho, em qualquer largura. align-items:flex-start (não center) — com
+   wrap, "center" alinha a seta pelo meio das DUAS linhas (nome+badge em
+   cima, ações embaixo), fazendo ela parecer "colada na base" em vez de ao
+   lado do nome. */
+.row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  min-height: 44px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0;
+}
+
+.toggleSpacer {
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.name {
+  font-size: 13.5px;
+  font-weight: 600;
+  /* `flex: 1` puro (flex-basis:0%) nunca "pesa" pro flex-wrap decidir que a
+     linha não coube — o item some pra caber no espaço que sobrar em vez de
+     empurrar o badge/ações pra linha de baixo. Achado real (11/09, mesmo
+     bug do header de Projetos): nome de categoria comprido ("Administrativo")
+     ficava espremido a ponto de colidir visualmente com o badge ao lado.
+     Basis de 100px dá um tamanho preferido de verdade pro cálculo de wrap. */
+  flex: 1 1 100px;
+  min-width: 0;
+}
+
+.kindBadge,
+.incomeBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.incomeBadge {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* margin-left:auto (não flex-basis:100% preso a breakpoint) — empurra as
+   ações pro fim da linha em que elas realmente caírem, seja a mesma do
+   nome (cabe tudo) ou uma linha própria (não coube, flex-wrap do .row
+   empurrou sozinho) — funciona em qualquer largura, sem precisar acertar
+   um número de pixel que cobre todo nome de categoria possível. */
+.actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.addRootBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inlineForm {
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent-soft);
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.cancelBtn {
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: var(--r-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12.5px;
+}
+

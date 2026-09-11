@@ -1,8 +1,25 @@
-.pageTitle {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0 0 var(--space-5);
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
 }
+
+.addContributionBtn {
+  height: 36px;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 
 .subheading {
   font-size: 13.5px;
@@ -10,20 +27,76 @@
   margin: var(--space-6) 0 var(--space-3);
 }
 
-.targetForm,
-.yearForm {
+.targetForm {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
 }
 
-.yearForm {
+.helperText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-4);
+}
+
+.returnNote {
+  font-size: 12px;
+  color: var(--ink-faint);
   margin-top: var(--space-3);
 }
 
 .tableWrap {
   overflow-x: auto;
+}
+
+.positionCards {
+  display: none;
+}
+
+/* Tabela vira card por posição em tela estreita (pedido do Luiz, 11/09) —
+   mesmo padrão/breakpoint já usado em "Comprometido em parcelas futuras"
+   no Orçamento (07/09): "não por colunas e linhas, assim não precisamos
+   do scroll" horizontal. */
+@media (max-width: 640px) {
+  .tableWrap {
+    display: none;
+  }
+  .positionCards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.positionCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.positionCardTop {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.positionCardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.positionCardLabel {
+  color: var(--ink-soft);
+  flex-shrink: 0;
 }
 
 .table {
@@ -55,29 +128,10 @@
   border-bottom: none;
 }
 
-.extrapolatedTag {
-  margin-left: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  background: var(--fill-muted);
-  border-radius: var(--r-full);
-  padding: 2px 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.iconBtn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  background: var(--fill-muted);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-soft);
-  cursor: pointer;
+.realContributionPct {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-weight: 400;
 }
 
 .chartLabel {
@@ -117,57 +171,11 @@
   white-space: nowrap;
 }
 
-.usdSecondary {
+.cellNote {
   font-size: 11px;
   color: var(--ink-soft);
   margin-top: 2px;
   font-weight: 400;
-}
-
-/* ---------- painel de adicionar posição manual ---------- */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-}
-
-.sheet {
-  background: var(--surface);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: var(--space-5);
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 640px) {
-  .sheet {
-    border-radius: var(--r-lg);
-  }
-}
-
-.sheetHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
-}
-
-.addForm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
 }
 
 /* ---------- nome do ativo na tabela (o popup de hover é o componente
