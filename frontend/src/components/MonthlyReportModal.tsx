@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { X, Download } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
 import { ClientPieChart } from './ClientPieChart'
 import { MonthDelta } from './MonthDelta'
-import { IconButton } from './IconButton'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
+import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -111,28 +111,24 @@ export function MonthlyReportModal({
   const allocationData = wealth?.allocation.filter((a) => a.value > 0) ?? []
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={`${styles.header} ${styles.noPrint}`}>
-          <h3 className={styles.title}>Relatório de {monthLabel}</h3>
-          <div className={styles.headerActions}>
-            <button className={styles.pdfBtn} onClick={downloadPdf} disabled={loading}>
-              <Download size={13} strokeWidth={2} />
-              Baixar PDF
-            </button>
-            <IconButton onClick={onClose} aria-label="Fechar">
-              <X size={16} strokeWidth={2} />
-            </IconButton>
-          </div>
-        </div>
+    <ModalShell
+      title={<span className={styles.reportTitle}>Relatório de {monthLabel}</span>}
+      headerActions={
+        <button className={styles.pdfBtn} onClick={downloadPdf} disabled={loading}>
+          <Download size={13} strokeWidth={2} />
+          Baixar PDF
+        </button>
+      }
+      printable
+      onClose={onClose}
+    >
+      {loading && <p className={styles.loading}>Carregando relatório...</p>}
 
-        {loading && <p className={styles.loading}>Carregando relatório...</p>}
+      {!loading && (
+        <>
+          <p className={styles.printTitle}>Command OS — Relatório de {monthLabel}</p>
 
-        {!loading && (
-          <div className={styles.content}>
-            <p className={styles.printTitle}>Command OS — Relatório de {monthLabel}</p>
-
-            {/* ---------- Orçamento ---------- */}
+          {/* ---------- Orçamento ---------- */}
             <section className={styles.block}>
               <h4 className={styles.blockTitle}>Orçamento</h4>
               <div className={styles.statGrid}>
@@ -298,9 +294,8 @@ export function MonthlyReportModal({
                 <p className={styles.emptyNote}>Sem recebimento de projeto registrado em {monthLabel} ainda.</p>
               )}
             </section>
-          </div>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </ModalShell>
   )
 }

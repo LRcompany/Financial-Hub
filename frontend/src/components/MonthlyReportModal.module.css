@@ -1,42 +1,6 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  /* width/height explícitos além do inset — mesmo bug conhecido de PWA em
-     modo standalone no iOS (position:fixed some/desloca quando o teclado
-     abre); 100dvh acompanha a viewport visual de verdade. */
-  width: 100vw;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-}
-
-.sheet {
-  background: var(--surface);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: var(--space-5);
-  width: 100%;
-  max-width: 520px;
-  max-height: 85vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 640px) {
-  .sheet {
-    border-radius: var(--r-lg);
-  }
-}
+/* overlay/sheet/header/headerActions/title vêm do ModalShell compartilhado
+   (11/09) — inclusive o suporte a impressão (`printable`, ver
+   ModalShell.module.css). Aqui só o que é específico dessa modal. */
 
 .loading {
   text-align: center;
@@ -45,24 +9,10 @@
   font-size: 13.5px;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
+/* Mês/ano vem em minúsculo de `MONTH_NAMES_FULL` — capitaliza só aqui, não
+   no `.title` compartilhado do ModalShell (isso afetaria todo título de
+   toda modal do app). */
+.reportTitle {
   text-transform: capitalize;
 }
 
@@ -175,39 +125,9 @@
 }
 
 /* ---------- impressão / "baixar PDF" via window.print() ----------
-   Esconde a página inteira por trás e mostra só o conteúdo do .sheet. */
+   Esconder/reposicionar overlay+sheet é genérico, já vem do ModalShell
+   (`printable`) — aqui só o que é específico DESSE conteúdo. */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-
-  .sheet,
-  .sheet * {
-    visibility: visible;
-  }
-
-  .noPrint {
-    display: none !important;
-  }
-
-  .overlay {
-    position: static;
-    background: none;
-    display: block;
-  }
-
-  .sheet {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    box-shadow: none;
-    max-width: 100%;
-    max-height: none;
-    overflow: visible;
-    padding: 0;
-  }
-
   .printTitle {
     display: block;
     font-size: 18px;

@@ -1,67 +1,11 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  /* width/height explícitos além do inset (achado real, 07/09: PWA em modo
-     standalone no iOS tem bug conhecido de position:fixed se deslocar/cortar
-     quando o teclado abre, ex: campo de data/número desses modais) — 100dvh
-     acompanha a viewport visual de VERDADE (some o espaço do teclado), 100vh
-     sozinho não. */
-  width: 100vw;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-}
-
-.sheet {
-  background: var(--surface);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: var(--space-5);
-  width: 100%;
-  max-width: 640px;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 640px) {
-  .sheet {
-    border-radius: var(--r-lg);
-  }
-}
+/* overlay/sheet/header/title vêm do ModalShell compartilhado (11/09) —
+   aqui só o que é específico dessa modal. */
 
 .loading {
   text-align: center;
   padding: var(--space-6) var(--space-4);
   color: var(--ink-soft);
   font-size: 13.5px;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-4);
-}
-
-.title {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.listWrap {
-  overflow-y: auto;
-  flex: 1;
 }
 
 .table {
@@ -168,14 +112,6 @@
   color: var(--ink-soft);
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
-}
 
 .cancelBtn {
   height: 38px;

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { api, type BudgetReviewCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
 import { Input } from './Input'
-import { IconButton } from './IconButton'
+import { ModalShell } from './ModalShell'
 import styles from './BudgetReviewModal.module.css'
 
 const KIND_LABEL: Record<string, string> = {
@@ -53,18 +52,24 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h3 className={styles.title}>
-            Revisar orçamento — {String(month).padStart(2, '0')}/{year}
-          </h3>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
-
-        {!categories && <p className={styles.loading}>Carregando categorias...</p>}
+    <ModalShell
+      title={`Revisar orçamento — ${String(month).padStart(2, '0')}/${year}`}
+      maxWidth={640}
+      onClose={onClose}
+      footer={
+        categories && (
+          <>
+            <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+              Cancelar
+            </button>
+            <button className={styles.confirmBtn} onClick={saveAll} disabled={saving}>
+              {saving ? 'Salvando...' : `Salvar ${categories.length} categorias`}
+            </button>
+          </>
+        )
+      }
+    >
+      {!categories && <p className={styles.loading}>Carregando categorias...</p>}
 
         {categories && (
           <>
@@ -139,17 +144,8 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                 })}
               </div>
             </div>
-            <div className={styles.actions}>
-              <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
-                Cancelar
-              </button>
-              <button className={styles.confirmBtn} onClick={saveAll} disabled={saving}>
-                {saving ? 'Salvando...' : `Salvar ${categories.length} categorias`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </ModalShell>
   )
 }

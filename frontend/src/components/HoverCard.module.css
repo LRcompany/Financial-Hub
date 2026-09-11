@@ -5,11 +5,15 @@
   border-bottom: 1px dashed var(--border);
 }
 
+/* `position: fixed` (11/09) — o popup agora é renderizado num PORTAL pra
+   `document.body` (ver HoverCard.tsx), `left`/`bottom` calculados em JS a
+   partir do gatilho e aplicados via `style` inline. Isso escapa de QUALQUER
+   ancestral com overflow cortando o popup (era exatamente esse o bug real:
+   `.tableWrap { overflow-x: auto }` também vira `overflow-y: auto` por
+   regra do CSS, cortando o popup que tentava escapar pra cima). */
 .popup {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 5;
+  position: fixed;
+  z-index: 15;
   min-width: 220px;
   max-width: 280px;
   /* Trava a altura (11/09) — o hover de "de onde veio a grana" em Patrimônio
@@ -27,19 +31,19 @@
   padding: var(--space-3);
   box-shadow: var(--shadow-md);
   opacity: 0;
-  visibility: hidden;
   transform: translateY(4px);
   transition: opacity 0.12s ease, transform 0.12s ease;
-  /* auto (não none, 11/09) — o popup agora pode precisar rolar (ver
-     max-height acima); fica dentro de `.trigger`, então passar o mouse pra
-     cima dele continua contando como hover do gatilho, não quebra nada. */
-  pointer-events: auto;
+  pointer-events: none;
 }
 
-.trigger:hover .popup {
+/* Classe aplicada via JS (não `:hover`, 11/09) — o popup não é mais
+   descendente do gatilho no DOM (portal), `.trigger:hover .popup` nunca
+   bateria. `HoverCard.tsx` controla o mostrar/esconder no próprio
+   mouseenter/mouseleave do gatilho. */
+.popupVisible {
   opacity: 1;
-  visibility: visible;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .row {

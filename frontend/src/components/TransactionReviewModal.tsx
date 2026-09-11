@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { api, type UncategorizedTransactionGroup, type LeafCategoryOption } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
 import { Select } from './Select'
-import { IconButton } from './IconButton'
 import { InstallmentBadge } from './Badge'
+import { ModalShell } from './ModalShell'
 import styles from './TransactionReviewModal.module.css'
 
 function formatDate(iso: string): string {
@@ -155,51 +154,44 @@ export function TransactionReviewModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <h3 className={styles.title}>Compras sem categoria</h3>
-            {groups && <p className={styles.subtitle}>{groups.length} comerciante(s) ainda sem categoria</p>}
-          </div>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
+    <ModalShell
+      title="Compras sem categoria"
+      subtitle={groups ? `${groups.length} comerciante(s) ainda sem categoria` : undefined}
+      maxWidth={960}
+      onClose={onClose}
+    >
+      {!groups && <p className={styles.loading}>Carregando...</p>}
+      {groups && groups.length === 0 && <p className={styles.loading}>Tudo categorizado — nada pendente aqui.</p>}
 
-        {!groups && <p className={styles.loading}>Carregando...</p>}
-        {groups && groups.length === 0 && <p className={styles.loading}>Tudo categorizado — nada pendente aqui.</p>}
-
-        {groups && groups.length > 0 && (
-          <div className={styles.listWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Comerciante</th>
-                  <th>Compras</th>
-                  <th>Última</th>
-                  <th>Total</th>
-                  <th>Categoria</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <GroupRow key={g.description} group={g} categories={categories} onSaved={handleSaved} />
-                ))}
-              </tbody>
-            </table>
-
-            {/* Tela estreita: mesma conversão tabela→card do resto do app
-                (pedido do Luiz, 11/09). */}
-            <div className={styles.cards}>
+      {groups && groups.length > 0 && (
+        <div className={styles.listWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Comerciante</th>
+                <th>Compras</th>
+                <th>Última</th>
+                <th>Total</th>
+                <th>Categoria</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
               {groups.map((g) => (
-                <GroupCard key={g.description} group={g} categories={categories} onSaved={handleSaved} />
+                <GroupRow key={g.description} group={g} categories={categories} onSaved={handleSaved} />
               ))}
-            </div>
+            </tbody>
+          </table>
+
+          {/* Tela estreita: mesma conversão tabela→card do resto do app
+              (pedido do Luiz, 11/09). */}
+          <div className={styles.cards}>
+            {groups.map((g) => (
+              <GroupCard key={g.description} group={g} categories={categories} onSaved={handleSaved} />
+            ))}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </ModalShell>
   )
 }

@@ -164,8 +164,13 @@
   margin-bottom: var(--space-1);
 }
 
+/* Cinza neutro (11/09, pedido do Luiz de novo: "o fundo das categorias
+   precisa ser cinzinha claro, não esse azul") — accent-soft é reservado pra
+   estado de SELEÇÃO/destaque de verdade (ex: item ativo do menu, chip
+   marcado), não pra "esse grupo tá expandido", que é só um estado de
+   exibição neutro. */
 .accordionOpen {
-  background: var(--accent-soft);
+  background: var(--fill-muted);
 }
 
 .accordionHeader {

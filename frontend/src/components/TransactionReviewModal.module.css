@@ -1,48 +1,7 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  /* width/height explícitos além do inset (achado real, 07/09: PWA em modo
-     standalone no iOS tem bug conhecido de position:fixed se deslocar/cortar
-     quando o teclado abre, ex: campo de data/número desses modais) — 100dvh
-     acompanha a viewport visual de VERDADE (some o espaço do teclado), 100vh
-     sozinho não. */
-  width: 100vw;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 30;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-@media (min-width: 640px) {
-  .overlay {
-    align-items: center;
-  }
-}
-
-.sheet {
-  background: var(--surface);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: var(--space-5);
-  width: 100%;
-  /* 720px forçava scroll horizontal direto (achado real, 08/09: nome de
-     comerciante longo + 4 colunas numéricas + seletor de 220px nunca cabia).
-     960px é a mesma faixa já usada em outro modal com tabela larga
-     (ManualPositionsModal, 920px) — cresce com o conteúdo em vez de escondê-lo
-     atrás de scroll. */
-  max-width: 960px;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-md);
-}
-
-@media (min-width: 640px) {
-  .sheet {
-    border-radius: var(--r-lg);
-  }
-}
+/* overlay/sheet/header/title/subtitle vêm do ModalShell compartilhado
+   (11/09) — `maxWidth={960}` passado na chamada (nome de comerciante longo +
+   4 colunas numéricas + seletor de 220px nunca cabia numa modal padrão,
+   achado real 08/09). Aqui só o que é específico dessa modal. */
 
 .loading {
   text-align: center;
@@ -51,29 +10,11 @@
   font-size: 13.5px;
 }
 
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: var(--space-4);
-}
-
-.title {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.subtitle {
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin: 4px 0 0;
-}
-
+/* overflow-x continua aqui (tabela pode ficar mais larga que a modal em
+   telas médias) — overflow-y não é mais necessário, quem rola verticalmente
+   agora é o `.content` do ModalShell. */
 .listWrap {
-  overflow-y: auto;
   overflow-x: auto;
-  flex: 1;
 }
 
 .table {

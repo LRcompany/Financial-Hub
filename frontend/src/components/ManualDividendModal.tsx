@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { api, type DividendPayment } from '../lib/api'
 import { currency } from '../lib/format'
 import { Input } from './Input'
 import { IconButton } from './IconButton'
 import { Money } from './Money'
+import { ModalShell } from './ModalShell'
 import styles from './ManualDividendModal.module.css'
 
 function todayISO(): string {
@@ -93,56 +94,45 @@ export function ManualDividendModal({
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <h3 className={styles.title}>Rendimentos — {securityName}</h3>
-            <p className={styles.subtitle}>
-              A Pluggy não manda provento pra esse tipo de ativo — lance aqui, com a data e o valor, e ele aparece na coluna "Proventos (mês)"
-              e no total do ano.
-            </p>
-          </div>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
-
-        <div className={styles.formRow}>
-          <Input label="Data do recebimento" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <Input label="Valor (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
-        </div>
-
-        {error && <p className={styles.error}>{error}</p>}
-
-        <div className={styles.actions}>
-          <button className={styles.saveBtn} onClick={handleAdd} disabled={saving}>
-            {saving ? 'Adicionando...' : '+ Adicionar'}
-          </button>
-        </div>
-
-        <div className={styles.list}>
-          {loading && <p className={styles.helperText}>Carregando...</p>}
-          {!loading && payments.length === 0 && <p className={styles.helperText}>Nenhum rendimento lançado ainda.</p>}
-          {payments.map((p) => (
-            <div key={p.id} className={styles.row}>
-              <span className={styles.rowLabel}>{monthLabel(p.month, p.year)}</span>
-              <span className={styles.rowValue}>
-                <Money>R$ {currency(p.amount)}</Money>
-              </span>
-              <IconButton
-                size="sm"
-                variant="danger"
-                aria-label="Remover lançamento"
-                onClick={() => handleDelete(p.id)}
-                disabled={deletingId === p.id}
-              >
-                <Trash2 size={13} strokeWidth={2} />
-              </IconButton>
-            </div>
-          ))}
-        </div>
+    <ModalShell
+      title={`Rendimentos — ${securityName}`}
+      subtitle={'A Pluggy não manda provento pra esse tipo de ativo — lance aqui, com a data e o valor, e ele aparece na coluna "Proventos (mês)" e no total do ano.'}
+      onClose={onClose}
+    >
+      <div className={styles.formRow}>
+        <Input label="Data do recebimento" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Input label="Valor (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
       </div>
-    </div>
+
+      {error && <p className={styles.error}>{error}</p>}
+
+      <div className={styles.actions}>
+        <button className={styles.saveBtn} onClick={handleAdd} disabled={saving}>
+          {saving ? 'Adicionando...' : '+ Adicionar'}
+        </button>
+      </div>
+
+      <div className={styles.list}>
+        {loading && <p className={styles.helperText}>Carregando...</p>}
+        {!loading && payments.length === 0 && <p className={styles.helperText}>Nenhum rendimento lançado ainda.</p>}
+        {payments.map((p) => (
+          <div key={p.id} className={styles.row}>
+            <span className={styles.rowLabel}>{monthLabel(p.month, p.year)}</span>
+            <span className={styles.rowValue}>
+              <Money>R$ {currency(p.amount)}</Money>
+            </span>
+            <IconButton
+              size="sm"
+              variant="danger"
+              aria-label="Remover lançamento"
+              onClick={() => handleDelete(p.id)}
+              disabled={deletingId === p.id}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+            </IconButton>
+          </div>
+        ))}
+      </div>
+    </ModalShell>
   )
 }

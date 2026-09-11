@@ -138,6 +138,47 @@ positionsRouter.get("/positions", async (_req, res) => {
     byType.set(groupKey, list);
   }
 
+  // Consolida lotes da MESMA posição (11/09, pedido do Luiz: "por que
+  // Tesouro Direto - LFT aparece várias vezes se é um item só?"). A Pluggy
+  // trata cada COMPRA de Renda Fixa como um Investment separado (confirmado
+  // ao vivo: mesmo ISIN, `id` diferente por lote) — comprar o mesmo título
+  // em datas diferentes virava uma linha nova na tabela a cada vez, mesmo
+  // sendo economicamente o mesmo ativo. Agrupa por corretora+ISIN (ou nome,
+  // quando o ativo não tem ISIN — caso de crowdfunding/CCB sem título
+  // público) e soma quantidade/investido/valor atual. Nunca agrupa só por
+  // NOME sozinho quando existe ISIN: dois títulos diferentes podem ter o
+  // mesmo nome comercial ("TESOURO DIRETO - LFT") com vencimento diferente
+  // — o ISIN é o que garante que só lotes do MESMO papel se juntam.
+  for (const [groupKey, positions] of byType) {
+    const merged = new Map<string, (typeof positions)[number]>();
+    for (const p of positions) {
+      const lotKey = `${p.brokerId}:${p.isin ?? `nome:${p.name}`}`;
+      const existing = merged.get(lotKey);
+      if (!existing) {
+        merged.set(lotKey, { ...p });
+        continue;
+      }
+      existing.investedAmount += p.investedAmount;
+      existing.marketValue += p.marketValue;
+      if (existing.previousMarketValue != null || p.previousMarketValue != null) {
+        existing.previousMarketValue = (existing.previousMarketValue ?? 0) + (p.previousMarketValue ?? 0);
+      }
+      existing.quantity = existing.quantity != null && p.quantity != null ? existing.quantity + p.quantity : null;
+      if (existing.dividends != null || p.dividends != null) {
+        existing.dividends = (existing.dividends ?? 0) + (p.dividends ?? 0);
+      }
+      if (existing.previousDividends != null || p.previousDividends != null) {
+        existing.previousDividends = (existing.previousDividends ?? 0) + (p.previousDividends ?? 0);
+      }
+    }
+    // Preço unitário recalculado sobre a quantidade TOTAL consolidada — o
+    // valor de um lote sozinho não representa mais a posição inteira.
+    for (const p of merged.values()) {
+      if (p.quantity != null && p.quantity > 0) p.unitValue = p.marketValue / p.quantity;
+    }
+    byType.set(groupKey, [...merged.values()]);
+  }
+
   const standaloneBrokerNames = new Set(
     (await prisma.broker.findMany({ where: { standalone: true, archivedAt: null }, select: { name: true } })).map((b) => b.name)
   );

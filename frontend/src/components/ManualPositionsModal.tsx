@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { api, type BrokerPosition, type PositionFieldConfig } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
 import { IconButton } from './IconButton'
+import { ModalShell } from './ModalShell'
 import styles from './ManualPositionsModal.module.css'
 
 const SECURITY_TYPES = ['Conta Corrente', 'Renda Fixa', 'Fundo', 'Ação', 'FII', 'Cripto', 'Moeda', 'Outro']
@@ -128,23 +129,29 @@ export function ManualPositionsModal({
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <h3 className={styles.title}>Atualizar posições — {brokerName}</h3>
-            <p className={styles.subtitle}>
-              {lastSyncedAt
-                ? `última atualização: ${new Date(lastSyncedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
-                : 'nunca atualizado manualmente'}
-            </p>
-          </div>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
-
-        {loading || !fieldConfig ? (
+    <ModalShell
+      title={`Atualizar posições — ${brokerName}`}
+      subtitle={
+        lastSyncedAt
+          ? `última atualização: ${new Date(lastSyncedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+          : 'nunca atualizado manualmente'
+      }
+      maxWidth={920}
+      onClose={onClose}
+      footer={
+        !(loading || !fieldConfig) && (
+          <>
+            <button className={styles.secondaryBtn} onClick={onClose} disabled={saving}>
+              Cancelar
+            </button>
+            <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </>
+        )
+      }
+    >
+      {loading || !fieldConfig ? (
           <p className={styles.helperText}>Carregando...</p>
         ) : (
           <>
@@ -299,18 +306,8 @@ export function ManualPositionsModal({
             </button>
 
             {error && <p className={styles.error}>{error}</p>}
-
-            <div className={styles.actions}>
-              <button className={styles.secondaryBtn} onClick={onClose} disabled={saving}>
-                Cancelar
-              </button>
-              <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvando...' : 'Salvar'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </ModalShell>
   )
 }

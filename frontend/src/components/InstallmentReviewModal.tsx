@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { api, type InstallmentGroup, type LeafCategoryOption } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
-import { IconButton } from './IconButton'
+import { ModalShell } from './ModalShell'
 import styles from './InstallmentReviewModal.module.css'
 
 const OTHER = '__other__'
@@ -345,26 +344,22 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
   const configured = groups?.filter((g) => g.categoryId !== null) ?? []
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <h3 className={styles.title}>Revisar parcelas futuras</h3>
-            {groups && (
-              <p className={styles.subtitle}>
-                {unconfigured.length} compra{unconfigured.length !== 1 ? 's' : ''} sem categoria · {configured.length} já categorizada
-                {configured.length !== 1 ? 's' : ''}
-              </p>
-            )}
-          </div>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
+    <ModalShell
+      title="Revisar parcelas futuras"
+      subtitle={
+        groups && (
+          <>
+            {unconfigured.length} compra{unconfigured.length !== 1 ? 's' : ''} sem categoria · {configured.length} já categorizada
+            {configured.length !== 1 ? 's' : ''}
+          </>
+        )
+      }
+      maxWidth={860}
+      onClose={onClose}
+    >
+      {!groups && <p className={styles.loading}>Carregando parcelas...</p>}
 
-        {!groups && <p className={styles.loading}>Carregando parcelas...</p>}
-
-        {groups && (
+      {groups && (
           <div className={styles.listWrap}>
             <table className={styles.table}>
               <thead>
@@ -401,7 +396,6 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </ModalShell>
   )
 }
