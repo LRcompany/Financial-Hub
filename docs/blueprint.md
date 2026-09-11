@@ -1478,6 +1478,22 @@ Verificado: as 3 modais mais complexas (parcelas futuras com 7 campos, compras s
 
 **Lição de processo, não só de código**: uma auditoria pontual (grep + leitura) depois de uma leva grande de mudanças vale a pena — achou 3 furos reais que "parecer certo visualmente" não capturava. Vale repetir esse tipo de checagem depois de qualquer leva grande de UI, não só quando o Luiz perguntar.
 
+### Mais 4 furos batendo o olho (11/09, mesmo dia) — a auditoria por grep não pega tudo
+
+Depois da auditoria por grep (achados acima), Luiz bateu o olho na tela renderizada e achou 4 problemas reais que grep+leitura de código não capturava, por serem de RENDERIZAÇÃO (cascata CSS, especificidade) — o código "parecia certo" lido isoladamente:
+
+1. **Categorias com caixa dentro de caixa**: `.list` (CategoryManager) tinha border+radius próprios; como a lista passou a viver dentro de `cards.card` na leva anterior (item 3), isso duplicava a moldura visualmente. Removido — lista flat, só o card externo tem borda/radius.
+
+2. **Hierarquia de valor invertida — bug real, não só estética**. `.totalLabel span:last-child`/`.progressLabel span:last-child` (`cards.module.css`) usavam seletor DESCENDENTE (sem `>`), escrito quando o conteúdo do valor era um span único (antes do `SpentPlannedValue` existir). Esse seletor bate em QUALQUER span descendente que seja last-child do próprio pai — inclusive o `.planned` aninhado dentro do `SpentPlannedValue` (que também é "span:last-child" do seu pai imediato). Como `.totalLabel span:last-child` tem mais especificidade que `.planned`/`.spent` sozinhos, ele VENCIA e invertia a regra: planejado saía em negrito preto, gasto saía cinza claro — o oposto exato da regra do design system. Só não aparecia no Orçamento porque a estrutura ali (`.categoryRowValues`, uma classe direta sem seletor `:last-child`) não tinha esse problema. Corrigido trocando pra combinador de FILHO DIRETO (`.totalLabel > span:last-child`), que não vaza pra dentro de componentes aninhados — regra geral daqui pra frente: **nunca usar seletor descendente solto (`.pai span`) quando o span pode conter outro componente compartilhado por dentro; sempre `>` (filho direto)**. Verificado via `getComputedStyle`: `.spent` = rgb(21,23,28) peso 700, `.planned` = rgb(107,112,118) peso 400, batendo em Início e Orçamento.
+
+3. **Ícone de alerta faltando no "Meta diária de gasto" do Dashboard**: Orçamento tem essa marca (leva anterior); o Dashboard tem uma cópia SEPARADA do mesmo widget (JSX duplicado entre os dois arquivos, não um componente compartilhado) que ficou pra trás na correção. Adicionado o mesmo `AlertTriangle`. **Risco estrutural anotado**: enquanto "Meta diária de gasto" existir como dois blocos de JSX independentes (Dashboard.tsx e Orcamento.tsx), qualquer ajuste futuro nesse widget precisa lembrar de aplicar nos dois lugares — candidato a virar componente compartilhado se continuar divergindo.
+
+4. **Título de página inconsistente**: Patrimônio/Projetos/Configurações tinham `<h1 class="pageTitle">` (3 cópias idênticas do mesmo CSS, uma por arquivo); Orçamento usava `<h1 class="sectionTitle">` (estilo de rótulo pequeno, não de título de página); Início não tinha `<h1>` nenhum — só ia direto pros rótulos de seção, que ainda por cima eram `<h1>` também (3 na mesma página, semanticamente errado). Corrigido: `.pageTitle` virou definição ÚNICA em `cards.module.css` (removidas as 3 cópias); toda página tem exatamente um `<h1 className={cards.pageTitle}>`; agrupadores DENTRO de uma página (ex: "Orçamento"/"Patrimônio & Investimentos"/"Projetos" dentro de Início) viraram `<h2 className={cards.sectionTitle}>` — nunca `<h1>` pra isso.
+
+Verificado com `getComputedStyle` (não só olhar a tela) em Início, Orçamento e Configurações antes de subir.
+
+**Lição de processo, parte 2**: grep encontra "componente errado sendo usado"; não encontra "seletor CSS com especificidade errada vazando pra dentro de um componente aninhado" nem "título que existe mas com o estilo errado" — esses só aparecem olhando a tela renderizada de verdade, ou inspecionando `getComputedStyle` em cima do DOM real. As duas checagens são complementares, nenhuma substitui a outra.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
