@@ -5,7 +5,7 @@
 //
 // Proventos (11/09): dividendos/JCP/rendimento não vêm nesse payload — vêm
 // de GET /investments/{id}/transactions (`type: "INTEREST"`), buscado à
-// parte só pra Ação/FII (ver `fetchMonthlyDividends` abaixo). Renda Fixa/
+// parte só pra Ação/FII (ver `fetchAndSyncDividends` abaixo). Renda Fixa/
 // Fundo/Cripto continuam com `dividends: null` (não é 0 fake, é "não se
 // aplica" — não fazia sentido gastar uma chamada extra da Pluggy por
 // posição pra um tipo que o Luiz nem pediu).
@@ -81,26 +81,57 @@ function mapSecurityType(inv: PluggyInvestment): string {
   return "Outro";
 }
 
-/** Soma os proventos (type: "INTEREST") de uma posição dentro do mês/ano
- * pedido — usado só pra Ação/FII (Renda Fixa/Fundo/Cripto não têm esse
- * conceito, ver nota no topo do arquivo). Uma chamada extra da Pluggy por
- * posição; erro nela (ex: rate limit) não pode derrubar o sync do resto da
- * carteira NEM apagar um valor real já coletado num sync anterior desse
- * mesmo mês (o sync roda todo dia) — por isso devolve `undefined` em erro
- * (Prisma trata como "não mexe nesse campo" no upsert), nunca `null` fake
- * por cima de um dado bom. */
-async function fetchMonthlyDividends(investmentId: string, month: number, year: number): Promise<number | undefined> {
-  const monthStart = new Date(year, month - 1, 1).getTime();
-  const monthEnd = new Date(year, month, 1).getTime();
+/** Soma proventos (type: "INTEREST") de uma posição por mês/ano, a partir do
+ * extrato COMPLETO da Pluggy (não só o mês corrente) — usado só pra Ação/FII
+ * (Renda Fixa/Fundo/Cripto não têm esse conceito, ver nota no topo do
+ * arquivo). Uma chamada extra da Pluggy por posição; erro nela (ex: rate
+ * limit) não pode derrubar o sync do resto da carteira — devolve `null`
+ * nesse caso (o chamador decide o que fazer, ver `fetchAndSyncDividends`). */
+async function fetchDividendsByMonth(investmentId: string): Promise<Map<string, number> | null> {
   try {
     const transactions = await getAllInvestmentTransactions(investmentId);
-    return transactions
-      .filter((t) => t.type === "INTEREST" && new Date(t.date).getTime() >= monthStart && new Date(t.date).getTime() < monthEnd)
-      .reduce((sum, t) => sum + (t.netAmount ?? t.amount), 0);
+    const byMonth = new Map<string, number>(); // chave "ano-mês", ex: "2026-9"
+    for (const t of transactions) {
+      if (t.type !== "INTEREST") continue;
+      const d = new Date(t.date);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + (t.netAmount ?? t.amount));
+    }
+    return byMonth;
   } catch (err) {
     console.error(`[pluggySync] falha ao buscar proventos de ${investmentId}:`, err);
-    return undefined;
+    return null;
   }
+}
+
+/** Busca o extrato completo de uma posição e:
+ * 1) PREENCHE RETROATIVAMENTE o `dividends` de todo `PositionSnapshot` já
+ *    existente dessa posição (`updateMany` — só toca snapshot que já existe,
+ *    nunca cria um novo) — sem isso, o gráfico "proventos por mês" só teria
+ *    barra a partir de hoje, quando essa feature nasceu (11/09), mesmo a
+ *    Pluggy já tendo o histórico completo desde sempre.
+ * 2) Devolve o valor do mês/ano pedido (o que está sendo sincronizado agora),
+ *    pro chamador incluir no upsert principal (que pode ser um `create`, se
+ *    a posição for nova — updateMany não cobre esse caso).
+ * `undefined` em erro (Prisma trata como "não mexe nesse campo" no upsert),
+ * nunca `null` fake por cima de um provento já coletado num sync anterior. */
+async function fetchAndSyncDividends(
+  brokerId: string,
+  securityId: string,
+  investmentId: string,
+  month: number,
+  year: number
+): Promise<number | undefined> {
+  const byMonth = await fetchDividendsByMonth(investmentId);
+  if (byMonth === null) return undefined;
+  await Promise.all(
+    [...byMonth.entries()].map(([key, total]) => {
+      const [y, m] = key.split("-").map(Number);
+      if (m === month && y === year) return Promise.resolve(); // esse mês entra pelo upsert principal, não aqui
+      return prisma.positionSnapshot.updateMany({ where: { brokerId, securityId, month: m, year: y }, data: { dividends: total } });
+    })
+  );
+  return byMonth.get(`${year}-${month}`) ?? 0;
 }
 
 /** Sincroniza os investimentos de um item (conexão) da Pluggy pro Broker correspondente. */
@@ -207,9 +238,11 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     // Renda Fixa/Fundo/Cripto fica null ("não se aplica"), sem gastar uma
     // chamada extra da Pluggy por posição à toa. `undefined` (erro pontual
     // na chamada) preserva o que já tinha sido gravado num sync anterior
-    // desse mesmo mês — ver `fetchMonthlyDividends`.
+    // desse mesmo mês — ver `fetchAndSyncDividends` (que também preenche
+    // retroativamente todo mês anterior já sincronizado, pro gráfico "por
+    // mês do ano" ter histórico completo desde o primeiro dia da feature).
     const dividends: number | null | undefined =
-      secType === "Ação" || secType === "FII" ? await fetchMonthlyDividends(inv.id, month, year) : null;
+      secType === "Ação" || secType === "FII" ? await fetchAndSyncDividends(broker.id, security.id, inv.id, month, year) : null;
 
     await prisma.positionSnapshot.upsert({
       where: {

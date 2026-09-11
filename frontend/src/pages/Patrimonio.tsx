@@ -20,6 +20,7 @@ import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { VerticalBarChart } from '../components/VerticalBarChart'
+import { DividendsByMonthChart } from '../components/DividendsByMonthChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
 import { ReturnBadge } from '../components/ReturnBadge'
@@ -283,23 +284,30 @@ export function Patrimonio() {
               )}
             </div>
 
-            <div className={cards.card}>
+            <div className={`${cards.card} ${cards.fullWidth}`}>
               <CardHeader icon={Coins} title="Proventos recebidos" />
               {/* Dividendo/JCP/rendimento — dado real via Pluggy (11/09), só
                   existe pra Ação/FII (Renda Fixa/Fundo/Cripto não têm esse
                   conceito, ficam de fora da conta). null = ainda sem dado
                   coletado (posição sem Ação/FII, ou sync mais antigo que a
-                  feature) — nunca mostra R$0,00 fingindo que já sincronizou. */}
+                  feature) — nunca mostra R$0,00 fingindo que já sincronizou.
+                  Box ocupa a linha inteira (pedido do Luiz, 11/09) porque
+                  agora carrega um gráfico mês a mês, não só um número. */}
               {wealth.dividendsThisMonth != null ? (
                 <>
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(wealth.dividendsThisMonth)}
                   </div>
-                  {wealth.dividendsLastMonth != null && wealth.dividendsLastMonth > 0 && (
-                    <div className={cards.chartMeta}>
+                  <div className={cards.chartMeta}>
+                    <span>Recebido este mês</span>
+                    {wealth.dividendsLastMonth != null && wealth.dividendsLastMonth > 0 && (
                       <MonthDelta current={wealth.dividendsThisMonth} previous={wealth.dividendsLastMonth} />
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  {wealth.dividendsByMonth.length > 0 && <DividendsByMonthChart data={wealth.dividendsByMonth} />}
+                  <div className={cards.chartMeta}>
+                    <span>R$ {currency(wealth.dividendsThisYear ?? 0)} recebido no ano</span>
+                  </div>
                 </>
               ) : (
                 <div className={cards.emptyState}>Sem provento coletado ainda pra Ação/FII.</div>
@@ -362,7 +370,7 @@ export function Patrimonio() {
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
                     R$ {currency(group.total)}
                   </div>
-                  {usdTotal != null && <div className={styles.usdSecondary}>US$ {currency(usdTotal)}</div>}
+                  {usdTotal != null && <div className={styles.cellNote}>US$ {currency(usdTotal)}</div>}
                   <div className={cards.chartMeta}>
                     <span>
                       {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
@@ -473,7 +481,7 @@ export function Patrimonio() {
                                 <td>
                                   R$ {currency(p.marketValue)}
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
                                   )}
                                 </td>
                                 <td>
@@ -491,25 +499,34 @@ export function Patrimonio() {
                                 <td>
                                   R$ {currency(p.investedAmount)}
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
                                   )}
                                   {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                    <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                    <div className={styles.cellNote}>US$ {currency(p.investedAmount / usdToBrl)}</div>
                                   )}
                                 </td>
                                 <td>
                                   R$ {currency(p.marketValue)}
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
                                   )}
                                   {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                    <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / usdToBrl)}</div>
                                   )}
                                 </td>
                                 <td>
                                   <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
                                 </td>
-                                {showDividends && <td>{p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}</td>}
+                                {showDividends && (
+                                  <td>
+                                    {p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}
+                                    {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
+                                      <div className={styles.cellNote}>
+                                        <MonthDelta current={p.dividends} previous={p.previousDividends} />
+                                      </div>
+                                    )}
+                                  </td>
+                                )}
                               </>
                             )}
                           </tr>
@@ -543,7 +560,7 @@ export function Patrimonio() {
                               <span>
                                 R$ {currency(p.marketValue)}
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
                                 )}
                               </span>
                             </div>
@@ -571,10 +588,10 @@ export function Patrimonio() {
                               <span>
                                 R$ {currency(p.investedAmount)}
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
                                 )}
                                 {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                  <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                  <div className={styles.cellNote}>US$ {currency(p.investedAmount / usdToBrl)}</div>
                                 )}
                               </span>
                             </div>
@@ -583,10 +600,10 @@ export function Patrimonio() {
                               <span>
                                 R$ {currency(p.marketValue)}
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
                                 )}
                                 {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / usdToBrl)}</div>
                                 )}
                               </span>
                             </div>
@@ -597,7 +614,14 @@ export function Patrimonio() {
                             {showDividends && (
                               <div className={styles.positionCardRow}>
                                 <span className={styles.positionCardLabel}>Proventos (mês)</span>
-                                <span>{p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}</span>
+                                <span>
+                                  {p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}
+                                  {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
+                                    <div className={styles.cellNote}>
+                                      <MonthDelta current={p.dividends} previous={p.previousDividends} />
+                                    </div>
+                                  )}
+                                </span>
                               </div>
                             )}
                           </>

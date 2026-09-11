@@ -249,6 +249,11 @@ export interface WealthOverview {
   // null = "não se aplica" ou "ainda não sincronizado", nunca 0 fake.
   dividendsThisMonth?: number | null
   dividendsLastMonth?: number | null
+  // Proventos por mês do ANO-CALENDÁRIO corrente (janeiro até o mês atual,
+  // nunca mistura ano passado — mesmo critério de "Recebido no ano" em
+  // Projetos), separado Ação x FII pro gráfico empilhado em Patrimônio.
+  dividendsByMonth: { label: string; acao: number; fii: number }[]
+  dividendsThisYear?: number
   movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null
   /** Retorno médio mensal REAL (%), calculado do histórico de PositionSnapshot
@@ -422,6 +427,11 @@ export interface Position {
   // Proventos do mês (11/09) — só Ação/FII têm valor real; null = "não se
   // aplica" pra esse tipo de ativo ou "ainda não sincronizado".
   dividends: number | null
+  // Proventos do mês ANTERIOR da mesma posição — alimenta a seta de MonthDelta
+  // na coluna "Proventos" (pedido do Luiz, 11/09: "quero saber se foi maior ou
+  // menor que o mês passado"). Null quando o mês anterior não tem provento
+  // coletado (primeira vez, ou ativo que não paga) — sem seta fingindo 0.
+  previousDividends: number | null
 }
 
 export interface PositionsByType {

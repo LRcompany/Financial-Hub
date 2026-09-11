@@ -24,6 +24,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
       wealthGoal,
       evolution: [],
       investedByMonth: [],
+      dividendsByMonth: [],
       allocation: [],
       movers: [],
       avgMonthlyReturnPct: null,
@@ -134,14 +135,51 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // ---- proventos: soma do campo dividends do período (11/09: dado real via
   // GET /investments/{id}/transactions, não mais placeholder — só Ação/FII
   // têm; null = "não se aplica a esse ativo" ou "ainda não sincronizado",
-  // nunca 0 fake) ----
-  function dividendsSum(snaps: { dividends: number | null }[]): number | null {
-    const withData = snaps.filter((s) => s.dividends !== null);
-    if (withData.length === 0) return null;
-    return withData.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+  // nunca 0 fake). Diferente de `marketValue`/`investedAmount`, dividendo é
+  // um FLUXO do mês (quanto ENTROU naquele mês), não um estado — por isso
+  // soma o snapshot EXATO daquele mês/ano, nunca `activeSnapshotsAsOf` (que
+  // arrasta pra frente o último valor conhecido quando uma corretora ainda
+  // não ressincronizou no mês — certo pra "quanto vale hoje", errado aqui,
+  // duplicaria o provento de agosto pra setembro). Mantém o card em sintonia
+  // com a última barra de `dividendsByMonth` abaixo, que usa a mesma regra. ----
+  function dividendsForYm(ym: number): number | null {
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const snaps = all.filter(
+      (s) => s.year === year && s.month === month && (s.security.type === "Ação" || s.security.type === "FII") && s.dividends !== null
+    );
+    if (snaps.length === 0) return null;
+    return snaps.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
   }
-  const dividendsThisMonth = dividendsSum(latestSnaps);
-  const dividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
+  const dividendsThisMonth = dividendsForYm(nowYm);
+  const dividendsLastMonth = dividendsForYm(nowYm - 1);
+
+  // ---- proventos por mês do ano corrente, separado Ação x FII (11/09,
+  // pedido do Luiz: "gráfico por mês do ano... o que veio do FII e o que
+  // veio da Ação... quanto já ganhei de proventos no ano total"). SEMPRE o
+  // ano-calendário de verdade (`now`), janeiro até o mês atual — mesmo
+  // critério já usado em "Recebido no ano"/"Média mensal" de Projetos
+  // (nunca mistura mês do ano passado). Soma toda `PositionSnapshot` do ano
+  // (não só a ativa hoje) — um provento de março continua contando pro ano
+  // mesmo que a posição tenha sido vendida depois. `dividends` nulo conta
+  // como 0 aqui (é gráfico, não card de valor único) — a maioria dos meses
+  // já vem preenchida de verdade por `fetchAndSyncDividends` (backfill
+  // retroativo a partir do extrato completo da Pluggy, não só o mês corrente).
+  const nowReal = new Date();
+  const currentYear = nowReal.getFullYear();
+  const currentMonth = nowReal.getMonth() + 1;
+  const dividendSnapsThisYear = all.filter(
+    (s) => s.year === currentYear && s.month <= currentMonth && (s.security.type === "Ação" || s.security.type === "FII")
+  );
+  const dividendsByMonth: { label: string; acao: number; fii: number }[] = [];
+  let dividendsThisYear = 0;
+  for (let m = 1; m <= currentMonth; m++) {
+    const monthSnaps = dividendSnapsThisYear.filter((s) => s.month === m);
+    const acao = monthSnaps.filter((s) => s.security.type === "Ação").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+    const fii = monthSnaps.filter((s) => s.security.type === "FII").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii });
+    dividendsThisYear += acao + fii;
+  }
 
   // ---- destaques do mês: maior variação % por CATEGORIA (não por ativo) ----
   // Antes mostrava o ativo individual (ticker/CUSIP) — pra título de renda
@@ -195,6 +233,8 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     investedByMonth,
     dividendsThisMonth,
     dividendsLastMonth,
+    dividendsByMonth,
+    dividendsThisYear,
     movers,
     wealthGoal,
     avgMonthlyReturnPct,

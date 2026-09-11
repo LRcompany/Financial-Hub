@@ -45,6 +45,29 @@ positionsRouter.get("/positions", async (_req, res) => {
     previousByKey.set(`${s.brokerId}:${s.securityId}`, s.marketValue);
   }
 
+  // Provento por (broker, security) do mês EXATO — mês atual e anterior (11/09,
+  // seta tipo MonthDelta na coluna "Proventos"). Diferente de `previousByKey`
+  // acima, NÃO usa `activeSnapshotsAsOf` — dividendo é um FLUXO do mês (quanto
+  // entrou naquele mês), não um estado, então pegar o snapshot "ativo hoje"
+  // arrastaria pra frente o provento de um mês antigo (corretora que ainda não
+  // ressincronizou esse mês) e mostraria como se fosse do mês atual. Só entra
+  // no map quando aquele mês exato TEM dividendo coletado (nunca null) — vira
+  // `undefined` no lookup senão, e o front sabe que não tem dado real daquele
+  // mês (não mostra R$0 ou seta fingindo).
+  function dividendsByExactMonth(ym: number): Map<string, number> {
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const map = new Map<string, number>();
+    for (const s of all) {
+      if (s.year === year && s.month === month && s.dividends != null) {
+        map.set(`${s.brokerId}:${s.securityId}`, s.dividends);
+      }
+    }
+    return map;
+  }
+  const currentDividendsByKey = dividendsByExactMonth(nowYm);
+  const previousDividendsByKey = dividendsByExactMonth(nowYm - 1);
+
   const byType = new Map<
     string,
     {
@@ -66,6 +89,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       fixedAnnualRate: number | null;
       ratePeriodicity: string | null;
       dividends: number | null;
+      previousDividends: number | null;
     }[]
   >();
   for (const s of latest) {
@@ -94,10 +118,14 @@ positionsRouter.get("/positions", async (_req, res) => {
       dueDate: s.security.dueDate ? s.security.dueDate.toISOString() : null,
       fixedAnnualRate: s.security.fixedAnnualRate,
       ratePeriodicity: s.security.ratePeriodicity,
-      // Proventos do mês (11/09) — só Ação/FII têm valor real (ver
-      // pluggySync.ts); null = "não se aplica" pra esse tipo de ativo ou
-      // "ainda não sincronizado", nunca 0 fake.
-      dividends: s.dividends,
+      // Proventos do mês EXATO (11/09) — só Ação/FII têm valor real (ver
+      // pluggySync.ts); vem de `currentDividendsByKey`, não de `s.dividends`
+      // direto, pelo mesmo motivo do comentário acima (flow, não estado
+      // arrastável). null = "não se aplica" pra esse tipo de ativo, "ainda
+      // não sincronizado esse mês", ou corretora sem provento esse mês —
+      // nunca 0 fake.
+      dividends: currentDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
+      previousDividends: previousDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
     });
     byType.set(groupKey, list);
   }
