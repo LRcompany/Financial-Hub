@@ -1460,6 +1460,24 @@ Luiz mandou 16 prints numerados (1-15, um item com 2 imagens) pedindo uma leva d
 
 Verificado em mobile real (375px, emulador) e desktop: Dashboard, Orçamento, Patrimônio, Projetos, Configurações — `document.body.scrollWidth` conferido igual ao innerWidth (sem overflow) em cada tela testada; badge de parcela resolvendo posição real via Pluggy (`PAGUE MENOS 0208 2/3`) no modal de detalhamento; "Categorias" e linhas de projeto quebrando limpo em vez de colidir.
 
+### Auditoria da leva de 11/09 + unificação dos furos achados (11/09, mesmo dia)
+
+Luiz perguntou, sem rodeio: *"você me garante que todas as classes, estilos, componentes e etc estão sendo respeitados?"* — recusei confirmar sem checar de verdade e rodei grep sistemático em cima de cada regra travada em `docs/design-system.md` naquele mesmo dia. Achados reais (3, de um total de ~7 regras auditadas):
+
+1. **"dos quais R$X projetado"** (nota em "Onde meu dinheiro foi" no Orçamento e no Relatório Mensal) usava a palavra solta em texto cinza em vez do componente `ProjectedTag` — mesma aparência visual, mas não literalmente o componente único que a regra exige. "Onde meu dinheiro foi este mês" também tinha uma classe própria (`.ofPlanned`) reimplementando a mesma hierarquia preto-bold/cinza-fino que `SpentPlannedValue` já fazia.
+2. **"Sobrou/Estourou"** no Relatório Mensal ainda pintava o número de verde/vermelho — o único lugar que sobrou depois da leva de 11/09 porque é um padrão ANTERIOR a ela (não foi tocado na primeira passada por parecer "outra categoria de informação"). Sob a regra explícita ("nunca muda a cor do número"), é uma violação, não uma exceção válida.
+3. **5 tabelas** ainda só tinham scroll horizontal contido, sem virar card no mobile: `TransactionReviewModal`, `InstallmentReviewModal`, `BudgetReviewModal`, `ManualPositionsModal`, tabela de DAS em Projetos — só as que apareceram nos prints da leva anterior (Orçamento, Patrimônio) tinham sido convertidas.
+
+Luiz: *"pode unificar... o design system é a regra. Se surgir algo novo, adicionamos no design system e aí sim replicamos."* — ou seja: regra escrita > exceção por parecer razoável no momento. Corrigido:
+
+- `ProjectedTag` nos dois lugares de texto solto; `.ofPlanned` removida, trocada por `SpentPlannedValue`.
+- `MonthlyReportModal`: número sempre neutro, `AlertTriangle` vermelho só em "Estourou" (mesmo padrão do highlight de categoria estourada logo abaixo, já usava). `.good`/`.bad` removidas.
+- As 5 tabelas ganharam a versão card, mesmo padrão/breakpoint (640px) das já convertidas. `InstallmentReviewModal` é a mais complexa (7 campos editáveis por compra — nota, total de parcelas, valor, cartão com opção "Outro", categoria, salvar, excluir); a lógica de estado/salvar/excluir foi extraída pro hook `useGroupForm`, compartilhado entre a linha de tabela (`GroupRow`) e o card (`GroupCard`) — cada um com sua própria instância do hook (só um fica visível por vez via CSS), pra não duplicar a lógica de negócio em dois componentes. `ManualPositionsModal` (Nomad/INCO/Wise) respeita o `fieldConfig` por corretora no card igual já respeitava na tabela.
+
+Verificado: as 3 modais mais complexas (parcelas futuras com 7 campos, compras sem categoria com select+salvar, atualização manual de posição da INCO) renderizadas em mobile real (375px) sem overflow; toggle tabela/card testado nos dois sentidos (375px mostra card + tabela `display:none`; 1024px mostra tabela + card `display:none`).
+
+**Lição de processo, não só de código**: uma auditoria pontual (grep + leitura) depois de uma leva grande de mudanças vale a pena — achou 3 furos reais que "parecer certo visualmente" não capturava. Vale repetir esse tipo de checagem depois de qualquer leva grande de UI, não só quando o Luiz perguntar.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
