@@ -3,10 +3,12 @@
 // type: COE | EQUITY | ETF | FIXED_INCOME | MUTUAL_FUND | SECURITY | OTHER
 // subtype: STOCK | REAL_ESTATE_FUND | ... | balance (valor de mercado) | amountOriginal (custo)
 //
-// TODO: dividendos do mês não vêm nesse payload — precisam de
-// GET /investments/{id}/transactions filtrando por tipo de rendimento.
-// Até isso ser implementado, PositionSnapshot.dividends fica null (não é 0 fake,
-// é "ainda não coletado").
+// Proventos (11/09): dividendos/JCP/rendimento não vêm nesse payload — vêm
+// de GET /investments/{id}/transactions (`type: "INTEREST"`), buscado à
+// parte só pra Ação/FII (ver `fetchMonthlyDividends` abaixo). Renda Fixa/
+// Fundo/Cripto continuam com `dividends: null` (não é 0 fake, é "não se
+// aplica" — não fazia sentido gastar uma chamada extra da Pluggy por
+// posição pra um tipo que o Luiz nem pediu).
 //
 // Descoberta real (25/08/2026): "CDB de liquidez diária" de conta digital
 // (99, e também uma conta específica do BTG) não aparece em GET /investments
@@ -17,7 +19,7 @@
 // activePositions.ts). Por isso `syncBrokerInvestments` busca as duas coisas.
 
 import { prisma } from "../prisma.js";
-import { getInvestments, getAccounts } from "./pluggy.js";
+import { getInvestments, getAccounts, getAllInvestmentTransactions } from "./pluggy.js";
 import { getUsdToBrlRate } from "./fx.js";
 
 interface PluggyAccount {
@@ -79,6 +81,28 @@ function mapSecurityType(inv: PluggyInvestment): string {
   return "Outro";
 }
 
+/** Soma os proventos (type: "INTEREST") de uma posição dentro do mês/ano
+ * pedido — usado só pra Ação/FII (Renda Fixa/Fundo/Cripto não têm esse
+ * conceito, ver nota no topo do arquivo). Uma chamada extra da Pluggy por
+ * posição; erro nela (ex: rate limit) não pode derrubar o sync do resto da
+ * carteira NEM apagar um valor real já coletado num sync anterior desse
+ * mesmo mês (o sync roda todo dia) — por isso devolve `undefined` em erro
+ * (Prisma trata como "não mexe nesse campo" no upsert), nunca `null` fake
+ * por cima de um dado bom. */
+async function fetchMonthlyDividends(investmentId: string, month: number, year: number): Promise<number | undefined> {
+  const monthStart = new Date(year, month - 1, 1).getTime();
+  const monthEnd = new Date(year, month, 1).getTime();
+  try {
+    const transactions = await getAllInvestmentTransactions(investmentId);
+    return transactions
+      .filter((t) => t.type === "INTEREST" && new Date(t.date).getTime() >= monthStart && new Date(t.date).getTime() < monthEnd)
+      .reduce((sum, t) => sum + (t.netAmount ?? t.amount), 0);
+  } catch (err) {
+    console.error(`[pluggySync] falha ao buscar proventos de ${investmentId}:`, err);
+    return undefined;
+  }
+}
+
 /** Sincroniza os investimentos de um item (conexão) da Pluggy pro Broker correspondente. */
 export async function syncBrokerInvestments(brokerId: string, itemId: string) {
   const broker = await prisma.broker.findUniqueOrThrow({ where: { id: brokerId } });
@@ -96,6 +120,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
 
   for (const inv of results) {
     const currency = inv.currencyCode ?? "BRL";
+    const secType = mapSecurityType(inv);
     // Hoje só sabemos converter USD (é o único caso real — Nomad/Phantom).
     // Outra moeda estrangeira ainda não suportada: grava sem converter e
     // deixa fxRateToBRL null, pra não fingir uma conversão que não fizemos.
@@ -113,7 +138,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         name: inv.name,
         ticker: inv.code ?? null,
         currency,
-        type: mapSecurityType(inv),
+        type: secType,
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
         dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
@@ -124,7 +149,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         id: `pluggy:${inv.id}`,
         name: inv.name,
         ticker: inv.code ?? null,
-        type: mapSecurityType(inv),
+        type: secType,
         currency,
         isin: inv.isin ?? null,
         issuer: inv.issuer ?? null,
@@ -178,6 +203,13 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
     const quantity = inv.quantity ?? null;
     const unitValue = inv.value ?? null;
+    // Proventos só fazem sentido pra Ação/FII (pedido do Luiz, 11/09) — pra
+    // Renda Fixa/Fundo/Cripto fica null ("não se aplica"), sem gastar uma
+    // chamada extra da Pluggy por posição à toa. `undefined` (erro pontual
+    // na chamada) preserva o que já tinha sido gravado num sync anterior
+    // desse mesmo mês — ver `fetchMonthlyDividends`.
+    const dividends: number | null | undefined =
+      secType === "Ação" || secType === "FII" ? await fetchMonthlyDividends(inv.id, month, year) : null;
 
     await prisma.positionSnapshot.upsert({
       where: {
@@ -188,7 +220,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
           year,
         },
       },
-      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue },
+      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue, dividends },
       create: {
         brokerId: broker.id,
         securityId: security.id,
@@ -201,6 +233,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         annualRatePct,
         quantity,
         unitValue,
+        dividends,
       },
     });
   }

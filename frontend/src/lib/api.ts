@@ -244,8 +244,11 @@ export interface WealthOverview {
   // investido acumulado, é a variação de cada mês) — alimenta o gráfico
   // "Investido por mês" no Dashboard.
   investedByMonth: { label: string; value: number }[]
-  projectedDividends?: number | null
-  projectedDividendsLastMonth?: number | null
+  // Proventos (dividendo/JCP/rendimento) recebidos no período — dado real
+  // via GET /investments/{id}/transactions (11/09), só existe pra Ação/FII;
+  // null = "não se aplica" ou "ainda não sincronizado", nunca 0 fake.
+  dividendsThisMonth?: number | null
+  dividendsLastMonth?: number | null
   movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null
   /** Retorno médio mensal REAL (%), calculado do histórico de PositionSnapshot
@@ -416,6 +419,9 @@ export interface Position {
   dueDate: string | null
   fixedAnnualRate: number | null
   ratePeriodicity: string | null
+  // Proventos do mês (11/09) — só Ação/FII têm valor real; null = "não se
+  // aplica" pra esse tipo de ativo ou "ainda não sincronizado".
+  dividends: number | null
 }
 
 export interface PositionsByType {

@@ -131,14 +131,17 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
   const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
 
-  // ---- proventos: soma do campo dividends do período (null = ainda não coletado, não é 0) ----
+  // ---- proventos: soma do campo dividends do período (11/09: dado real via
+  // GET /investments/{id}/transactions, não mais placeholder — só Ação/FII
+  // têm; null = "não se aplica a esse ativo" ou "ainda não sincronizado",
+  // nunca 0 fake) ----
   function dividendsSum(snaps: { dividends: number | null }[]): number | null {
     const withData = snaps.filter((s) => s.dividends !== null);
     if (withData.length === 0) return null;
     return withData.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
   }
-  const projectedDividends = dividendsSum(latestSnaps);
-  const projectedDividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
+  const dividendsThisMonth = dividendsSum(latestSnaps);
+  const dividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
 
   // ---- destaques do mês: maior variação % por CATEGORIA (não por ativo) ----
   // Antes mostrava o ativo individual (ticker/CUSIP) — pra título de renda
@@ -190,8 +193,8 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     investedThisMonth,
     investedLastMonth,
     investedByMonth,
-    projectedDividends,
-    projectedDividendsLastMonth,
+    dividendsThisMonth,
+    dividendsLastMonth,
     movers,
     wealthGoal,
     avgMonthlyReturnPct,

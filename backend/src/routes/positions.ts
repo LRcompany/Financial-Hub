@@ -65,6 +65,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       dueDate: string | null;
       fixedAnnualRate: number | null;
       ratePeriodicity: string | null;
+      dividends: number | null;
     }[]
   >();
   for (const s of latest) {
@@ -93,6 +94,10 @@ positionsRouter.get("/positions", async (_req, res) => {
       dueDate: s.security.dueDate ? s.security.dueDate.toISOString() : null,
       fixedAnnualRate: s.security.fixedAnnualRate,
       ratePeriodicity: s.security.ratePeriodicity,
+      // Proventos do mês (11/09) — só Ação/FII têm valor real (ver
+      // pluggySync.ts); null = "não se aplica" pra esse tipo de ativo ou
+      // "ainda não sincronizado", nunca 0 fake.
+      dividends: s.dividends,
     });
     byType.set(groupKey, list);
   }

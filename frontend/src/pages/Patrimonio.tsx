@@ -13,6 +13,7 @@ import {
   Bitcoin,
   DollarSign,
   Banknote,
+  Coins,
 } from 'lucide-react'
 import { api, type WealthOverview, type PositionsByType, type Position } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
@@ -283,6 +284,29 @@ export function Patrimonio() {
             </div>
 
             <div className={cards.card}>
+              <CardHeader icon={Coins} title="Proventos recebidos" />
+              {/* Dividendo/JCP/rendimento — dado real via Pluggy (11/09), só
+                  existe pra Ação/FII (Renda Fixa/Fundo/Cripto não têm esse
+                  conceito, ficam de fora da conta). null = ainda sem dado
+                  coletado (posição sem Ação/FII, ou sync mais antigo que a
+                  feature) — nunca mostra R$0,00 fingindo que já sincronizou. */}
+              {wealth.dividendsThisMonth != null ? (
+                <>
+                  <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+                    R$ {currency(wealth.dividendsThisMonth)}
+                  </div>
+                  {wealth.dividendsLastMonth != null && wealth.dividendsLastMonth > 0 && (
+                    <div className={cards.chartMeta}>
+                      <MonthDelta current={wealth.dividendsThisMonth} previous={wealth.dividendsLastMonth} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className={cards.emptyState}>Sem provento coletado ainda pra Ação/FII.</div>
+              )}
+            </div>
+
+            <div className={cards.card}>
               <CardHeader icon={Activity} title="Destaques do mês" />
               {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
               {wealth.movers.map((m, i) => (
@@ -327,6 +351,9 @@ export function Patrimonio() {
               const history = groupHistories[group.type]
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
+              // Proventos só existem de verdade pra Ação/FII (11/09) — ver
+              // fetchMonthlyDividends em pluggySync.ts.
+              const showDividends = group.type === 'Ação' || group.type === 'FII'
               const usdTotal = groupUsdTotal(group, usdToBrl)
 
               return (
@@ -420,6 +447,11 @@ export function Patrimonio() {
                               <th>Investido</th>
                               <th>Valor atual</th>
                               <th>Rentab.</th>
+                              {/* Só Ação/FII recebem provento de verdade
+                                  (11/09) — mesmo princípio de "só mostra
+                                  coluna que faz sentido pra esse tipo",
+                                  igual já vale pra Conta Corrente/standalone. */}
+                              {showDividends && <th>Proventos (mês)</th>}
                             </>
                           )}
                         </tr>
@@ -477,6 +509,7 @@ export function Patrimonio() {
                                 <td>
                                   <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
                                 </td>
+                                {showDividends && <td>{p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}</td>}
                               </>
                             )}
                           </tr>
@@ -561,6 +594,12 @@ export function Patrimonio() {
                               <span className={styles.positionCardLabel}>Rentab.</span>
                               <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
                             </div>
+                            {showDividends && (
+                              <div className={styles.positionCardRow}>
+                                <span className={styles.positionCardLabel}>Proventos (mês)</span>
+                                <span>{p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}</span>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>

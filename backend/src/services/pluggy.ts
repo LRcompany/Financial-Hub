@@ -68,6 +68,38 @@ export function getInvestments(itemId: string) {
   return pluggyGet(`/investments?itemId=${itemId}`);
 }
 
+interface PluggyInvestmentTransaction {
+  id: string;
+  date: string; // ISO
+  type: string; // "INTEREST" (provento — dividendo/JCP/rendimento, a Pluggy não separa), "BUY", "SELL", ...
+  movementType: string; // "DEBIT" | "CREDIT"
+  amount: number;
+  netAmount: number | null;
+  quantity: number | null;
+}
+
+// GET /investments/{id}/transactions — extrato de uma posição (compra, venda,
+// provento...). Confirmado ao vivo em 11/09: proventos (dividendo de ação,
+// JCP, rendimento de FII) sempre vêm com `type: "INTEREST"` — a Pluggy não
+// distingue dividendo de JCP entre si, mas separa bem de compra/venda
+// (`type: "BUY"/"SELL"`). Paginado — `getAllInvestmentTransactions` busca
+// todas as páginas de uma vez, uso normal (nunca só a primeira página, senão
+// perde provento de posição antiga com muito histórico).
+function getInvestmentTransactions(investmentId: string, page: number) {
+  return pluggyGet<{ total: number; totalPages: number; page: number; results: PluggyInvestmentTransaction[] }>(
+    `/investments/${investmentId}/transactions?page=${page}`
+  );
+}
+
+export async function getAllInvestmentTransactions(investmentId: string): Promise<PluggyInvestmentTransaction[]> {
+  const first = await getInvestmentTransactions(investmentId, 1);
+  if (first.totalPages <= 1) return first.results;
+  const rest = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, i) => getInvestmentTransactions(investmentId, i + 2))
+  );
+  return [first, ...rest].flatMap((p) => p.results);
+}
+
 // v1 /transactions retorna 410 (deprecado) — confirmado em 29/08. v2 não
 // aceita pageSize (ignora o parâmetro se mandar), então só accountId mesmo.
 export function getTransactions(accountId: string) {
