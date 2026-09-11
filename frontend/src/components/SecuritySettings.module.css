@@ -42,6 +42,11 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .saveBtn:disabled {
@@ -113,6 +118,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .actionBtn:disabled {
@@ -133,4 +143,9 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.logoutBtn:hover {
+  background: color-mix(in srgb, var(--danger-soft) 80%, var(--danger) 20%);
 }

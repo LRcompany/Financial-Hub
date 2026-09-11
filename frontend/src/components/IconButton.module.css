@@ -9,6 +9,14 @@
      da maioria, mesma linguagem visual do <Input>/<Select> do app. */
   border-radius: var(--r-sm);
   cursor: pointer;
+  /* Regra geral (11/09): todo elemento clicável do site precisa de feedback
+     visual de hover, não só o cursor mudando. Transição curta e a mesma em
+     todo botão pra sensação consistente — ver docs/design-system.md. */
+  transition: background-color 0.15s ease, filter 0.15s ease, transform 0.1s ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .btn:disabled {
@@ -31,6 +39,15 @@
 .default {
   background: var(--fill-muted);
   color: var(--ink-soft);
+}
+
+/* color-mix em vez de filter: brightness — um fundo já muito claro (light
+   mode) ou já quase preto (dark mode) mal muda de tom com brightness().
+   Misturar 10% de --ink escurece no claro E clareia no escuro, sempre na
+   direção certa nos dois temas sem precisar de um :hover separado por
+   media query (11/09, regra geral pra qualquer botão com fundo --fill-muted). */
+.default:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 /* Header pede um pouco mais de contraste que uma ação secundária de modal —

@@ -452,6 +452,31 @@
   padding-top: 0;
 }
 
+/* Linha de transação clicável (11/09, pedido do Luiz: clicar abre a modal
+   de edição) — junto com `.listRow`, reseta o `<button>` pra parecer a
+   mesma linha de sempre, com hover leve indicando que é clicável (mesmo
+   princípio pedido pra TODO botão do site: "só o cursor muda, sem feedback
+   visual nenhum"). Sangra a lateral (margin negativo) pra o hover preencher
+   até a borda do card sem empurrar o texto. */
+.listRowButton {
+  width: calc(100% + var(--space-4) * 2);
+  margin: 0 calc(var(--space-4) * -1);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.listRowButton:hover {
+  background: var(--fill-muted);
+}
+
 .listIcon {
   width: 38px;
   height: 38px;
@@ -539,6 +564,15 @@
   justify-content: center;
   box-shadow: var(--shadow-md);
   cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.fab:hover {
+  background: var(--accent-hover);
+}
+
+.fab:active {
+  transform: scale(0.96);
 }
 
 @media (min-width: 900px) {
@@ -563,6 +597,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .saveBtn:disabled {
@@ -602,4 +641,9 @@
   cursor: pointer;
   white-space: nowrap;
   text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.bannerBtn:hover {
+  background: var(--accent-hover);
 }

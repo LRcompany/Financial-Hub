@@ -53,6 +53,11 @@
   font-weight: 600;
   cursor: pointer;
   margin-top: var(--space-2);
+  transition: background-color 0.15s ease;
+}
+
+.faceIdBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .faceIdBtn:disabled {

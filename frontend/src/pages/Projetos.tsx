@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import {
   PieChart,
   TrendingDown,
@@ -10,7 +10,6 @@ import {
   Receipt,
   Users,
   LineChart,
-  X,
   Pause,
   Play,
 } from 'lucide-react'
@@ -31,6 +30,7 @@ import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { IconButton } from '../components/IconButton'
 import { Money } from '../components/Money'
+import { ModalShell } from '../components/ModalShell'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Projetos.module.css'
@@ -225,7 +225,7 @@ export function Projetos() {
       <section>
         <div className={styles.sectionHeaderRow}>
           <h2 className={cards.sectionTitle}>Impostos (DAS)</h2>
-          <button className={styles.addBtn} onClick={() => setShowNewTax((v) => !v)}>
+          <button className={styles.addBtn} onClick={() => setShowNewTax(true)}>
             <Plus size={14} strokeWidth={2} />
             Registrar DAS
           </button>
@@ -235,9 +235,11 @@ export function Projetos() {
           resolve o imposto de projeto de cliente estrangeiro, que é variável e só se sabe no boleto).
         </p>
 
-        {showNewTax && <NewTaxPaymentForm onCancel={() => setShowNewTax(false)} onSaved={() => { setShowNewTax(false); load() }} />}
+        {showNewTax && (
+          <NewTaxPaymentModal onClose={() => setShowNewTax(false)} onSaved={() => { setShowNewTax(false); load() }} />
+        )}
 
-        {taxPayments.length === 0 && !showNewTax && <div className={cards.emptyState}>Nenhum DAS registrado ainda.</div>}
+        {taxPayments.length === 0 && <div className={cards.emptyState}>Nenhum DAS registrado ainda.</div>}
 
         {taxPayments.length > 0 && (
           <div className={styles.tableWrap}>
@@ -359,8 +361,21 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
   }
 
   return (
-    <Modal title="Novo projeto" onClose={onCancel}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+    <ModalShell
+      title="Novo projeto"
+      onClose={onCancel}
+      footer={
+        <>
+          <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" form="new-project-form" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </>
+      }
+    >
+      <form id="new-project-form" className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
           <Select label="Cliente" value={clientChoice} onChange={(e) => setClientChoice(e.target.value)}>
             {clients.map((c) => (
@@ -410,16 +425,8 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
           </div>
         )}
         {error && <p className={styles.error}>{error}</p>}
-        <div className={styles.formActions}>
-          <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
-            Cancelar
-          </button>
-          <button type="submit" className={cards.saveBtn} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
       </form>
-    </Modal>
+    </ModalShell>
   )
 }
 
@@ -681,8 +688,22 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
   }
 
   return (
-    <Modal title="Novo recebimento" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+    <ModalShell
+      title="Novo recebimento"
+      subtitle={`${detail.client.name} — ${detail.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" form="new-receipt-form" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </>
+      }
+    >
+      <form id="new-receipt-form" className={styles.form} onSubmit={handleSubmit}>
         {isForeign && (
           <>
             <p className={styles.helperText}>Digite os números exatos do extrato (Wise etc.) — nada aqui é calculado/estimado.</p>
@@ -710,16 +731,8 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
           <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
-        <div className={styles.formActions}>
-          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
-            Cancelar
-          </button>
-          <button type="submit" className={cards.saveBtn} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
       </form>
-    </Modal>
+    </ModalShell>
   )
 }
 
@@ -809,8 +822,22 @@ function AddSupplierCostModal({
   }
 
   return (
-    <Modal title="Novo fornecedor no projeto" subtitle={`${detail.client.name} — ${detail.name}`} onClose={onClose}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+    <ModalShell
+      title="Novo fornecedor no projeto"
+      subtitle={`${detail.client.name} — ${detail.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" form="new-supplier-cost-form" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </>
+      }
+    >
+      <form id="new-supplier-cost-form" className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
           <Select label="Fornecedor" value={supplierChoice} onChange={(e) => setSupplierChoice(e.target.value)}>
             {suppliers.map((s) => (
@@ -826,16 +853,8 @@ function AddSupplierCostModal({
           <Input label="Valor acordado (R$)" type="number" step="0.01" value={agreedAmount} onChange={(e) => setAgreedAmount(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
-        <div className={styles.formActions}>
-          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
-            Cancelar
-          </button>
-          <button type="submit" className={cards.saveBtn} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
       </form>
-    </Modal>
+    </ModalShell>
   )
 }
 
@@ -916,50 +935,42 @@ function AddSupplierPaymentModal({
   }
 
   return (
-    <Modal title={`Pagamento — ${cost.supplier.name}`} onClose={onClose}>
-      <form className={styles.form} onSubmit={handleSubmit}>
+    <ModalShell
+      title={`Pagamento — ${cost.supplier.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" form="add-supplier-payment-form" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </>
+      }
+    >
+      <form id="add-supplier-payment-form" className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.formRow}>
           <Input label="Valor pago (R$)" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
         </div>
         {error && <p className={styles.error}>{error}</p>}
-        <div className={styles.formActions}>
-          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
-            Cancelar
-          </button>
-          <button type="submit" className={cards.saveBtn} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
       </form>
-    </Modal>
+    </ModalShell>
   )
 }
 
-// ---------- Modal genérico (overlay + folha) ----------
-
-function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <div>
-            <h3 className={styles.modalTitle}>{title}</h3>
-            {subtitle && <p className={styles.modalSubtitle}>{subtitle}</p>}
-          </div>
-          <IconButton onClick={onClose} aria-label="Fechar">
-            <X size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
+// (Modal genérico local removido, 11/09 — as 4 modais deste arquivo agora
+// usam o `ModalShell` compartilhado, ver components/ModalShell.tsx — tinha
+// o mesmo bug de sheet inteira rolando junto com o cabeçalho.)
 
 // ---------- Novo DAS ----------
+// Virou modal (11/09, pedido do Luiz) — antes era um card inline que
+// empurrava o resto da página pra baixo quando aberto, mesmo padrão de
+// formulário-de-criação-vira-modal já usado em Registrar aporte/Lançar
+// gasto manual.
 
-function NewTaxPaymentForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
+function NewTaxPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const now = new Date()
   const [month, setMonth] = useState(String(now.getMonth() + 1))
   const [year, setYear] = useState(String(now.getFullYear()))
@@ -996,10 +1007,26 @@ function NewTaxPaymentForm({ onCancel, onSaved }: { onCancel: () => void; onSave
   }
 
   return (
-    <form className={`${cards.card} ${styles.form}`} onSubmit={handleSubmit}>
-      <div className={styles.formRow}>
-        <Input label="Mês de competência" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(e.target.value)} />
-        <Input label="Ano" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+    <ModalShell
+      title="Registrar DAS"
+      subtitle="Um DAS por mês de competência — o valor é rateado entre os projetos que faturaram naquele mês."
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" form="new-tax-payment-form" className={cards.saveBtn} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </>
+      }
+    >
+      <form id="new-tax-payment-form" className={styles.form} onSubmit={handleSubmit}>
+        <div className={styles.formRow}>
+          <Input label="Mês de competência" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(e.target.value)} />
+          <Input label="Ano" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+        </div>
         <div className={styles.previewNote}>
           {preview && (
             <>
@@ -1008,20 +1035,12 @@ function NewTaxPaymentForm({ onCancel, onSaved }: { onCancel: () => void; onSave
             </>
           )}
         </div>
-      </div>
-      <div className={styles.formRow}>
-        <Input label="Valor pago no boleto (R$)" type="number" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
-        <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-      </div>
-      {error && <p className={styles.error}>{error}</p>}
-      <div className={styles.formActions}>
-        <button type="button" className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
-          Cancelar
-        </button>
-        <button type="submit" className={cards.saveBtn} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar'}
-        </button>
-      </div>
-    </form>
+        <div className={styles.formRow}>
+          <Input label="Valor pago no boleto (R$)" type="number" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
+          <Input label="Data do pagamento" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+      </form>
+    </ModalShell>
   )
 }

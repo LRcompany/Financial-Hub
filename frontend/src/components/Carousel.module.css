@@ -35,6 +35,11 @@
   background: var(--fill-muted);
   color: var(--ink);
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.arrow:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .arrow:disabled {
@@ -59,6 +64,11 @@
   border-radius: 50%;
   background: var(--fill-muted);
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.dot:hover {
+  background: color-mix(in srgb, var(--fill-muted) 80%, var(--ink) 20%);
 }
 
 .dotActive {

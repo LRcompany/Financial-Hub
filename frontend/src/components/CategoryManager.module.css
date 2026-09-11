@@ -54,9 +54,15 @@
   flex-shrink: 0;
   background: none;
   border: none;
+  border-radius: var(--r-sm);
   color: var(--ink-soft);
   cursor: pointer;
   padding: 0;
+  transition: background-color 0.15s ease;
+}
+
+.toggle:hover {
+  background: var(--fill-muted);
 }
 
 .toggleSpacer {
@@ -118,6 +124,11 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.addRootBtn:hover {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .inlineForm {
@@ -147,6 +158,7 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .saveBtn {
@@ -158,6 +170,15 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .saveBtn:disabled,

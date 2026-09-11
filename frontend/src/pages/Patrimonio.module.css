@@ -18,6 +18,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.addContributionBtn:hover {
+  background: var(--accent-hover);
 }
 
 
@@ -169,6 +174,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.uploadBtn:hover {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .cellNote {

@@ -125,6 +125,11 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.addRowBtn:hover {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .error {
@@ -143,6 +148,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .saveBtn {
@@ -155,6 +161,15 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .saveBtn:disabled,

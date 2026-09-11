@@ -123,6 +123,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .confirmBtn {
@@ -135,6 +136,15 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.confirmBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .cancelBtn:disabled,

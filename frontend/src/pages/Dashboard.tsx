@@ -22,6 +22,7 @@ import {
   type BudgetCategory,
   type WealthOverview,
   type ProjectsSummary,
+  type LeafCategoryOption,
 } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { MonthDelta } from '../components/MonthDelta'
@@ -29,6 +30,7 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
+import { TransactionEditModal } from '../components/TransactionEditModal'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
@@ -94,6 +96,12 @@ export function Dashboard() {
   // nesse montante" (pedido do Luiz, 10/09).
   const [breakdown, setBreakdown] = useState<{ title: string; categoryIds: string[]; planned: number } | null>(null)
 
+  const [leafCategories, setLeafCategories] = useState<LeafCategoryOption[]>([])
+  // Clique numa transação de "Últimas transações" abre a mesma modal de
+  // edição do Orçamento (pedido do Luiz, 11/09: "replique essa modal
+  // também em transações no dashboard") — antes essa lista era só leitura.
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+
   function loadUncategorizedCount() {
     api.uncategorizedTransactionGroups().then((r) => setUncategorizedCount(r.total)).catch(() => {})
   }
@@ -112,8 +120,13 @@ export function Dashboard() {
     api.budgetSummary().then(setBudget).catch(() => setBudgetError(true))
     api.wealthOverview().then(setWealth).catch(() => setWealthError(true))
     api.projectsSummary().then(setProjects).catch(() => setProjectsError(true))
+    api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
     loadUncategorizedCount()
   }, [])
+
+  function reloadTransactions() {
+    api.transactions().then(setTransactions).catch(() => setTransactionsError(true))
+  }
 
   // "Últimas transações" mostra o mesmo tanto de linhas que "Orçamento do
   // mês" (o box vizinho, à esquerda) tem de categoria-mãe — pedido do Luiz
@@ -378,7 +391,12 @@ export function Dashboard() {
 
             {!transactionsError &&
               transactions?.slice(0, visibleTransactionCount).map((t) => (
-                <div key={t.id} className={styles.listRow}>
+                <button
+                  type="button"
+                  key={t.id}
+                  className={`${styles.listRow} ${styles.listRowButton}`}
+                  onClick={() => setSelectedTransaction(t)}
+                >
                   <div className={styles.listIcon}>💳</div>
                   <div className={styles.listBody}>
                     <div className={styles.listTitle}>
@@ -390,8 +408,8 @@ export function Dashboard() {
                     <div className={styles.listSub}>
                       {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
-                      {/* Nota livre (08/09) — só leitura aqui; edição fica
-                          em Orçamento > Todas as transações do mês. */}
+                      {/* Nota livre (08/09) — edição via modal, clique na
+                          linha (mesma modal de Orçamento, 11/09). */}
                       {t.note && ` · "${t.note}"`}
                     </div>
                   </div>
@@ -403,9 +421,21 @@ export function Dashboard() {
                     )}
                     <Money>R$ {currency(t.amount)}</Money>
                   </div>
-                </div>
+                </button>
               ))}
           </div>
+
+          {selectedTransaction && (
+            <TransactionEditModal
+              transaction={selectedTransaction}
+              categories={leafCategories}
+              onClose={() => setSelectedTransaction(null)}
+              onSaved={() => {
+                setSelectedTransaction(null)
+                reloadTransactions()
+              }}
+            />
+          )}
         </div>
       </section>
 

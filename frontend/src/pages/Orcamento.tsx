@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp, StickyNote } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp } from 'lucide-react'
 import {
   api,
   type BudgetSummary,
@@ -19,11 +19,10 @@ import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
+import { TransactionEditModal } from '../components/TransactionEditModal'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
-import { Select } from '../components/Select'
-import { Input } from '../components/Input'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -79,15 +78,15 @@ export function Orcamento() {
   const [copying, setCopying] = useState(false)
   const [syncingTx, setSyncingTx] = useState(false)
 
-  // Lista de TODAS as transações do mês navegado, com categoria editável na
-  // hora — pedido do Luiz (07/09): "assim eu não tenho que ficar pedindo pra
-  // você checar" (veio depois de eu corrigir à mão uma compra categorizada
-  // errado pela Pluggy). Trocar a categoria aqui chama o mesmo endpoint que
-  // já reforça a regra de categorização — a próxima compra do mesmo
-  // comerciante já chega certa sozinha.
+  // Lista de TODAS as transações do mês navegado. Edição de categoria/nota
+  // virou modal (11/09, pedido do Luiz: "a edição tem que rolar através de
+  // modal e não diretamente na lista... clicou e aí lá você tem as edições
+  // e salvar") — antes o Select/Input de cada linha já vinham abertos
+  // direto na lista, o que não deixava óbvio que dava pra clicar em nota
+  // pra editar. `selectedTransaction` = qual linha está com a modal aberta.
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [leafCategories, setLeafCategories] = useState<LeafCategoryOption[]>([])
-  const [savingTransactionId, setSavingTransactionId] = useState<string | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
 
   function loadTransactions() {
     api.transactions({ month, year }).then(setTransactions).catch(() => {})
@@ -97,50 +96,6 @@ export function Orcamento() {
   useEffect(() => {
     api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
   }, [])
-
-  async function changeTransactionCategory(id: string, categoryId: string) {
-    setSavingTransactionId(id)
-    // Otimista: atualiza a tela na hora, sem esperar o servidor confirmar —
-    // trocar categoria é uma ação de baixo risco (reversível clicando de
-    // novo) e a lista pode ter muita linha, não vale a pena re-buscar tudo
-    // a cada clique.
-    const newPath = leafCategories.find((c) => c.id === categoryId)?.path ?? null
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, category: { ...(t.category ?? { name: '', type: 'expense', kind: 'non_essential' }), id: categoryId }, categoryPath: newPath } : t))
-    )
-    try {
-      await api.categorizeTransactionGroup([id], categoryId)
-    } catch (err) {
-      alert(`Falha ao trocar categoria: ${(err as Error).message}`)
-      loadTransactions()
-    } finally {
-      setSavingTransactionId(null)
-    }
-  }
-
-  // Nota livre por transação (08/09, "vamos adicionar esse campo apenas
-  // para documentar") — pra quando a Pluggy manda nome genérico ("MASTERCARD")
-  // e o Luiz quer lembrar o que a compra foi de verdade. Puramente
-  // documental, não mexe em categoria/valor.
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
-  const [noteDraft, setNoteDraft] = useState('')
-
-  function startEditingNote(t: Transaction) {
-    setEditingNoteId(t.id)
-    setNoteDraft(t.note ?? '')
-  }
-
-  async function saveNote(id: string) {
-    const trimmed = noteDraft.trim() || null
-    setEditingNoteId(null)
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, note: trimmed } : t)))
-    try {
-      await api.updateTransactionNote(id, trimmed)
-    } catch (err) {
-      alert(`Falha ao salvar nota: ${(err as Error).message}`)
-      loadTransactions()
-    }
-  }
 
   function load() {
     api
@@ -718,13 +673,18 @@ export function Orcamento() {
         <div className={`${cards.card} ${cards.fullWidth}`}>
           <CardHeader icon={ListChecks} title="Todas as transações do mês" />
           <p className={styles.transactionsHelperText}>
-            Errou uma categoria (ex: a Pluggy manda errado às vezes)? Troca aqui direto, sem precisar pedir pra checar.
+            Clique numa transação pra corrigir categoria ou adicionar uma nota.
           </p>
           {transactions.length === 0 && <div className={cards.emptyState}>Nenhuma transação em {MONTH_NAMES[month - 1]}/{year}.</div>}
           {transactions.map((t) => (
-            <div key={t.id} className={`${cards.listRow} ${styles.transactionRow}`}>
+            <button
+              type="button"
+              key={t.id}
+              className={`${cards.listRow} ${cards.listRowButton}`}
+              onClick={() => setSelectedTransaction(t)}
+            >
               <div className={cards.listIcon}>💳</div>
-              <div className={`${cards.listBody} ${styles.transactionBody}`}>
+              <div className={cards.listBody}>
                 <div className={cards.listTitle}>
                   {t.description}
                   {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
@@ -735,56 +695,32 @@ export function Orcamento() {
                 <div className={cards.listSub}>
                   {formatDayLabel(t.date.slice(0, 10))}
                   {t.broker && ` · ${t.broker.name}`}
+                  {' · '}
+                  {t.isTransfer ? 'Transferência' : t.type === 'income' ? 'Receita de projeto' : t.categoryPath || 'Sem categoria'}
+                  {/* Nota livre (08/09) — só leitura aqui, edição é no clique
+                      da linha (modal). */}
+                  {t.note && ` · "${t.note}"`}
                 </div>
-                {/* Nota livre (08/09) — puramente documental, pra quando a
-                    Pluggy manda nome genérico ("MASTERCARD") sem jeito de
-                    saber o comerciante real. */}
-                {editingNoteId === t.id ? (
-                  <Input
-                    autoFocus
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    onBlur={() => saveNote(t.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                      if (e.key === 'Escape') setEditingNoteId(null)
-                    }}
-                    placeholder="Nota (ex: Adidas)"
-                    className={styles.noteInput}
-                  />
-                ) : (
-                  <button type="button" className={styles.noteButton} onClick={() => startEditingNote(t)}>
-                    <StickyNote size={11} strokeWidth={2} />
-                    {t.note || 'nota'}
-                  </button>
-                )}
               </div>
-              {t.isTransfer ? (
-                <span className={`${styles.transactionStaticLabel} ${styles.transactionSecondRow}`}>Transferência — não conta como gasto</span>
-              ) : t.type === 'income' ? (
-                <span className={`${styles.transactionStaticLabel} ${styles.transactionSecondRow}`}>Receita de projeto — categoria automática</span>
-              ) : (
-                <Select
-                  value={t.category?.id ?? ''}
-                  onChange={(e) => changeTransactionCategory(t.id, e.target.value)}
-                  disabled={savingTransactionId === t.id}
-                  className={`${styles.transactionCategorySelect} ${styles.transactionSecondRow}`}
-                >
-                  <option value="" disabled>
-                    Sem categoria
-                  </option>
-                  {leafCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.path}
-                    </option>
-                  ))}
-                </Select>
-              )}
-              <div className={`${cards.listValue} ${styles.transactionSecondRow}`}><Money>R$ {currency(t.amount)}</Money></div>
-            </div>
+              <div className={cards.listValue}>
+                <Money>R$ {currency(t.amount)}</Money>
+              </div>
+            </button>
           ))}
         </div>
       </div>
+
+      {selectedTransaction && (
+        <TransactionEditModal
+          transaction={selectedTransaction}
+          categories={leafCategories}
+          onClose={() => setSelectedTransaction(null)}
+          onSaved={() => {
+            setSelectedTransaction(null)
+            loadTransactions()
+          }}
+        />
+      )}
 
       {showReview && (
         <BudgetReviewModal
