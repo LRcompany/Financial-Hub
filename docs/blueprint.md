@@ -1613,7 +1613,17 @@ Luiz: *"pode fazer os 3 itens que ficaram de fora. E depois disso eu quero que v
 
 Verificado: `npx tsc -b` limpo (front) depois de cada mudança de TSX; `npm run build` (Vite) sem erro de CSS com `color-mix()`. Verificação visual em browser real não rodada nessa leva (mudança é hover/CSS de baixo risco, sem lógica de dado nova) — recomendo Luiz conferir hover/dark-mode com calma numa passada visual antes ou depois do deploy.
 
-**Pendente**: build de produção (frontend+backend) e deploy — nenhuma migration nova, só código/CSS/docs.
+**Deployado em produção** (mesmo dia, sem migration): build local + servidor, rsync pros dois domínios, `pm2 restart financial-hub financial-hub-demo`.
+
+### Furo achado numa segunda passada: navegação principal sem hover (11/09, mesmo dia)
+
+Luiz apontou que ainda faltava algo depois do deploy acima. Investigando de novo: a varredura do item 3 (leva anterior) procurou só por arquivo `.module.css` com a string `cursor: pointer` — um `<Link>`/`<NavLink>` já é `cursor: pointer` por padrão do navegador, nunca precisa declarar isso no CSS, então `AppLayout.module.css` nunca apareceu na lista de arquivos varridos. Resultado: a navegação PRINCIPAL do app inteiro (sidebar no desktop, bottom nav no mobile — os 5 itens Início/Orçamento/Patrimônio/Projetos/Configurações) não tinha hover nenhum, o exemplo mais visível de todos de "só o cursor muda".
+
+Fix: `.navItem`/`.sidebarItem` ganharam `background: var(--fill-muted)` no hover (mesmo princípio "ghost" já documentado). Item ATIVO (`.navItemActive`/`.sidebarItemActive`) precisou de hover próprio — sem isso o hover genérico, mesma especificidade mas vindo depois no arquivo, apagava a cor de seleção e o item ativo ficava cinza ao passar o mouse em vez de continuar azul. `.navItemActive:hover`/`.sidebarItemActive:hover` intensificam a própria cor de seleção (`--accent-soft`, com um toque a mais de `--accent` via `color-mix` no caso da sidebar) em vez de herdar o cinza neutro — regra escrita no design-system.md pra não se perder de novo ("uma varredura por `cursor: pointer` não pega `<Link>`").
+
+Verificado ao vivo no browser (não só lendo o CSS, dessa vez): logado local (`dev.db`, PIN de teste), hover em cada item da sidebar (desktop) e da bottom nav (mobile, via emulação de viewport) — "Orçamento" e os demais ganham fundo cinza claro ao passar o mouse, "Início" (ativo) mantém o azul e só intensifica um pouco, sem virar cinza. `npx tsc -b` + `npm run build` limpos de novo.
+
+**Pendente**: build de produção + deploy dessa correção (mesmo fluxo, sem migration).
 
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
 - [x] `pluggyTransactionSync.ts` nunca atualiza uma transação já sincronizada — aconteceu de novo (Google Workspace preso em "MASTERCARD INTERNACIONAL"), então dessa vez veio a correção geral: `Transaction.pluggyPending` + reconciliação automática no próximo sync (04/09, ver "Reconciliação de transação PENDING" acima). Cobre o caso de descrição/valor mudarem entre PENDING→POSTED; não cobre uma transação que a Pluggy já marcou POSTED da primeira vez e só depois corrige (esse foi o caso original da parcela BTG — mais raro, sem sinal (`pluggyPending`) pra saber quando revisitar).

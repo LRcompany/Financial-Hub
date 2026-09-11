@@ -124,6 +124,8 @@
   color: var(--ink-faint);
   text-decoration: none;
   padding: 6px 10px;
+  border-radius: var(--r-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .navItem span {
@@ -131,7 +133,25 @@
   font-weight: 500;
 }
 
+/* Navegação principal (bottom nav + sidebar, ver .sidebarItem abaixo) tinha
+   zero feedback de hover — achado 11/09 numa segunda passada: a varredura
+   original só pegou arquivo com `cursor: pointer` no CSS, e link (<NavLink>)
+   já é pointer por padrão do navegador, então nunca precisou dessa
+   declaração e escapou da varredura por texto. */
+.navItem:hover {
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+}
+
 .navItemActive {
+  color: var(--accent);
+}
+
+/* Mesma especificidade de `.navItem:hover` (classe + pseudo) — só ganha por
+   vir depois no arquivo. Item ativo continua destacado ao passar o mouse,
+   só um pouco mais intenso, em vez de virar cinza como um item comum. */
+.navItemActive:hover {
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -196,11 +216,24 @@
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .sidebarItem:hover {
+    background: var(--fill-muted);
+    color: var(--ink);
   }
 
   .sidebarItemActive {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /* Mesma especificidade de `.sidebarItem:hover` — vem depois no arquivo de
+     propósito, pra ganhar. Sem isso o hover cinza "genérico" pisava no azul
+     do item já selecionado. */
+  .sidebarItemActive:hover {
+    background: color-mix(in srgb, var(--accent-soft) 85%, var(--accent) 15%);
   }
 
   .bottomNav {
