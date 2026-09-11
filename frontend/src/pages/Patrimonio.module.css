@@ -7,12 +7,6 @@
   flex-wrap: wrap;
 }
 
-.pageTitle {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0;
-}
-
 .addContributionBtn {
   height: 36px;
   padding: 0 var(--space-4);
@@ -26,11 +20,6 @@
   white-space: nowrap;
 }
 
-@media (max-width: 480px) {
-  .pageTitle {
-    font-size: 1.15rem;
-  }
-}
 
 .subheading {
   font-size: 13.5px;

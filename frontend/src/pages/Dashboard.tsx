@@ -154,6 +154,13 @@ export function Dashboard() {
 
   return (
     <div className={styles.page}>
+      {/* Único <h1> da página — faltava (achado real, 11/09: Patrimônio,
+          Projetos e Configurações têm título de página, Início não tinha
+          nenhum). "Orçamento"/"Patrimônio & Investimentos"/"Projetos" logo
+          abaixo são só agrupadores DENTRO desta página — por isso são
+          <h2>, nunca <h1> (uma página só tem um <h1>). */}
+      <h1 className={styles.pageTitle}>Início</h1>
+
       {showSummaryBanner && (
         <div className={styles.banner}>
           <FileText size={16} strokeWidth={2} />
@@ -201,7 +208,7 @@ export function Dashboard() {
 
       {/* ---------- Orçamento ---------- */}
       <section>
-        <h1 className={styles.sectionTitle}>Orçamento</h1>
+        <h2 className={styles.sectionTitle}>Orçamento</h2>
         <div className={styles.grid}>
           <div className={`${styles.card} ${styles.fullWidth}`}>
             <CardHeader icon={Target} title="Meta diária de gasto" />
@@ -213,7 +220,16 @@ export function Dashboard() {
                 <div className={styles.dailyGoalTop}>
                   <div>
                     <div className={styles.heroLabel}>{dailySpendLabel}</div>
-                    <div className={styles.heroValue}>R$ {currency(displaySpend)}</div>
+                    <div className={styles.heroValue}>
+                      {/* Mesmo ícone de alerta do "Gasto diário" em Orçamento
+                          (11/09) — essa é a mesma meta, só um card separado
+                          duplicado; tinha ficado pra trás na primeira leva
+                          por serem dois JSX diferentes pro mesmo conceito. */}
+                      {budget.dailyGoal != null && displaySpend > budget.dailyGoal && (
+                        <AlertTriangle size={16} strokeWidth={2} className={styles.progressOverIcon} />
+                      )}
+                      R$ {currency(displaySpend)}
+                    </div>
                   </div>
                   <div className={styles.dailyGoalMeta}>
                     <span className={styles.heroLabel}>Meta diária</span>
@@ -387,7 +403,7 @@ export function Dashboard() {
 
       {/* ---------- Patrimônio & Investimentos ---------- */}
       <section>
-        <h1 className={styles.sectionTitle}>Patrimônio &amp; Investimentos</h1>
+        <h2 className={styles.sectionTitle}>Patrimônio &amp; Investimentos</h2>
         <div className={styles.grid}>
           {wealthError && (
             <div className={`${styles.card} ${styles.fullWidth}`}>
@@ -536,7 +552,7 @@ export function Dashboard() {
 
       {/* ---------- Projetos ---------- */}
       <section>
-        <h1 className={styles.sectionTitle}>Projetos</h1>
+        <h2 className={styles.sectionTitle}>Projetos</h2>
         <div className={styles.grid}>
           {projectsError && (
             <div className={`${styles.card} ${styles.fullWidth}`}>

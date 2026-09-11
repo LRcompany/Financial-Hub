@@ -79,7 +79,7 @@ export function Projetos() {
 
   return (
     <div className={cards.page}>
-      <h1 className={styles.pageTitle}>Projetos</h1>
+      <h1 className={cards.pageTitle}>Projetos</h1>
 
       {/* ---------- Visão Geral ---------- */}
       <section>

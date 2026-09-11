@@ -225,7 +225,7 @@ export function Patrimonio() {
   return (
     <div className={cards.page}>
       <div className={styles.titleRow}>
-        <h1 className={styles.pageTitle}>Patrimônio</h1>
+        <h1 className={cards.pageTitle}>Patrimônio</h1>
         <button className={styles.addContributionBtn} onClick={() => setShowContributionModal(true)}>
           + Registrar aporte
         </button>

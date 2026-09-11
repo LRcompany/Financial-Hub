@@ -4,6 +4,26 @@
   gap: var(--space-7);
 }
 
+/* Título de PÁGINA — um único <h1> por página, sempre esse estilo (achado
+   real, 11/09: Patrimônio/Projetos/Configurações tinham cada um sua própria
+   cópia idêntica desse mesmo CSS; Orçamento usava `.sectionTitle` nele por
+   engano, ficando com cara de rótulo de seção em vez de título; Início não
+   tinha nenhum <h1> de página). Único lugar que define isso agora. */
+.pageTitle {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .pageTitle {
+    font-size: 1.15rem;
+  }
+}
+
+/* Título de SEÇÃO dentro de uma página (ex: "Segurança" em Configurações,
+   "Orçamento"/"Patrimônio & Investimentos"/"Projetos" dentro de Início) —
+   sempre <h2>, nunca <h1> (uma página só tem um <h1>, o `.pageTitle`). */
 .sectionTitle {
   font-size: 0.6rem;
   font-weight: 600;
@@ -260,10 +280,12 @@
   margin-bottom: 6px;
 }
 
-.progressLabel span:last-child {
-  color: var(--ink-soft);
+/* `>` (filho direto) — mesmo achado do `.totalLabel` acima: sem isso, esse
+   seletor também bate em qualquer span aninhado que seja last-child do
+   próprio pai (ex: o pill do `ProjectedTag` dentro do primeiro span),
+   forçando um font-weight errado nele por especificidade. */
+.progressLabel > span:last-child {
   font-variant-numeric: tabular-nums;
-  font-weight: 400;
 }
 
 .progressTrack {
@@ -341,7 +363,14 @@
   margin-bottom: var(--space-2);
 }
 
-.totalLabel span:first-child {
+/* `>` (filho direto), NUNCA descendente solto — achado real (11/09): com
+   `.totalLabel span:last-child` (sem `>`), esse seletor também batia no
+   `.spent`/`.planned` de dentro do `SpentPlannedValue` (ele TAMBÉM é um
+   span que é last-child do próprio pai), e por ter mais especificidade
+   que `.planned`/`.spent` sozinhos, vencia e invertia a hierarquia de cor
+   (o planejado saía em negrito preto, o gasto saía cinza pequeno — o
+   oposto da regra do design system). */
+.totalLabel > span:first-child {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-soft);
@@ -349,10 +378,8 @@
   letter-spacing: 0.04em;
 }
 
-.totalLabel span:last-child {
+.totalLabel > span:last-child {
   font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 

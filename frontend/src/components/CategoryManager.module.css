@@ -9,13 +9,13 @@
   color: var(--ink-soft);
 }
 
+/* Sem borda/radius próprios (11/09) — a lista já vive dentro do
+   `cards.card` (ver CategoryManager.tsx), que já tem borda+radius+sombra;
+   repetir isso aqui criava uma caixa dentro da caixa (achado real do
+   Luiz: "remove esse border radius de categorias, remove a borda também"). */
 .list {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  overflow: hidden;
 }
 
 .node {

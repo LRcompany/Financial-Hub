@@ -273,9 +273,7 @@ export function Orcamento() {
   return (
     <div className={cards.page}>
       <div className={styles.header}>
-        <h1 className={cards.sectionTitle} style={{ margin: 0 }}>
-          Orçamento
-        </h1>
+        <h1 className={cards.pageTitle}>Orçamento</h1>
         <div className={styles.monthNav}>
           {!isCurrentMonth && (
             <button className={styles.todayBtn} onClick={goToToday}>

@@ -122,7 +122,7 @@ export function Settings() {
 
   return (
     <div className={cards.page}>
-      <h1 className={styles.pageTitle}>Configurações</h1>
+      <h1 className={cards.pageTitle}>Configurações</h1>
 
       {/* ---------- Relatório mensal ---------- */}
       <section id="relatorio-mensal">
