@@ -1421,6 +1421,27 @@ Três pedidos em sequência sobre a mesma tela ("onde meu dinheiro foi" / "Orça
 
 Verificado local (`dev.db`): barra "Transporte" (R$1.577,83 / R$1.050,00) com preenchimento vermelho + ícone; modal abre com faixa "Ultrapassou em R$527,83", R$8,00 confirmado + R$1.569,83 projetado (bike x3, Unidas, Movida, capacete x3) = total da barra. Folha "Itens de Casa" (R$2.708,03, meta R$0) abre modal com as parcelas projetadas somando exatamente o valor da linha, sem faixa de estouro (meta 0 = "sem opinião", mesma convenção `isOver` do resto do app).
 
+### Revisão geral de consistência (11/09)
+
+Luiz: *"às vezes vejo alguns números diferentes em lugares diferentes, e isso me deixa muito inseguro... se eu digo que uma categoria passou do limite, essa regra precisa ser global... se em algum lugar falamos de uma parcela, precisamos mostrar também a quantidade de parcelas."* Pedido de auditoria completa (backend + frontend), usando as regras já documentadas aqui como checklist, pra achar lugar onde uma atualização recente não foi propagada.
+
+**Achados reais e corrigidos:**
+
+1. **"Comprometido em parcelas futuras" podia divergir do total de categoria** — desde a mudança de 09/09 (parcela projetada conta como gasto), `/budget-summary` deduplica contra `Transaction` real do mês (`projectedSpendByCategory`), mas `/upcoming-installments` (o card "Comprometido em parcelas futuras") somava TODA `UpcomingInstallment` do mês sem esse dedup — se uma parcela já tivesse virado gasto confirmado dentro do próprio mês, ela contava duas vezes entre os dois cards, sem nenhuma explicação visível. Exatamente o tipo de "número que não bate" que o Luiz descreveu. Corrigido extraindo `getPostedPurchaseKeys(start, end)` (fonte única desse dedup) e aplicando nos 3 lugares que precisam dele: `projectedSpendByCategory`, `/upcoming-installments` e `/budget-summary/category-breakdown` (que antes duplicava a query inline). Verificado: total de "Comprometido" (R$11.703,67) agora bate exatamente com `totalProjected` da categoria — mesma fonte, garantido por construção, não só coincidência do dado atual.
+
+2. **Badge "N de Total" da parcela não aparecia em toda parcela mostrada** — a regra (Dashboard, "Todas as transações do mês", "Comprometido em parcelas futuras", `TransactionReviewModal`) só valia pras `Transaction` já confirmadas. Dois lugares ficaram pra trás:
+   - `CategoryBreakdownModal` (criado em 10/09): a lista "Parcelas projetadas" não calculava posição nenhuma — endpoint não tinha essa lógica. Corrigido usando `buildInstallmentPositions` (mesma função de `/upcoming-installments`) sobre TODA `UpcomingInstallment` (sem filtro de mês/categoria, mesma necessidade de `/upcoming-installments/groups`). De quebra, a modal tinha inventado um estilo próprio pro badge (`.rowInst`, texto colorido) em vez de reusar o `cards.installmentPill` já usado em todo o resto do app — unificado.
+   - `biggestPurchase` ("maior compra do mês", no Relatório Mensal): o endpoint não devolvia `installmentNumber`/`totalInstallments` (o campo já existe na própria `Transaction`, só faltava incluir na resposta). Corrigido — a pill aparece quando a maior compra do mês é ela mesma uma parcela de cartão.
+
+3. **Marca de "estourou o planejado" não chegava ao Relatório Mensal** — a regra visual (vermelho + `AlertTriangle`, `spent > planned && planned > 0`) já valia em Dashboard/Orçamento/`CategoryBreakdownModal`, mas o Relatório só mostrava "Estourou R$X" no TOTAL geral, sem dizer qual categoria. Adicionado highlight "Estourou o planejado em: [categoria (+R$X), ...]" com a mesma cor de alerta. Também faltava a nota "dos quais R$X projetado" no "Total gasto" do relatório — já existia em "Onde meu dinheiro foi" (Orçamento) desde 09/09, mas o relatório mostrava o número mesclado sem avisar que uma fatia era projetada. Adicionado.
+
+**Checado e CONFIRMADO consistente** (não precisou de mudança, mas valia a pena verificar):
+- Valor de Renda Fixa (fix de 08/09, `amount` em vez de `balance`): todo consumidor (`positions.ts`, `wealth.ts`, `brokers.ts`, `contributions.ts`) lê `PositionSnapshot.marketValue` já corrigido no sync — nenhum recálculo duplicado com a lógica antiga em outro lugar.
+- Formatação de moeda: `currency()` usado em todo componente que mostra R$; só `ClientPieChart`/`SmoothLineChart` duplicam a mesma fórmula inline (`toLocaleString('pt-BR', {...})`) em vez de importar — mesmo resultado exato, não é bug visível, só uma duplicação de código pra limpar num outro momento.
+- Altura de barra de progresso (8px, padronizado em 09/09): nenhum componente criado depois (`CategoryBreakdownModal`, `MonthlyReportModal`) introduziu uma barra nova com altura diferente.
+- "Usado" do cartão de crédito (`/credit-cards`) vs "Comprometido em parcelas futuras": são métricas DIFERENTES de propósito (uma é limite de crédito disponível agora, a outra é compromisso futuro conhecido) — já documentado em 30/08, confirmado que continuam calculadas separadamente sem vazar uma lógica na outra.
+- "Parcela N" em Projetos (`ReceiptsList`/pagamento de fornecedor): é um contador de recebimento/pagamento (1º, 2º, 3º...), não uma parcela de financiamento com total fixo desde o início — não existe um "total" pra mostrar ali, então não é a mesma regra do cartão de crédito. Nome um pouco ambíguo ("Parcela" sugere plano fixo) mas não é dado errado — fica como observação, não como bug.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
