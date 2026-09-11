@@ -69,6 +69,69 @@ function GroupRow({
   )
 }
 
+/** Mesmo comerciante da `GroupRow` (tabela), em formato de card — pra tela
+ * estreita, onde tabela vira sempre card (pedido do Luiz, 11/09: "toda
+ * célula numa table vira um card... não rola termos tabela no mobile").
+ * Estado próprio (não compartilha com `GroupRow`) — só uma das duas versões
+ * fica visível de cada vez via CSS, nunca as duas ao mesmo tempo. */
+function GroupCard({
+  group,
+  categories,
+  onSaved,
+}: {
+  group: UncategorizedTransactionGroup
+  categories: LeafCategoryOption[]
+  onSaved: (ids: string[]) => void
+}) {
+  const [categoryId, setCategoryId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!categoryId) return
+    setSaving(true)
+    try {
+      await api.categorizeTransactionGroup(group.ids, categoryId)
+      onSaved(group.ids)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTop}>
+        {group.description}
+        <InstallmentBadge number={group.installmentNumber} total={group.totalInstallments} />
+      </div>
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Compras</span>
+        <span>{group.count}x</span>
+      </div>
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Última</span>
+        <span>{formatDate(group.lastDate)}</span>
+      </div>
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Total</span>
+        <span>R$ {currency(group.totalAmount)}</span>
+      </div>
+      <div className={styles.cardActions}>
+        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>
+          <option value="">— escolher —</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.path}
+            </option>
+          ))}
+        </Select>
+        <button className={styles.saveBtn} onClick={save} disabled={!categoryId || saving}>
+          Salvar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function TransactionReviewModal({ onClose }: { onClose: () => void }) {
   const [groups, setGroups] = useState<UncategorizedTransactionGroup[] | null>(null)
   const [categories, setCategories] = useState<LeafCategoryOption[]>([])
@@ -125,6 +188,14 @@ export function TransactionReviewModal({ onClose }: { onClose: () => void }) {
                 ))}
               </tbody>
             </table>
+
+            {/* Tela estreita: mesma conversão tabela→card do resto do app
+                (pedido do Luiz, 11/09). */}
+            <div className={styles.cards}>
+              {groups.map((g) => (
+                <GroupCard key={g.description} group={g} categories={categories} onSaved={handleSaved} />
+              ))}
+            </div>
           </div>
         )}
       </div>

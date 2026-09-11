@@ -264,6 +264,34 @@ export function Projetos() {
                 ))}
               </tbody>
             </table>
+
+            {/* Tela estreita: mesma conversão tabela→card do resto do app
+                (pedido do Luiz, 11/09). */}
+            <div className={styles.taxCards}>
+              {taxPayments.map((t) => (
+                <div key={t.id} className={styles.taxCard}>
+                  <div className={styles.taxCardTop}>
+                    {String(t.competenceMonth).padStart(2, '0')}/{t.competenceYear}
+                  </div>
+                  <div className={styles.taxCardRow}>
+                    <span className={styles.taxCardLabel}>Faturamento do mês</span>
+                    <span>R$ {currency(t.totalRevenue)}</span>
+                  </div>
+                  <div className={styles.taxCardRow}>
+                    <span className={styles.taxCardLabel}>Valor pago (real)</span>
+                    <span>R$ {currency(t.amountPaid)}</span>
+                  </div>
+                  <div className={styles.taxCardRow}>
+                    <span className={styles.taxCardLabel}>Alíquota efetiva</span>
+                    <span>{t.totalRevenue > 0 ? ((t.amountPaid / t.totalRevenue) * 100).toFixed(2) : '0,00'}%</span>
+                  </div>
+                  <div className={styles.taxCardRow}>
+                    <span className={styles.taxCardLabel}>Data pgto.</span>
+                    <span>{formatDate(t.paymentDate)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>

@@ -5,7 +5,7 @@ import { currency } from '../lib/format'
 import { ClientPieChart } from './ClientPieChart'
 import { MonthDelta } from './MonthDelta'
 import { IconButton } from './IconButton'
-import { InstallmentBadge } from './Badge'
+import { InstallmentBadge, ProjectedTag } from './Badge'
 import styles from './MonthlyReportModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -140,8 +140,14 @@ export function MonthlyReportModal({
                   <span className={styles.statValue}>R$ {currency(budget!.totalSpent)}</span>
                   {/* Mesma nota de "Onde meu dinheiro foi" em Orçamento (10/09)
                       — o total já inclui parcela projetada, precisa avisar
-                      aqui também pra não parecer um número "de outro lugar". */}
-                  {totalProjected > 0 && <span className={styles.projectedNote}>dos quais R$ {currency(totalProjected)} projetado</span>}
+                      aqui também pra não parecer um número "de outro lugar".
+                      Unificado (11/09) pra usar a mesma tag `ProjectedTag`
+                      do resto do site, em vez da palavra solta em texto. */}
+                  {totalProjected > 0 && (
+                    <span className={styles.projectedNote}>
+                      dos quais R$ {currency(totalProjected)} <ProjectedTag />
+                    </span>
+                  )}
                   {previousTotalSpent > 0 && <MonthDelta current={budget!.totalSpent} previous={previousTotalSpent} higherIsBetter={false} />}
                 </div>
                 <div className={styles.stat}>
@@ -153,7 +159,13 @@ export function MonthlyReportModal({
                 </div>
                 <div className={styles.stat}>
                   <span className={styles.statLabel}>{withinBudget ? 'Sobrou' : 'Estourou'}</span>
-                  <span className={`${styles.statValue} ${withinBudget ? styles.good : styles.bad}`}>
+                  {/* Unificado (11/09) com a regra do design system: nunca cor
+                      no número, só o ícone de alerta acusa problema (mesmo
+                      padrão do highlight "Estourou o planejado em..." logo
+                      abaixo, e do resto do app). "Sobrou" não precisa de
+                      marca nenhuma — alerta é só pra problema. */}
+                  <span className={styles.statValue}>
+                    {!withinBudget && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
                     R$ {currency(Math.abs(diffFromPlanned))}
                   </span>
                 </div>

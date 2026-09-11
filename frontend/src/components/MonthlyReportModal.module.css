@@ -146,14 +146,6 @@
   color: var(--ink-faint);
 }
 
-.good {
-  color: var(--success);
-}
-
-.bad {
-  color: var(--danger);
-}
-
 .splitRow {
   display: flex;
   justify-content: space-between;

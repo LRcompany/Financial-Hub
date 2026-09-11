@@ -364,12 +364,17 @@ export function Orcamento() {
             }
           />
           <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
-            R$ {currency(budget.totalSpent)} <span className={styles.ofPlanned}>/ R$ {currency(budget.totalPlanned)} planejado</span>
+            <SpentPlannedValue spent={budget.totalSpent} planned={budget.totalPlanned} suffix="planejado" />
           </div>
           <div className={cards.chartMeta}>
             <span>
               {budget.categories.length} categorias com meta
-              {budget.totalProjected > 0 && ` · dos quais R$ ${currency(budget.totalProjected)} são parcelas projetadas`}
+              {budget.totalProjected > 0 && (
+                <>
+                  {' · dos quais R$ '}
+                  {currency(budget.totalProjected)} <ProjectedTag />
+                </>
+              )}
             </span>
           </div>
           {pieData.length > 0 ? (

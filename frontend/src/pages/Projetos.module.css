@@ -525,3 +525,48 @@
 .table tbody tr:last-child td {
   border-bottom: none;
 }
+
+.taxCards {
+  display: none;
+}
+
+/* Tabela vira card por competência em tela estreita (pedido do Luiz,
+   11/09) — mesmo padrão/breakpoint de toda tabela do projeto. */
+@media (max-width: 640px) {
+  .tableWrap {
+    display: none;
+  }
+  .taxCards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.taxCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.taxCardTop {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.taxCardRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.taxCardLabel {
+  color: var(--ink-soft);
+}

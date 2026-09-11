@@ -104,6 +104,39 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                   })}
                 </tbody>
               </table>
+
+              {/* Tela estreita: mesma conversão tabela→card do resto do app
+                  (pedido do Luiz, 11/09). */}
+              <div className={styles.cards}>
+                {categories.map((c) => {
+                  const parentTrail = c.path.split(' > ').slice(0, -1).join(' > ')
+                  return (
+                    <div key={c.categoryId} className={styles.card}>
+                      <div className={styles.cardTop}>
+                        <span>
+                          {parentTrail && <div className={styles.parentTrail}>{parentTrail}</div>}
+                          {c.name}
+                        </span>
+                        <span className={styles.kindTag}>{KIND_LABEL[c.kind]}</span>
+                      </div>
+                      <div className={styles.cardRow}>
+                        <span className={styles.cardLabel}>Mês passado</span>
+                        <span>R$ {currency(c.previousSpent)}</span>
+                      </div>
+                      <div className={styles.cardRow}>
+                        <span className={styles.cardLabel}>Meta deste mês</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={values[c.categoryId] ?? ''}
+                          onChange={(e) => updateValue(c.categoryId, e.target.value)}
+                          className={styles.rowInput}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
             <div className={styles.actions}>
               <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>

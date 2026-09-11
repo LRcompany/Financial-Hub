@@ -228,6 +228,71 @@ export function ManualPositionsModal({
               </table>
             </div>
 
+            {/* Tela estreita: mesma conversão tabela→card do resto do app
+                (pedido do Luiz, 11/09). */}
+            <div className={styles.cards}>
+              {rows.map((r, i) => (
+                <div key={r.securityId ?? `new-${i}`} className={styles.card}>
+                  <div className={styles.cardTop}>
+                    <Input placeholder="Nome do ativo" value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })} />
+                    <IconButton onClick={() => removeRow(i)} aria-label="Remover linha">
+                      <Trash2 size={13} strokeWidth={2} />
+                    </IconButton>
+                  </div>
+                  {r.lastUpdated && <div className={styles.lastUpdated}>atualizado {r.lastUpdated}</div>}
+
+                  {fieldConfig.showType && (
+                    <div className={styles.cardField}>
+                      <span className={styles.cardLabel}>Tipo</span>
+                      <Select value={r.type} onChange={(e) => updateRow(i, { type: e.target.value })}>
+                        {SECURITY_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
+                  {fieldConfig.currency === 'selectable' && (
+                    <div className={styles.cardField}>
+                      <span className={styles.cardLabel}>Moeda</span>
+                      <Select value={r.currency} onChange={(e) => updateRow(i, { currency: e.target.value })}>
+                        <option value="BRL">BRL</option>
+                        <option value="USD">USD</option>
+                      </Select>
+                    </div>
+                  )}
+                  {fieldConfig.showQuantity && (
+                    <div className={styles.cardField}>
+                      <span className={styles.cardLabel}>Qtd.</span>
+                      <Input type="number" step="0.000001" value={r.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} />
+                    </div>
+                  )}
+                  {fieldConfig.showUnitValue && (
+                    <div className={styles.cardField}>
+                      <span className={styles.cardLabel}>Valor unit.</span>
+                      <Input type="number" step="0.01" value={r.unitValue} onChange={(e) => updateRow(i, { unitValue: e.target.value })} />
+                    </div>
+                  )}
+                  {fieldConfig.showInvestedAmount && (
+                    <div className={styles.cardField}>
+                      <span className={styles.cardLabel}>Valor investido</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={r.investedAmount}
+                        onChange={(e) => updateRow(i, { investedAmount: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  <div className={styles.cardField}>
+                    <span className={styles.cardLabel}>Valor atual</span>
+                    <Input type="number" step="0.01" value={r.marketValue} onChange={(e) => updateRow(i, { marketValue: e.target.value })} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <button className={styles.addRowBtn} onClick={addRow}>
               <Plus size={13} strokeWidth={2} />
               Novo ativo

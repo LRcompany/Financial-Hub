@@ -12,24 +12,22 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
-/** Uma linha editável por compra (não por parcela — as N parcelas restantes
- * da mesma compra mudam juntas, é a mesma correção pra todas). */
-function GroupRow({
-  group,
-  knownCards,
-  categories,
-  onSaved,
-  onDeleted,
-}: {
+type GroupFormProps = {
   group: InstallmentGroup
-  knownCards: string[]
   categories: LeafCategoryOption[]
   onSaved: (
     ids: string[],
     changes: { cardLabel: string | null; amount: number; categoryId: string | null; categoryPath: string | null; note: string | null; totalInstallments: number | null }
   ) => void
   onDeleted: (ids: string[]) => void
-}) {
+}
+
+/** Estado + handlers de edição de uma compra parcelada — compartilhado entre
+ * `GroupRow` (tabela, desktop) e `GroupCard` (mobile, 11/09), pra não
+ * duplicar a lógica de salvar/excluir em dois lugares (só a apresentação
+ * muda). Cada instância (linha OU card) tem seu próprio estado — só uma das
+ * duas fica visível por vez via CSS, nunca as duas ao mesmo tempo. */
+function useGroupForm({ group, categories, onSaved, onDeleted }: GroupFormProps) {
   const [cardChoice, setCardChoice] = useState(group.cardLabel ?? '')
   const [customCard, setCustomCard] = useState('')
   const [categoryChoice, setCategoryChoice] = useState(group.categoryId ?? '')
@@ -81,6 +79,50 @@ function GroupRow({
       setSaving(false)
     }
   }
+
+  return {
+    cardChoice,
+    setCardChoice,
+    customCard,
+    setCustomCard,
+    categoryChoice,
+    setCategoryChoice,
+    amount,
+    setAmount,
+    note,
+    setNote,
+    totalInstallments,
+    setTotalInstallments,
+    saving,
+    isOther,
+    dirty,
+    save,
+    remove,
+  }
+}
+
+/** Uma linha editável por compra (não por parcela — as N parcelas restantes
+ * da mesma compra mudam juntas, é a mesma correção pra todas). */
+function GroupRow({ group, knownCards, categories, onSaved, onDeleted }: GroupFormProps & { knownCards: string[] }) {
+  const {
+    cardChoice,
+    setCardChoice,
+    customCard,
+    setCustomCard,
+    categoryChoice,
+    setCategoryChoice,
+    amount,
+    setAmount,
+    note,
+    setNote,
+    totalInstallments,
+    setTotalInstallments,
+    saving,
+    isOther,
+    dirty,
+    save,
+    remove,
+  } = useGroupForm({ group, categories, onSaved, onDeleted })
 
   return (
     <tr className={group.categoryId === null ? styles.unconfiguredRow : ''}>
@@ -166,6 +208,109 @@ function GroupRow({
   )
 }
 
+/** Mesma compra da `GroupRow` (tabela), em formato de card — tela estreita
+ * (pedido do Luiz, 11/09). Mesmo hook `useGroupForm`, só a apresentação
+ * muda. */
+function GroupCard({ group, knownCards, categories, onSaved, onDeleted }: GroupFormProps & { knownCards: string[] }) {
+  const {
+    cardChoice,
+    setCardChoice,
+    customCard,
+    setCustomCard,
+    categoryChoice,
+    setCategoryChoice,
+    amount,
+    setAmount,
+    note,
+    setNote,
+    totalInstallments,
+    setTotalInstallments,
+    saving,
+    isOther,
+    dirty,
+    save,
+    remove,
+  } = useGroupForm({ group, categories, onSaved, onDeleted })
+
+  return (
+    <div className={`${styles.card} ${group.categoryId === null ? styles.unconfiguredCard : ''}`}>
+      <div className={styles.cardTop}>{group.description}</div>
+
+      <Input placeholder="O que foi essa compra?" value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} />
+
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Total parcelas</span>
+        <span className={styles.cardInlineField}>
+          <Input
+            type="number"
+            step="1"
+            min="1"
+            placeholder="?"
+            value={totalInstallments}
+            onChange={(e) => setTotalInstallments(e.target.value)}
+            className={styles.totalInput}
+            disabled={saving}
+          />
+          <span className={styles.remainingHint}>
+            {group.paidCount > 0 && `${group.paidCount} já lançada${group.paidCount > 1 ? 's' : ''} · `}
+            {group.count}x restante{group.count > 1 ? 's' : ''}
+          </span>
+        </span>
+      </div>
+
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Período</span>
+        <span>
+          {formatDate(group.firstDueDate)}
+          {group.count > 1 ? ` — ${formatDate(group.lastDueDate)}` : ''}
+        </span>
+      </div>
+
+      <div className={styles.cardRow}>
+        <span className={styles.cardLabel}>Valor/parcela</span>
+        <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={styles.amountInput} disabled={saving} />
+      </div>
+
+      <div className={styles.cardField}>
+        <span className={styles.cardLabel}>Cartão</span>
+        <Select value={cardChoice} onChange={(e) => setCardChoice(e.target.value)} disabled={saving}>
+          <option value="">— sem cartão —</option>
+          {knownCards.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value={OTHER}>Outro...</option>
+        </Select>
+        {isOther && (
+          <Input placeholder="Nome do cartão" value={customCard} onChange={(e) => setCustomCard(e.target.value)} disabled={saving} />
+        )}
+      </div>
+
+      <div className={styles.cardField}>
+        <span className={styles.cardLabel}>Categoria</span>
+        <Select value={categoryChoice} onChange={(e) => setCategoryChoice(e.target.value)} disabled={saving}>
+          <option value="">— sem categoria —</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.path}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className={styles.cardActions}>
+        <button className={styles.saveBtn} onClick={save} disabled={!dirty || saving}>
+          Salvar
+        </button>
+        <button className={styles.deleteBtn} onClick={remove} disabled={saving} aria-label="Remover (duplicata)">
+          Excluir
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
   const [groups, setGroups] = useState<InstallmentGroup[] | null>(null)
   const [knownCards, setKnownCards] = useState<string[]>([])
@@ -243,6 +388,17 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
                 ))}
               </tbody>
             </table>
+
+            {/* Tela estreita: mesma conversão tabela→card do resto do app
+                (pedido do Luiz, 11/09). */}
+            <div className={styles.cards}>
+              {unconfigured.map((g) => (
+                <GroupCard key={g.ids.join(',')} group={g} knownCards={knownCards} categories={categories} onSaved={handleSaved} onDeleted={handleDeleted} />
+              ))}
+              {configured.map((g) => (
+                <GroupCard key={g.ids.join(',')} group={g} knownCards={knownCards} categories={categories} onSaved={handleSaved} onDeleted={handleDeleted} />
+              ))}
+            </div>
           </div>
         )}
       </div>

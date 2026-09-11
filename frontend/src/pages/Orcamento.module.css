@@ -108,12 +108,6 @@
   white-space: nowrap;
 }
 
-.ofPlanned {
-  font-size: 1rem;
-  font-weight: 400;
-  color: var(--ink-soft);
-}
-
 .chartLabel {
   font-size: 12px;
   font-weight: 600;
