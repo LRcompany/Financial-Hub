@@ -1494,12 +1494,37 @@ Verificado com `getComputedStyle` (não só olhar a tela) em Início, Orçamento
 
 **Lição de processo, parte 2**: grep encontra "componente errado sendo usado"; não encontra "seletor CSS com especificidade errada vazando pra dentro de um componente aninhado" nem "título que existe mas com o estilo errado" — esses só aparecem olhando a tela renderizada de verdade, ou inspecionando `getComputedStyle` em cima do DOM real. As duas checagens são complementares, nenhuma substitui a outra.
 
+### Proventos reais de Ação/FII — dividendo/JCP/rendimento (11/09)
+
+Luiz: *"preciso mostrar os dividendos de alguns investimentos. Ações e FII eu recebo dividendos. Como podemos fazer isso?!"* — pendência documentada desde 25/08 (`PositionSnapshot.dividends` já existia no schema, sempre `null`: "não vem no payload de `/investments`, precisaria de uma chamada extra em `/investments/{id}/transactions`").
+
+Investigado ao vivo ANTES de implementar (regra do projeto: nunca supor formato de payload, sempre confirmar com dado real) — testei `GET /investments/{id}/transactions` contra o BTG real com PETR4 e HGRE11:
+
+| Ativo | Data | Tipo | Valor |
+|---|---|---|---|
+| PETR4 | 20/08/2026 | `INTEREST` | R$ 86,57 |
+| HGRE11 | 15/01/2026 | `INTEREST` | R$ 189,00 |
+
+Confirmado: proventos (dividendo de ação, JCP, rendimento de FII) sempre vêm com `type: "INTEREST"` — a Pluggy não distingue dividendo de JCP entre si, mas separa bem de compra/venda (`type: "BUY"/"SELL"`). Endpoint pagina (`total`/`totalPages`/`page`/`results`).
+
+**Implementado:**
+- `pluggy.ts`: `getAllInvestmentTransactions(id)` — busca todas as páginas de uma vez.
+- `pluggySync.ts`: `fetchMonthlyDividends(investmentId, month, year)` soma os `INTEREST` de uma posição dentro do mês sendo sincronizado; chamado só pra Ação/FII (`secType`) — Renda Fixa/Fundo/Cripto não têm esse conceito, sem gastar uma chamada extra da Pluggy à toa por posição que nunca vai ter provento. Erro pontual na chamada (rate limit, rede) devolve `undefined`, não `null` — no `upsert`, isso faz o Prisma **não mexer** no campo, preservando um provento real já coletado num sync anterior desse mesmo mês (o sync roda 1x/dia + sob demanda; sem essa distinção, uma falha pontual apagaria dado bom).
+- `wealth.ts`: o campo já existia como `projectedDividends`/`projectedDividendsLastMonth` (nunca teve valor real, nome era um placeholder) — renomeado pra `dividendsThisMonth`/`dividendsLastMonth` agora que é dado de verdade.
+- `positions.ts`: `dividends` por posição, pro front mostrar por ativo (não só o agregado).
+
+**Frontend (Patrimônio)** — perguntei ao Luiz o nível de detalhe antes de implementar (`AskUserQuestion`), ele confirmou os dois:
+- Card novo **"Proventos recebidos"** (ícone `Coins`), ao lado de "Alocação de investimentos"/"Destaques do mês" — total do mês + `MonthDelta` vs. mês anterior. Empty state ("Sem provento coletado ainda pra Ação/FII") quando `dividendsThisMonth` é `null`, nunca R$0,00 fingido.
+- Coluna **"Proventos (mês)"** na tabela de posições — só aparece pra grupo Ação/FII (`showDividends = group.type === 'Ação' || group.type === 'FII'`), tanto na tabela desktop quanto no card mobile; ausente em Renda Fixa/Fundo/Cripto/Conta Corrente/corretora standalone (mesmo princípio já usado pra cota/preço, 11/09 mesmo dia).
+
+**Verificado com dado real de produção** (não só teste): rodei um sync isolado do BTG depois de subir o código (script padrão, apagado depois) — 44 posições de Ação/FII ganharam `dividends` preenchido nesse mesmo mês, incluindo valores reais não-zero (BBSE3 R$156,67, VALE3 R$111,68, HTMX11 R$69,60, ITUB4 R$3,47) e zero de verdade pro resto (ainda não pagou esse mês, não é "não coletado"). Confirmado que BTG é a ÚNICA corretora com Ação/FII via Pluggy hoje — nenhum outro broker precisou de sync extra. Frontend testado com dado fake em `dev.db` (nunca em produção): card mostra o total certo, coluna aparece só nas tabelas certas — `dev.db` restaurado ao estado original depois do teste.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
 - [x] `pluggyTransactionSync.ts` nunca atualiza uma transação já sincronizada — aconteceu de novo (Google Workspace preso em "MASTERCARD INTERNACIONAL"), então dessa vez veio a correção geral: `Transaction.pluggyPending` + reconciliação automática no próximo sync (04/09, ver "Reconciliação de transação PENDING" acima). Cobre o caso de descrição/valor mudarem entre PENDING→POSTED; não cobre uma transação que a Pluggy já marcou POSTED da primeira vez e só depois corrige (esse foi o caso original da parcela BTG — mais raro, sem sinal (`pluggyPending`) pra saber quando revisitar).
-- [ ] Dividendos por posição (`PositionSnapshot.dividends`) não vêm no payload de `/investments` da Pluggy — precisa de uma chamada extra (`/investments/{id}/transactions`) pra popular; até lá, fica `null` (não é fake, é "ainda não coletado")
+- [x] Dividendos por posição (`PositionSnapshot.dividends`) — resolvido em 11/09, ver seção "Proventos reais de Ação/FII" abaixo
 - [x] `BudgetTarget` por categoria — seedado (25/08) a partir da aba "ORÇAMENTO" da mesma planilha "PLANEJAMENTO - PESSOAL" (é a mesma aba que dá nome à "ORÇAMENTO — PESSOAL - 2026", não uma planilha separada). 32 categorias (8 mães + subcategorias) e o orçamento de agosto/2026 (R$9.895,70, bate com o "CUSTOS" da planilha). De quebra, populou também `Debt`/`DebtInstallment` do empréstimo do Tio João (24 parcelas, 2 pagas) que estava documentado mas nunca tinha dado real.
 - [x] `Client`/`Project`/`ProjectReceipt` de Projetos — importado (02/09) da planilha real "PLANEJAMENTO - 2026": 8 clientes, 22 projetos, 21 recebimentos, 1 fornecedor. Ver "Módulo Projetos" acima.
 - [ ] DAS real de cada mês de competência dos clientes estrangeiros (HKEK/PICKLEBALL FORUM/SOILYTIX) — Luiz precisa lançar em Projetos conforme os boletos forem chegando; até lá, imposto desses meses usa a estimativa de 6%
