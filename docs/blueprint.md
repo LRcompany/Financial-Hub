@@ -1519,6 +1519,20 @@ Confirmado: proventos (dividendo de ação, JCP, rendimento de FII) sempre vêm 
 
 **Verificado com dado real de produção** (não só teste): rodei um sync isolado do BTG depois de subir o código (script padrão, apagado depois) — 44 posições de Ação/FII ganharam `dividends` preenchido nesse mesmo mês, incluindo valores reais não-zero (BBSE3 R$156,67, VALE3 R$111,68, HTMX11 R$69,60, ITUB4 R$3,47) e zero de verdade pro resto (ainda não pagou esse mês, não é "não coletado"). Confirmado que BTG é a ÚNICA corretora com Ação/FII via Pluggy hoje — nenhum outro broker precisou de sync extra. Frontend testado com dado fake em `dev.db` (nunca em produção): card mostra o total certo, coluna aparece só nas tabelas certas — `dev.db` restaurado ao estado original depois do teste.
 
+### Gráfico de proventos por mês (Ação x FII), total no ano e seta de variação (11/09, mesmo dia)
+
+Luiz pediu, no mesmo dia da feature acima: *"quero um gráfico por mês do ano... o que veio do FII e o que veio da Ação... quanto já ganhei de proventos no ano total. O box pode ocupar a linha inteira. Na coluna do proventos eu quero saber se ele foi maior ou menor que o mês passado, com a setinha."*
+
+**Backend:**
+- `wealth.ts`: `dividendsByMonth` (array `{label, acao, fii}`, janeiro até o mês corrente REAL) e `dividendsThisYear` — mesmo critério de ano-calendário já usado em "Recebido no ano"/"Média mensal" de Projetos (nunca mistura mês do ano passado, sempre `now`-based mesmo quando a rota recebe `month`/`year` de relatório histórico).
+- `pluggySync.ts`: reescrito pra fazer **backfill retroativo** — a cada sync, busca o extrato completo (`getAllInvestmentTransactions`) e roda `updateMany` em TODO `PositionSnapshot` já existente daquela posição, não só o mês sendo sincronizado agora. Sem isso, o gráfico só teria barra a partir de hoje (dia que a feature nasceu), mesmo a Pluggy já tendo histórico desde sempre.
+
+**Achado no meio do caminho (bug de consistência, não pedido explicitamente mas corrigido por iniciativa própria — mesmo princípio de "o design system é a regra, não só onde foi visto primeiro" já aplicado a CSS, agora aplicado a dado)**: o card "Recebido este mês" e a coluna "Proventos (mês)" por posição usavam `activeSnapshotsAsOf` (a mesma função que decide "qual é o valor de mercado atual" arrastando pra frente o último snapshot conhecido quando uma corretora não ressincronizou esse mês específico) — certo pra `marketValue`/`investedAmount` (são ESTADO, "quanto vale hoje"), errado pra `dividends` (é FLUXO, "quanto entrou nesse mês exato"). Isso fazia o card mostrar um número diferente da última barra do próprio gráfico no mesmo card. Corrigido pra somar sempre o snapshot do mês/ano EXATO (`dividendsForYm` em `wealth.ts`, `dividendsByExactMonth` em `positions.ts`) — `null` quando aquele mês específico não tem dado ainda, nunca herdando o valor de um mês anterior.
+
+**Frontend**: `DividendsByMonthChart.tsx` (novo componente) — barra empilhada de 2 cores por mês, modelado no padrão visual/responsivo de `VerticalBarChart` (vira linha horizontal ≤640px). Cores fixas (não cicladas por índice como no `ClientPieChart`): Ação reaproveita `--accent`, FII ganha token novo `--dividends-fii` (`#3FB6A8` claro / `#5CCFC1` escuro — mesmo teal já usado num stop do `--grad`, não introduz tom novo). Card "Proventos recebidos" agora `cards.fullWidth`, com total do ano em texto abaixo do gráfico. Seta `MonthDelta` (mesmo componente já usado em "Investido este mês"/patrimônio total) na coluna "Proventos (mês)" de cada posição, tabela e card mobile — só aparece quando o mês anterior tem provento real coletado (`previousDividends != null && > 0`), nunca fingindo base de comparação.
+
+Verificado local (dado fake em `dev.db`, restaurado depois) em desktop, mobile e dark mode — card cheio confere com a última barra do gráfico depois da correção acima.
+
 ## Pendências (não travadas ainda)
 
 - [ ] `TaxPayment.total_revenue`: confirmar se é por data de recebimento (assumido) ou data de emissão da NF
