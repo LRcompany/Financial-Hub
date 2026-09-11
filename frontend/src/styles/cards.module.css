@@ -329,15 +329,6 @@
   background: var(--fill-muted);
 }
 
-/* Estourou o planejado — SÓ o ícone de alerta fica vermelho (pedido do
-   Luiz, 11/09: "não mude a cor do texto pra vermelho... deixa apenas o
-   alerta em vermelho e o arrow-up em vermelho"). O valor em si nunca muda
-   de cor — ver `SpentPlannedValue`. */
-.progressOverIcon {
-  color: var(--danger);
-  vertical-align: -2px;
-  margin-right: 4px;
-}
 
 /* ---------- linha "Total do mês" em destaque ---------- */
 /* Separada visualmente do resto da lista (fundo próprio, texto maior) —

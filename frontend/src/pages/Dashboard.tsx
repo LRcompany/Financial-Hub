@@ -14,7 +14,6 @@ import {
   Activity,
   Briefcase,
   FileText,
-  AlertTriangle,
 } from 'lucide-react'
 import {
   api,
@@ -30,8 +29,9 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
-import { InstallmentBadge, ProjectedTag } from '../components/Badge'
+import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
+import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
@@ -225,16 +225,14 @@ export function Dashboard() {
                           (11/09) — essa é a mesma meta, só um card separado
                           duplicado; tinha ficado pra trás na primeira leva
                           por serem dois JSX diferentes pro mesmo conceito. */}
-                      {budget.dailyGoal != null && displaySpend > budget.dailyGoal && (
-                        <AlertTriangle size={16} strokeWidth={2} className={styles.progressOverIcon} />
-                      )}
-                      R$ {currency(displaySpend)}
+                      <Money>R$ {currency(displaySpend)}</Money>
+                      {budget.dailyGoal != null && displaySpend > budget.dailyGoal && <OverBudgetIcon />}
                     </div>
                   </div>
                   <div className={styles.dailyGoalMeta}>
                     <span className={styles.heroLabel}>Meta diária</span>
                     <span style={{ fontWeight: 600 }}>
-                      {budget.dailyGoal != null ? `R$ ${currency(budget.dailyGoal)}` : 'não definida'}
+                      {budget.dailyGoal != null ? <Money>{`R$ ${currency(budget.dailyGoal)}`}</Money> : 'não definida'}
                     </span>
                   </div>
                 </div>
@@ -251,11 +249,17 @@ export function Dashboard() {
                 )}
                 <div className={styles.chartMeta}>
                   <span>
-                    {diff === null
-                      ? 'defina uma meta diária pra acompanhar'
-                      : diff >= 0
-                        ? `R$ ${currency(diff)} abaixo da meta${isShowingToday ? ' hoje' : ''}`
-                        : `R$ ${currency(-diff)} acima da meta${isShowingToday ? ' hoje' : ''}`}
+                    {diff === null ? (
+                      'defina uma meta diária pra acompanhar'
+                    ) : diff >= 0 ? (
+                      <>
+                        <Money>R$ {currency(diff)}</Money> abaixo da meta{isShowingToday ? ' hoje' : ''}
+                      </>
+                    ) : (
+                      <>
+                        <Money>R$ {currency(-diff)}</Money> acima da meta{isShowingToday ? ' hoje' : ''}
+                      </>
+                    )}
                   </span>
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
@@ -269,7 +273,11 @@ export function Dashboard() {
                 />
                 <div className={styles.chartMeta}>
                   <span>neste mês</span>
-                  {budget.dailyGoal != null && <span>linha tracejada = meta de R$ {budget.dailyGoal}</span>}
+                  {budget.dailyGoal != null && (
+                    <span>
+                      linha tracejada = meta de <Money>R$ {budget.dailyGoal}</Money>
+                    </span>
+                  )}
                 </div>
                 {budget.daysWithGoalThisMonth > 0 && (
                   <div className={styles.chartMeta}>
@@ -301,8 +309,8 @@ export function Dashboard() {
                       <div className={styles.totalLabel}>
                         <span>Total do mês</span>
                         <span>
-                          {totalOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
                           <SpentPlannedValue spent={budget.totalSpent} planned={budget.totalPlanned} />
+                          {totalOver && <OverBudgetIcon />}
                         </span>
                       </div>
                       <div className={styles.totalTrack}>
@@ -330,9 +338,9 @@ export function Dashboard() {
                     >
                       <div className={styles.progressLabel}>
                         <span>
-                          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
                           {group.parentName}
                           {group.spentProjected > 0 && <ProjectedTag />}
+                          {isOver && <OverBudgetIcon />}
                         </span>
                         <span>
                           <SpentPlannedValue spent={group.spent} planned={group.planned} />
@@ -393,7 +401,7 @@ export function Dashboard() {
                     ) : (
                       <ArrowRight size={13} className={styles.dirOut} />
                     )}
-                    R$ {currency(t.amount)}
+                    <Money>R$ {currency(t.amount)}</Money>
                   </div>
                 </div>
               ))}
@@ -426,7 +434,7 @@ export function Dashboard() {
               <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={LineChart} title="Evolução do patrimônio" href="/patrimonio" />
                 <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
-                  R$ {currency(wealthTotal)}
+                  <Money>R$ {currency(wealthTotal)}</Money>
                 </div>
                 <div className={styles.chartMeta}>
                   <span>Patrimônio total</span>
@@ -455,7 +463,7 @@ export function Dashboard() {
               <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={Coins} title="Investido por mês" href="/patrimonio" />
                 <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
-                  R$ {currency(wealth.investedThisMonth ?? 0)}
+                  <Money>R$ {currency(wealth.investedThisMonth ?? 0)}</Money>
                 </div>
                 <div className={styles.chartMeta}>
                   <span>Investido este mês</span>
@@ -515,12 +523,12 @@ export function Dashboard() {
                   <>
                     <div className={styles.dailyGoalTop}>
                       <div>
-                        <div className={styles.heroLabel}>Progresso até R$ {currency(wealthGoal.targetAmount)}</div>
+                        <div className={styles.heroLabel}>Progresso até <Money>R$ {currency(wealthGoal.targetAmount)}</Money></div>
                         <div className={styles.heroValue}>{goalProgress.toFixed(0)}%</div>
                       </div>
                       <div className={styles.dailyGoalMeta}>
                         <span className={styles.heroLabel}>Faltam</span>
-                        <span style={{ fontWeight: 600 }}>R$ {currency(Math.max(0, wealthGoal.targetAmount - wealthTotal))}</span>
+                        <span style={{ fontWeight: 600 }}><Money>R$ {currency(Math.max(0, wealthGoal.targetAmount - wealthTotal))}</Money></span>
                       </div>
                     </div>
                     <div className={styles.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
@@ -567,27 +575,27 @@ export function Dashboard() {
                 <div className={styles.statGrid3}>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>Recebido este mês</span>
-                    <span className={styles.statTileValue}>R$ {currency(projects.receivedThisMonth)}</span>
+                    <span className={styles.statTileValue}><Money>R$ {currency(projects.receivedThisMonth)}</Money></span>
                     <MonthDelta current={projects.receivedThisMonth} previous={projects.receivedLastMonth} />
                   </div>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>Imposto pago no ano</span>
-                    <span className={styles.statTileValue}>R$ {currency(projects.taxPaidThisYear)}</span>
+                    <span className={styles.statTileValue}><Money>R$ {currency(projects.taxPaidThisYear)}</Money></span>
                   </div>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>A receber</span>
-                    <span className={styles.statTileValue}>R$ {currency(projects.outstanding)}</span>
+                    <span className={styles.statTileValue}><Money>R$ {currency(projects.outstanding)}</Money></span>
                     <MonthDelta current={projects.outstanding} previous={projects.outstandingLastMonth} higherIsBetter={false} />
                   </div>
                 </div>
                 <div className={styles.statGrid} style={{ marginTop: 'var(--space-3)' }}>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>Fornecedor pago</span>
-                    <span className={styles.statTileValue}>R$ {currency(projects.supplierPaid)}</span>
+                    <span className={styles.statTileValue}><Money>R$ {currency(projects.supplierPaid)}</Money></span>
                   </div>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>Fornecedor a pagar</span>
-                    <span className={styles.statTileValue}>R$ {currency(projects.supplierOutstanding)}</span>
+                    <span className={styles.statTileValue}><Money>R$ {currency(projects.supplierOutstanding)}</Money></span>
                   </div>
                   <div className={styles.statTile}>
                     <span className={styles.heroLabel}>Dias trabalhados</span>
@@ -605,11 +613,11 @@ export function Dashboard() {
               <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={LineChart} title="Recebido no ano" />
                 <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
-                  R$ {currency(projects.receivedThisYear)}
+                  <Money>R$ {currency(projects.receivedThisYear)}</Money>
                 </div>
                 <div className={styles.chartMeta}>
                   <span>Média mensal (desde janeiro)</span>
-                  <span className={styles.statValue}>R$ {currency(projects.avgMonthlyThisYear)}</span>
+                  <span className={styles.statValue}><Money>R$ {currency(projects.avgMonthlyThisYear)}</Money></span>
                 </div>
                 <SmoothLineChart
                   values={projects.monthlyReceived.map((m) => m.value)}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Money } from './Money'
 import styles from './SmoothLineChart.module.css'
 
 const GRADIENT_STOPS = [
@@ -220,8 +221,10 @@ export function SmoothLineChart({
         >
           <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
           <div className={styles.tooltipValue}>
-            {valuePrefix}
-            {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <Money>
+              {valuePrefix}
+              {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Money>
           </div>
         </div>
       )}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, X, Download } from 'lucide-react'
+import { X, Download } from 'lucide-react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import { ClientPieChart } from './ClientPieChart'
 import { MonthDelta } from './MonthDelta'
 import { IconButton } from './IconButton'
-import { InstallmentBadge, ProjectedTag } from './Badge'
+import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
 import styles from './MonthlyReportModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -137,7 +138,7 @@ export function MonthlyReportModal({
               <div className={styles.statGrid}>
                 <div className={styles.stat}>
                   <span className={styles.statLabel}>Total gasto</span>
-                  <span className={styles.statValue}>R$ {currency(budget!.totalSpent)}</span>
+                  <span className={styles.statValue}><Money>R$ {currency(budget!.totalSpent)}</Money></span>
                   {/* Mesma nota de "Onde meu dinheiro foi" em Orçamento (10/09)
                       — o total já inclui parcela projetada, precisa avisar
                       aqui também pra não parecer um número "de outro lugar".
@@ -145,14 +146,14 @@ export function MonthlyReportModal({
                       do resto do site, em vez da palavra solta em texto. */}
                   {totalProjected > 0 && (
                     <span className={styles.projectedNote}>
-                      dos quais R$ {currency(totalProjected)} <ProjectedTag />
+                      dos quais <Money>R$ {currency(totalProjected)}</Money> <ProjectedTag />
                     </span>
                   )}
                   {previousTotalSpent > 0 && <MonthDelta current={budget!.totalSpent} previous={previousTotalSpent} higherIsBetter={false} />}
                 </div>
                 <div className={styles.stat}>
                   <span className={styles.statLabel}>Recebido</span>
-                  <span className={styles.statValue}>R$ {currency(budget!.totalIncome)}</span>
+                  <span className={styles.statValue}><Money>R$ {currency(budget!.totalIncome)}</Money></span>
                   {budget!.previousTotalIncome > 0 && (
                     <MonthDelta current={budget!.totalIncome} previous={budget!.previousTotalIncome} higherIsBetter />
                   )}
@@ -165,14 +166,14 @@ export function MonthlyReportModal({
                       abaixo, e do resto do app). "Sobrou" não precisa de
                       marca nenhuma — alerta é só pra problema. */}
                   <span className={styles.statValue}>
-                    {!withinBudget && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
-                    R$ {currency(Math.abs(diffFromPlanned))}
+                    <Money>R$ {currency(Math.abs(diffFromPlanned))}</Money>
+                    {!withinBudget && <OverBudgetIcon />}
                   </span>
                 </div>
               </div>
               <div className={styles.splitRow}>
-                <span>Essencial: R$ {currency(essentialSpent)}</span>
-                <span>Não essencial: R$ {currency(nonEssentialSpent)}</span>
+                <span>Essencial: <Money>R$ {currency(essentialSpent)}</Money></span>
+                <span>Não essencial: <Money>R$ {currency(nonEssentialSpent)}</Money></span>
               </div>
 
               {pieData.length > 0 ? (
@@ -182,13 +183,13 @@ export function MonthlyReportModal({
                   </div>
                   {topCategory && (
                     <p className={styles.highlight}>
-                      Categoria que mais gastou: <strong>{topCategory.label}</strong> (R$ {currency(topCategory.value)})
+                      Categoria que mais gastou: <strong>{topCategory.label}</strong> (<Money>R$ {currency(topCategory.value)}</Money>)
                     </p>
                   )}
                   {fastestGrowingCategory && (
                     <p className={styles.highlight}>
-                      Categoria que mais cresceu: <strong>{fastestGrowingCategory.label}</strong> (+R${' '}
-                      {currency(fastestGrowingCategory.delta)} vs. mês anterior)
+                      Categoria que mais cresceu: <strong>{fastestGrowingCategory.label}</strong> (
+                      <Money>+R$ {currency(fastestGrowingCategory.delta)}</Money> vs. mês anterior)
                     </p>
                   )}
                 </>
@@ -201,8 +202,14 @@ export function MonthlyReportModal({
                   usada em toda a plataforma pra essa situação. */}
               {overBudgetCategories.length > 0 && (
                 <p className={styles.highlight}>
-                  <AlertTriangle size={12} strokeWidth={2} className={styles.overIcon} />
-                  Estourou o planejado em: {overBudgetCategories.map((c) => `${c.name} (+R$ ${currency(c.spent - c.planned)})`).join(', ')}
+                  Estourou o planejado em:{' '}
+                  {overBudgetCategories.map((c, i) => (
+                    <span key={c.name}>
+                      {i > 0 && ', '}
+                      {c.name} (<Money>+R$ {currency(c.spent - c.planned)}</Money>)
+                    </span>
+                  ))}
+                  <OverBudgetIcon />
                 </p>
               )}
 
@@ -210,8 +217,8 @@ export function MonthlyReportModal({
                 <p className={styles.highlight}>
                   Maior compra: <strong>{budget!.biggestPurchase.description}</strong>
                   <InstallmentBadge number={budget!.biggestPurchase.installmentNumber} total={budget!.biggestPurchase.totalInstallments} />
-                  {' — R$ '}
-                  {currency(budget!.biggestPurchase.amount)}
+                  {' — '}
+                  <Money>R$ {currency(budget!.biggestPurchase.amount)}</Money>
                   {budget!.biggestPurchase.category ? ` · ${budget!.biggestPurchase.category}` : ''} · {formatDate(budget!.biggestPurchase.date)}
                 </p>
               )}
@@ -225,7 +232,7 @@ export function MonthlyReportModal({
                   <div className={styles.statGrid}>
                     <div className={styles.stat}>
                       <span className={styles.statLabel}>Patrimônio total</span>
-                      <span className={styles.statValue}>R$ {currency(wealth!.total ?? 0)}</span>
+                      <span className={styles.statValue}><Money>R$ {currency(wealth!.total ?? 0)}</Money></span>
                       {wealth!.previousTotal != null && wealth!.previousTotal > 0 && (
                         <MonthDelta current={wealth!.total ?? 0} previous={wealth!.previousTotal} higherIsBetter />
                       )}
@@ -233,7 +240,7 @@ export function MonthlyReportModal({
                     <div className={styles.stat}>
                       <span className={styles.statLabel}>Investido no mês</span>
                       <span className={styles.statValue}>
-                        {wealth!.investedThisMonth != null ? `R$ ${currency(wealth!.investedThisMonth)}` : '—'}
+                        {wealth!.investedThisMonth != null ? <Money>{`R$ ${currency(wealth!.investedThisMonth)}`}</Money> : '—'}
                       </span>
                       {wealth!.investedThisMonth != null && wealth!.investedLastMonth != null && wealth!.investedLastMonth > 0 && (
                         <MonthDelta current={wealth!.investedThisMonth} previous={wealth!.investedLastMonth} higherIsBetter />
@@ -270,20 +277,20 @@ export function MonthlyReportModal({
                   <div className={styles.statGrid}>
                     <div className={styles.stat}>
                       <span className={styles.statLabel}>Recebido no mês</span>
-                      <span className={styles.statValue}>R$ {currency(projects!.receivedThisMonth)}</span>
+                      <span className={styles.statValue}><Money>R$ {currency(projects!.receivedThisMonth)}</Money></span>
                       {projects!.receivedLastMonth > 0 && (
                         <MonthDelta current={projects!.receivedThisMonth} previous={projects!.receivedLastMonth} higherIsBetter />
                       )}
                     </div>
                     <div className={styles.stat}>
                       <span className={styles.statLabel}>A receber</span>
-                      <span className={styles.statValue}>R$ {currency(projects!.outstanding)}</span>
+                      <span className={styles.statValue}><Money>R$ {currency(projects!.outstanding)}</Money></span>
                     </div>
                   </div>
                   {projects!.bestProjectThisMonth && (
                     <p className={styles.highlight}>
-                      Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (R${' '}
-                      {currency(projects!.bestProjectThisMonth.received)})
+                      Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (
+                      <Money>R$ {currency(projects!.bestProjectThisMonth.received)}</Money>)
                     </p>
                   )}
                 </>

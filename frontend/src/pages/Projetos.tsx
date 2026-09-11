@@ -30,6 +30,7 @@ import { MonthDelta } from '../components/MonthDelta'
 import { Input } from '../components/Input'
 import { Select } from '../components/Select'
 import { IconButton } from '../components/IconButton'
+import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Projetos.module.css'
@@ -90,26 +91,26 @@ export function Projetos() {
             <div className={cards.statGrid}>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Receita bruta</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.grossRevenue)}</span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.grossRevenue)}</Money></span>
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Imposto previsto</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.taxEstimatedTotal)}</span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.taxEstimatedTotal)}</Money></span>
                 {summary.hasEstimatedTax && <span className={styles.pendingNote}>inclui estimativa de 6% até o DAS real chegar</span>}
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Imposto pago</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.taxPaidTotal)}</span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.taxPaidTotal)}</Money></span>
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Receita líquida</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.netRevenue)}</span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.netRevenue)}</Money></span>
               </div>
             </div>
             <div className={cards.statGrid} style={{ marginTop: 'var(--space-3)' }}>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Média mensal (desde jan)</span>
-                <span className={cards.statTileValue}>R$ {currency(summary.avgMonthlyThisYear)}</span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.avgMonthlyThisYear)}</Money></span>
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Dias trabalhados</span>
@@ -140,17 +141,17 @@ export function Projetos() {
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Recebido este mês</span>
               <span className={styles.statValueWithDelta}>
-                <span className={cards.statValue}>R$ {currency(summary.receivedThisMonth)}</span>
+                <span className={cards.statValue}><Money>R$ {currency(summary.receivedThisMonth)}</Money></span>
                 <MonthDelta current={summary.receivedThisMonth} previous={summary.receivedLastMonth} />
               </span>
             </div>
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Recebido no ano</span>
-              <span className={cards.statValue}>R$ {currency(summary.receivedThisYear)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(summary.receivedThisYear)}</Money></span>
             </div>
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Total a receber</span>
-              <span className={cards.statValue}>R$ {currency(summary.outstanding)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(summary.outstanding)}</Money></span>
             </div>
           </div>
 
@@ -158,15 +159,15 @@ export function Projetos() {
             <CardHeader icon={TrendingDown} title="Total de saídas" />
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Imposto pago (ano)</span>
-              <span className={cards.statValue}>R$ {currency(summary.taxPaidThisYear)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(summary.taxPaidThisYear)}</Money></span>
             </div>
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Fornecedores pago</span>
-              <span className={cards.statValue}>R$ {currency(summary.supplierPaid)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(summary.supplierPaid)}</Money></span>
             </div>
             <div className={styles.statRow}>
               <span className={cards.heroLabel}>Total a pagar (fornecedor)</span>
-              <span className={cards.statValue}>R$ {currency(summary.supplierOutstanding)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(summary.supplierOutstanding)}</Money></span>
             </div>
           </div>
 
@@ -256,8 +257,8 @@ export function Projetos() {
                     <td>
                       {String(t.competenceMonth).padStart(2, '0')}/{t.competenceYear}
                     </td>
-                    <td>R$ {currency(t.totalRevenue)}</td>
-                    <td>R$ {currency(t.amountPaid)}</td>
+                    <td><Money>R$ {currency(t.totalRevenue)}</Money></td>
+                    <td><Money>R$ {currency(t.amountPaid)}</Money></td>
                     <td>{t.totalRevenue > 0 ? ((t.amountPaid / t.totalRevenue) * 100).toFixed(2) : '0,00'}%</td>
                     <td>{formatDate(t.paymentDate)}</td>
                   </tr>
@@ -275,11 +276,11 @@ export function Projetos() {
                   </div>
                   <div className={styles.taxCardRow}>
                     <span className={styles.taxCardLabel}>Faturamento do mês</span>
-                    <span>R$ {currency(t.totalRevenue)}</span>
+                    <span><Money>R$ {currency(t.totalRevenue)}</Money></span>
                   </div>
                   <div className={styles.taxCardRow}>
                     <span className={styles.taxCardLabel}>Valor pago (real)</span>
-                    <span>R$ {currency(t.amountPaid)}</span>
+                    <span><Money>R$ {currency(t.amountPaid)}</Money></span>
                   </div>
                   <div className={styles.taxCardRow}>
                     <span className={styles.taxCardLabel}>Alíquota efetiva</span>
@@ -508,14 +509,16 @@ function ProjectCard({
               {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
             </span>
             <div className={styles.projectHeaderValues}>
-              <span className={styles.projectValue}>R$ {currency(project.contractValue)}</span>
+              <span className={styles.projectValue}><Money>R$ {currency(project.contractValue)}</Money></span>
               <span className={styles.projectSub}>
-                recebido R$ {currency(project.received)} · falta R$ {currency(project.remaining)}
+                recebido <Money>R$ {currency(project.received)}</Money> · falta <Money>R$ {currency(project.remaining)}</Money>
               </span>
               {project.currency && project.contractValueForeign != null && (
                 <span className={styles.projectSub}>
-                  progresso do contrato: {project.currency} {currency(project.receivedForeign ?? 0)} de {project.currency}{' '}
-                  {currency(project.contractValueForeign)}
+                  progresso do contrato:{' '}
+                  <Money>
+                    {project.currency} {currency(project.receivedForeign ?? 0)} de {project.currency} {currency(project.contractValueForeign)}
+                  </Money>
                 </span>
               )}
             </div>
@@ -533,21 +536,21 @@ function ProjectCard({
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Imposto</span>
               <span className={cards.statValue}>
-                R$ {currency(project.taxAmount)}
+                <Money>R$ {currency(project.taxAmount)}</Money>
                 {project.taxEstimated && <span className={styles.pendingNote}> (estimativa 6%)</span>}
               </span>
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Custo fornecedor</span>
-              <span className={cards.statValue}>R$ {currency(project.supplierCost)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(project.supplierCost)}</Money></span>
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Líquido</span>
-              <span className={cards.statValue}>R$ {currency(project.net)}</span>
+              <span className={cards.statValue}><Money>R$ {currency(project.net)}</Money></span>
             </div>
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Rendimento/dia</span>
-              <span className={cards.statValue}>{project.yieldPerDay !== null ? `R$ ${currency(project.yieldPerDay)}` : '—'}</span>
+              <span className={cards.statValue}>{project.yieldPerDay !== null ? <Money>{`R$ ${currency(project.yieldPerDay)}`}</Money> : '—'}</span>
             </div>
           </div>
 
@@ -598,13 +601,17 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
         <div key={r.id} className={styles.subRow}>
           <span>Parcela {r.installmentNumber}</span>
           <span>
-            R$ {currency(r.amount)}
+            <Money>R$ {currency(r.amount)}</Money>
             {r.grossAmountForeign != null && (
               <span className={styles.subRowMeta}>
                 {' '}
-                ({detail.currency} {currency(r.grossAmountForeign)} bruto
-                {r.feeAmount != null && ` − ${currency(r.feeAmount)} tarifa`}
-                {r.iofAmount != null && ` − ${currency(r.iofAmount)} IOF`})
+                (
+                <Money>
+                  {detail.currency} {currency(r.grossAmountForeign)} bruto
+                  {r.feeAmount != null && ` − ${currency(r.feeAmount)} tarifa`}
+                  {r.iofAmount != null && ` − ${currency(r.iofAmount)} IOF`}
+                </Money>
+                )
               </span>
             )}
           </span>
@@ -840,9 +847,9 @@ function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCos
     <div className={styles.supplierBlock}>
       <div className={styles.subRow}>
         <span>{cost.supplier.name}</span>
-        <span>R$ {currency(cost.agreedAmount)}</span>
+        <span><Money>R$ {currency(cost.agreedAmount)}</Money></span>
         <span className={styles.subRowMeta}>
-          pago R$ {currency(paid)} · falta R$ {currency(Math.max(0, cost.agreedAmount - paid))}
+          pago <Money>R$ {currency(paid)}</Money> · falta <Money>R$ {currency(Math.max(0, cost.agreedAmount - paid))}</Money>
         </span>
         <button className={styles.smallBtn} onClick={() => setShowAddPayment(true)}>
           <Plus size={12} strokeWidth={2} /> Pagamento
@@ -853,7 +860,7 @@ function SupplierCostRow({ cost, onChanged }: { cost: ProjectDetail['supplierCos
           {cost.payments.map((p) => (
             <div key={p.id} className={styles.subRow}>
               <span>Parcela {p.installmentNumber}</span>
-              <span>R$ {currency(p.amount)}</span>
+              <span><Money>R$ {currency(p.amount)}</Money></span>
               <span className={styles.subRowMeta}>{formatDate(p.paymentDate)}</span>
             </div>
           ))}
@@ -996,7 +1003,7 @@ function NewTaxPaymentForm({ onCancel, onSaved }: { onCancel: () => void; onSave
         <div className={styles.previewNote}>
           {preview && (
             <>
-              Faturou R$ {currency(preview.totalRevenue)} nesse mês.
+              Faturou <Money>R$ {currency(preview.totalRevenue)}</Money> nesse mês.
               {preview.alreadyExists && ' Já existe um DAS pra essa competência — salvar vai substituir.'}
             </>
           )}

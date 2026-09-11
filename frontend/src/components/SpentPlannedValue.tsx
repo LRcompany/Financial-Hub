@@ -1,4 +1,5 @@
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import styles from './SpentPlannedValue.module.css'
 
 /** Par "R$ gasto / R$ planejado" — ÚNICO lugar que define essa hierarquia
@@ -10,10 +11,12 @@ import styles from './SpentPlannedValue.module.css'
 export function SpentPlannedValue({ spent, planned, suffix }: { spent: number; planned: number; suffix?: string }) {
   return (
     <>
-      <span className={styles.spent}>R$ {currency(spent)}</span>
+      <span className={styles.spent}>
+        <Money>R$ {currency(spent)}</Money>
+      </span>
       {' / '}
       <span className={styles.planned}>
-        R$ {currency(planned)}
+        <Money>R$ {currency(planned)}</Money>
         {suffix ? ` ${suffix}` : ''}
       </span>
     </>

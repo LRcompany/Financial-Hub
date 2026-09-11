@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api, type UncategorizedTransactionGroup, type LeafCategoryOption } from '../lib/api'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import { Select } from './Select'
 import { IconButton } from './IconButton'
 import { InstallmentBadge } from './Badge'
@@ -49,7 +50,7 @@ function GroupRow({
       </td>
       <td className={styles.numCell}>{group.count}x</td>
       <td className={styles.numCell}>{formatDate(group.lastDate)}</td>
-      <td className={styles.numCell}>R$ {currency(group.totalAmount)}</td>
+      <td className={styles.numCell}><Money>R$ {currency(group.totalAmount)}</Money></td>
       <td>
         <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={styles.categorySelect} disabled={saving}>
           <option value="">— escolher —</option>
@@ -113,7 +114,7 @@ function GroupCard({
       </div>
       <div className={styles.cardRow}>
         <span className={styles.cardLabel}>Total</span>
-        <span>R$ {currency(group.totalAmount)}</span>
+        <span><Money>R$ {currency(group.totalAmount)}</Money></span>
       </div>
       <div className={styles.cardActions}>
         <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>

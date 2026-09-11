@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, AlertTriangle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp, StickyNote } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp, StickyNote } from 'lucide-react'
 import {
   api,
   type BudgetSummary,
@@ -19,8 +19,9 @@ import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
-import { InstallmentBadge, ProjectedTag } from '../components/Badge'
+import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
+import { Money } from '../components/Money'
 import { Select } from '../components/Select'
 import { Input } from '../components/Input'
 import { currency } from '../lib/format'
@@ -307,7 +308,7 @@ export function Orcamento() {
         <div className={`${cards.card} ${cards.fullWidth}`}>
           <CardHeader icon={TrendingUp} title="Entradas do mês" />
           <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
-            R$ {currency(budget.totalIncome)}
+            <Money>R$ {currency(budget.totalIncome)}</Money>
           </div>
           <div className={cards.chartMeta}>
             {/* Hoje toda entrada vem de Projetos (não existe outro fluxo de
@@ -318,11 +319,15 @@ export function Orcamento() {
              * lugar além de Projetos. Span sempre presente (mesmo vazio) só
              * pra manter o layout de 2 colunas (space-between) com o delta. */}
             <span>
-              {budget.incomeFromProjects > 0 && budget.incomeFromProjects < budget.totalIncome
-                ? `dos quais R$ ${currency(budget.incomeFromProjects)} vieram de Projetos`
-                : budget.incomeFromProjects === 0 && budget.totalIncome > 0
-                  ? 'nenhum recebimento de Projetos esse mês'
-                  : ''}
+              {budget.incomeFromProjects > 0 && budget.incomeFromProjects < budget.totalIncome ? (
+                <>
+                  dos quais <Money>R$ {currency(budget.incomeFromProjects)}</Money> vieram de Projetos
+                </>
+              ) : budget.incomeFromProjects === 0 && budget.totalIncome > 0 ? (
+                'nenhum recebimento de Projetos esse mês'
+              ) : (
+                ''
+              )}
             </span>
             <MonthDelta current={budget.totalIncome} previous={budget.previousTotalIncome} />
           </div>
@@ -369,8 +374,8 @@ export function Orcamento() {
               {budget.categories.length} categorias com meta
               {budget.totalProjected > 0 && (
                 <>
-                  {' · dos quais R$ '}
-                  {currency(budget.totalProjected)} <ProjectedTag />
+                  {' · dos quais '}
+                  <Money>R$ {currency(budget.totalProjected)}</Money> <ProjectedTag />
                 </>
               )}
             </span>
@@ -403,15 +408,15 @@ export function Orcamento() {
               <div className={cards.heroValue}>
                 {/* Estourou a meta diária — só o ícone acusa, o número
                     continua preto (pedido do Luiz, 11/09). */}
-                {budget.dailyGoal != null && displaySpend > budget.dailyGoal && (
-                  <AlertTriangle size={16} strokeWidth={2} className={cards.progressOverIcon} />
-                )}
-                R$ {currency(displaySpend)}
+                <Money>R$ {currency(displaySpend)}</Money>
+                {budget.dailyGoal != null && displaySpend > budget.dailyGoal && <OverBudgetIcon />}
               </div>
             </div>
             <div className={cards.dailyGoalMeta}>
               <span className={cards.heroLabel}>Meta diária</span>
-              <span style={{ fontWeight: 600 }}>{budget.dailyGoal != null ? `R$ ${currency(budget.dailyGoal)}` : 'não definida'}</span>
+              <span style={{ fontWeight: 600 }}>
+                {budget.dailyGoal != null ? <Money>{`R$ ${currency(budget.dailyGoal)}`}</Money> : 'não definida'}
+              </span>
             </div>
           </div>
           {budget.dailyGoal != null && (
@@ -424,11 +429,17 @@ export function Orcamento() {
           )}
           <div className={cards.chartMeta}>
             <span>
-              {diff === null
-                ? 'defina uma meta diária pra acompanhar'
-                : diff >= 0
-                  ? `R$ ${currency(diff)} abaixo da meta${isShowingToday ? ' hoje' : ''}`
-                  : `R$ ${currency(-diff)} acima da meta${isShowingToday ? ' hoje' : ''}`}
+              {diff === null ? (
+                'defina uma meta diária pra acompanhar'
+              ) : diff >= 0 ? (
+                <>
+                  <Money>R$ {currency(diff)}</Money> abaixo da meta{isShowingToday ? ' hoje' : ''}
+                </>
+              ) : (
+                <>
+                  <Money>R$ {currency(-diff)}</Money> acima da meta{isShowingToday ? ' hoje' : ''}
+                </>
+              )}
             </span>
             <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
           </div>
@@ -489,7 +500,7 @@ export function Orcamento() {
                       </div>
                     </div>
                     <div className={cards.heroValue} style={{ fontSize: '1.2rem' }}>
-                      R$ {currency(c.usedAmount)}
+                      <Money>R$ {currency(c.usedAmount)}</Money>
                     </div>
                     {c.estimated && (
                       <p className={styles.estimatedNote}>
@@ -501,8 +512,8 @@ export function Orcamento() {
                     {hasLimit && (
                       <>
                         <div className={cards.chartMeta}>
-                          <span>de R$ {currency(c.creditLimit!)}</span>
-                          <span>R$ {currency(c.availableLimit!)} livre</span>
+                          <span>de <Money>R$ {currency(c.creditLimit!)}</Money></span>
+                          <span><Money>R$ {currency(c.availableLimit!)}</Money> livre</span>
                         </div>
                         <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
                           <div
@@ -515,7 +526,7 @@ export function Orcamento() {
                     {(c.dueDate || c.minimumPayment != null) && (
                       <div className={styles.creditCardFooter}>
                         {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
-                        {c.minimumPayment != null && <span>mínimo R$ {currency(c.minimumPayment)}</span>}
+                        {c.minimumPayment != null && <span>mínimo <Money>R$ {currency(c.minimumPayment)}</Money></span>}
                       </div>
                     )}
                   </div>
@@ -539,7 +550,7 @@ export function Orcamento() {
               }
             />
             <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-              R$ {currency(displayedInstallments.total)}
+              <Money>R$ {currency(displayedInstallments.total)}</Money>
             </div>
             <div className={cards.chartMeta}>
               <span>
@@ -571,7 +582,7 @@ export function Orcamento() {
                         onClick={() => selectInstallmentMonth(m.month, m.year)}
                       >
                         <span>{formatMonthLabel(m.month, m.year)}</span>
-                        <strong>R$ {currency(m.amount)}</strong>
+                        <strong><Money>R$ {currency(m.amount)}</Money></strong>
                       </button>
                     )
                   }}
@@ -585,7 +596,7 @@ export function Orcamento() {
               {displayedInstallments.byCard.map((c) => (
                 <div key={c.card} className={styles.upcomingMonthChip}>
                   <span>{c.card}</span>
-                  <strong>R$ {currency(c.amount)}</strong>
+                  <strong><Money>R$ {currency(c.amount)}</Money></strong>
                 </div>
               ))}
             </div>
@@ -618,7 +629,7 @@ export function Orcamento() {
                       <td>{i.installmentNumber && i.totalInstallments ? <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} /> : '—'}</td>
                       <td>{i.cardLabel ?? '—'}</td>
                       <td>{i.category ?? '—'}</td>
-                      <td>R$ {currency(i.amount)}</td>
+                      <td><Money>R$ {currency(i.amount)}</Money></td>
                     </tr>
                   ))}
                 </tbody>
@@ -636,7 +647,7 @@ export function Orcamento() {
                 <div key={i.id} className={styles.installmentCard}>
                   <div className={styles.installmentCardTop}>
                     <span className={styles.installmentCardTitle}>{i.note ?? i.description}</span>
-                    <span className={styles.installmentCardValue}>R$ {currency(i.amount)}</span>
+                    <span className={styles.installmentCardValue}><Money>R$ {currency(i.amount)}</Money></span>
                   </div>
                   {i.note && <div className={styles.installmentRawName}>{i.description}</div>}
                   <div className={styles.installmentCardRow}>
@@ -683,11 +694,11 @@ export function Orcamento() {
                   <div className={styles.kindSummary}>
                     <div>
                       <span className={styles.kindSummaryLabel}>Previsto</span>
-                      <span className={styles.kindSummaryValue}>R$ {currency(totalPlanned)}</span>
+                      <span className={styles.kindSummaryValue}><Money>R$ {currency(totalPlanned)}</Money></span>
                     </div>
                     <div>
                       <span className={styles.kindSummaryLabel}>Gasto</span>
-                      <span className={styles.kindSummaryValue}>R$ {currency(totalSpent)}</span>
+                      <span className={styles.kindSummaryValue}><Money>R$ {currency(totalSpent)}</Money></span>
                     </div>
                   </div>
                 )}
@@ -769,7 +780,7 @@ export function Orcamento() {
                   ))}
                 </Select>
               )}
-              <div className={`${cards.listValue} ${styles.transactionSecondRow}`}>R$ {currency(t.amount)}</div>
+              <div className={`${cards.listValue} ${styles.transactionSecondRow}`}><Money>R$ {currency(t.amount)}</Money></div>
             </div>
           ))}
         </div>
@@ -850,9 +861,9 @@ function ParentAccordion({
       <button className={styles.accordionHeader} onClick={() => setOpen((v) => !v)}>
         <span className={styles.accordionToggle}>{open ? <Minus size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}</span>
         <span className={styles.accordionName}>
-          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {parentName}
           {spentProjected > 0 && <ProjectedTag />}
+          {isOver && <OverBudgetIcon />}
         </span>
         <span className={styles.categoryRowValues}>
           <SpentPlannedValue spent={spent} planned={planned} />
@@ -888,12 +899,12 @@ function CategoryRow({
     >
       <div className={styles.categoryRowTop}>
         <span className={styles.categoryRowName}>
-          {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {item.name}
           {/* Parcela futura já comprometida, contando no gasto sem a Pluggy
               ter confirmado ainda (09/09) — marca visualmente que uma fatia
               desse valor ainda não é dado real. */}
           {item.spentProjected > 0 && <ProjectedTag />}
+          {isOver && <OverBudgetIcon />}
         </span>
         <span className={styles.categoryRowValues}>
           <SpentPlannedValue spent={item.spent} planned={item.planned} />

@@ -52,13 +52,6 @@
   margin: 0;
 }
 
-/* Estourou o planejado — só o ícone acusa (pedido do Luiz, 11/09: "deixa
-   apenas o alerta em vermelho"), nunca o texto/número. */
-.overIcon {
-  color: var(--danger);
-  flex-shrink: 0;
-}
-
 .subtitle {
   font-size: 13px;
   margin: 2px 0 0;

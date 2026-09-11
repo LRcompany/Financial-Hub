@@ -272,11 +272,6 @@
   gap: 6px;
 }
 
-.overIcon {
-  color: var(--danger);
-  flex-shrink: 0;
-}
-
 .categoryRowValues {
   font-variant-numeric: tabular-nums;
   font-weight: 400;

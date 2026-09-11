@@ -1,5 +1,6 @@
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import styles from './MonthDelta.module.css'
 
 /** Variação de saldo — NÃO é rentabilidade (pedido do Luiz, 08/09: "em conta
@@ -18,7 +19,9 @@ export function BalanceChangeBadge({ current, previous }: { current: number; pre
   return (
     <span className={styles.delta}>
       {isUp ? <ArrowUp size={12} className={styles.good} /> : <ArrowDown size={12} className={styles.bad} />}
-      {isUp ? '+' : '-'}R$ {currency(Math.abs(delta))}
+      <Money>
+        {isUp ? '+' : '-'}R$ {currency(Math.abs(delta))}
+      </Money>
     </span>
   )
 }

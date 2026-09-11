@@ -66,6 +66,24 @@
   animation: spin 0.8s linear infinite;
 }
 
+/* Ponto vermelho do sino (pedido do Luiz, 11/09: "o sino precisa ficar com
+   um pontinho vermelho caso haja algo que eu preciso fazer") — `position:
+   relative` no botão só existe pra ancorar esse ponto absoluto. */
+.bellButton {
+  position: relative;
+}
+
+.bellDot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--danger);
+  border: 1.5px solid var(--surface);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -146,6 +164,16 @@
     padding: var(--space-5) var(--space-4);
     flex-direction: column;
     gap: var(--space-1);
+    /* Fixa ao rolar (pedido do Luiz, 11/09: "hoje ele move junto com a
+       página") — sem isso, `.shell` (flex row) estica a sidebar pra ter a
+       mesma altura de `.main`, que cresce com o conteúdo da página, então a
+       sidebar inteira rolava junto. `align-self: flex-start` tira do stretch
+       padrão do flexbox, `height: 100svh` trava na altura da viewport. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100svh;
+    overflow-y: auto;
   }
 
   .sidebarBrand {

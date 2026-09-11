@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import styles from './DividendsByMonthChart.module.css'
 
 interface MonthDividends {
@@ -36,7 +37,7 @@ export function DividendsByMonthChart({ data }: { data: MonthDividends[] }) {
           const total = d.acao + d.fii
           return (
             <div key={d.label} className={styles.col} title={`R$ ${currency(total)}`}>
-              <span className={styles.value}>{total > 0 ? `R$ ${currency(total)}` : ''}</span>
+              <span className={styles.value}>{total > 0 ? <Money>{`R$ ${currency(total)}`}</Money> : ''}</span>
               <div className={styles.bar}>
                 {d.fii > 0 && (
                   <div

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { api, type CategoryBreakdown, type CategoryBreakdownRow } from '../lib/api'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import { IconButton } from './IconButton'
-import { InstallmentBadge, ProjectedTag } from './Badge'
+import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
 import { SpentPlannedValue } from './SpentPlannedValue'
 import styles from './CategoryBreakdownModal.module.css'
 
@@ -54,14 +55,14 @@ export function CategoryBreakdownModal({
         <div className={styles.header}>
           <div>
             <h3 className={styles.title}>
-              {isOver && <AlertTriangle size={14} strokeWidth={2} className={styles.overIcon} />}
               {title}
+              {isOver && <OverBudgetIcon />}
             </h3>
             <p className={styles.subtitle}>
               {planned != null && planned > 0 ? (
                 <SpentPlannedValue spent={total} planned={planned} suffix="planejado" />
               ) : (
-                `R$ ${currency(total)}`
+                <Money>{`R$ ${currency(total)}`}</Money>
               )}
             </p>
           </div>
@@ -73,7 +74,7 @@ export function CategoryBreakdownModal({
         {/* Só o ícone acusa o estouro (pedido do Luiz, 11/09) — nada de
             banner/texto vermelho, o valor continua com a hierarquia padrão
             de SpentPlannedValue. */}
-        {isOver && <div className={styles.overBanner}>Ultrapassou o planejado em R$ {currency(total - planned!)}.</div>}
+        {isOver && <div className={styles.overBanner}>Ultrapassou o planejado em <Money>R$ {currency(total - planned!)}</Money>.</div>}
 
         {error && <div className={styles.empty}>Não consegui carregar o detalhamento.</div>}
         {!error && !data && <div className={styles.empty}>Carregando…</div>}
@@ -84,7 +85,7 @@ export function CategoryBreakdownModal({
               <div className={styles.block}>
                 <div className={styles.blockHead}>
                   <span>Gastos confirmados</span>
-                  <span className={styles.blockHeadValueReal}>R$ {currency(realTotal)}</span>
+                  <span className={styles.blockHeadValueReal}><Money>R$ {currency(realTotal)}</Money></span>
                 </div>
                 {data.transactions.map((r) => (
                   <Row key={r.id} row={r} />
@@ -98,7 +99,7 @@ export function CategoryBreakdownModal({
                   <span>
                     Parcelas projetadas <ProjectedTag />
                   </span>
-                  <span className={styles.blockHeadValueProjected}>R$ {currency(projectedTotal)}</span>
+                  <span className={styles.blockHeadValueProjected}><Money>R$ {currency(projectedTotal)}</Money></span>
                 </div>
                 {data.projected.map((r) => (
                   <Row key={r.id} row={r} projected />
@@ -133,7 +134,7 @@ function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolea
           {row.category ? ` · ${row.category}` : ''}
         </span>
       </div>
-      <span className={`${styles.rowValue} ${projected ? styles.rowValueProjected : ''}`}>R$ {currency(row.amount)}</span>
+      <span className={`${styles.rowValue} ${projected ? styles.rowValueProjected : ''}`}><Money>R$ {currency(row.amount)}</Money></span>
     </div>
   )
 }

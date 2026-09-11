@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   LineChart,
   PieChart,
@@ -27,6 +27,7 @@ import { ReturnBadge } from '../components/ReturnBadge'
 import { BalanceChangeBadge } from '../components/BalanceChangeBadge'
 import { Input } from '../components/Input'
 import { ContributionModal } from '../components/ContributionModal'
+import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
@@ -114,7 +115,7 @@ const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
  * tudo que falta). Usa o `HoverCard` genérico do projeto — mesmo padrão em
  * qualquer lista com detalhe extra pra mostrar no hover do nome do item. */
 function assetHoverContent(p: Position) {
-  const rows: { label: string; value: string }[] = []
+  const rows: { label: string; value: ReactNode }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
   if (p.fixedAnnualRate != null) {
     // Taxa fixa numérica (CDB via Pluggy) — periodicidade é só um detalhe a mais.
@@ -127,10 +128,24 @@ function assetHoverContent(p: Position) {
   if (p.dueDate) rows.push({ label: 'Vencimento', value: new Date(p.dueDate).toLocaleDateString('pt-BR') })
   if (p.isin) rows.push({ label: 'ISIN', value: p.isin })
   if (p.quantity != null && p.unitValue != null) {
-    rows.push({ label: 'Posição', value: `${p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a R$ ${currency(p.unitValue)}` })
+    rows.push({
+      label: 'Posição',
+      value: (
+        <>
+          {p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)} cotas/ações a <Money>R$ {currency(p.unitValue)}</Money>
+        </>
+      ),
+    })
   }
   if (p.currency === 'USD' && p.fxRateToBRL) {
-    rows.push({ label: 'Valor em USD', value: `US$ ${currency(p.marketValue / p.fxRateToBRL)} (câmbio R$ ${p.fxRateToBRL.toFixed(2)})` })
+    rows.push({
+      label: 'Valor em USD',
+      value: (
+        <>
+          <Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money> (câmbio <Money>R$ {p.fxRateToBRL.toFixed(2)}</Money>)
+        </>
+      ),
+    })
   }
   if (rows.length === 0) return null
   return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)
@@ -257,7 +272,7 @@ export function Patrimonio() {
             <div className={`${cards.card} ${cards.fullWidth}`}>
               <CardHeader icon={LineChart} title="Evolução do patrimônio" />
               <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
-                R$ {currency(total)}
+                <Money>R$ {currency(total)}</Money>
               </div>
               <div className={cards.chartMeta}>
                 <span>Patrimônio total</span>
@@ -296,7 +311,7 @@ export function Patrimonio() {
               {wealth.dividendsThisMonth != null ? (
                 <>
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-                    R$ {currency(wealth.dividendsThisMonth)}
+                    <Money>R$ {currency(wealth.dividendsThisMonth)}</Money>
                   </div>
                   <div className={cards.chartMeta}>
                     <span>Recebido este mês</span>
@@ -306,7 +321,7 @@ export function Patrimonio() {
                   </div>
                   {wealth.dividendsByMonth.length > 0 && <DividendsByMonthChart data={wealth.dividendsByMonth} />}
                   <div className={cards.chartMeta}>
-                    <span>R$ {currency(wealth.dividendsThisYear ?? 0)} recebido no ano</span>
+                    <span><Money>R$ {currency(wealth.dividendsThisYear ?? 0)}</Money> recebido no ano</span>
                   </div>
                 </>
               ) : (
@@ -368,9 +383,9 @@ export function Patrimonio() {
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
                   <CardHeader icon={Icon} title={title} />
                   <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-                    R$ {currency(group.total)}
+                    <Money>R$ {currency(group.total)}</Money>
                   </div>
-                  {usdTotal != null && <div className={styles.cellNote}>US$ {currency(usdTotal)}</div>}
+                  {usdTotal != null && <div className={styles.cellNote}><Money>US$ {currency(usdTotal)}</Money></div>}
                   <div className={cards.chartMeta}>
                     <span>
                       {group.positions.length} posiç{group.positions.length === 1 ? 'ão' : 'ões'}
@@ -479,9 +494,9 @@ export function Patrimonio() {
                             {group.type === 'Conta Corrente' ? (
                               <>
                                 <td>
-                                  R$ {currency(p.marketValue)}
+                                  <Money>R$ {currency(p.marketValue)}</Money>
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
                                   )}
                                 </td>
                                 <td>
@@ -493,25 +508,25 @@ export function Patrimonio() {
                                 {!group.isBroker && (
                                   <>
                                     <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
-                                    <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
+                                    <td>{p.unitValue != null ? <Money>{`R$ ${currency(p.unitValue)}`}</Money> : '—'}</td>
                                   </>
                                 )}
                                 <td>
-                                  R$ {currency(p.investedAmount)}
+                                  <Money>R$ {currency(p.investedAmount)}</Money>
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.cellNote}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / p.fxRateToBRL)}</Money></div>
                                   )}
                                   {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                    <div className={styles.cellNote}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / usdToBrl)}</Money></div>
                                   )}
                                 </td>
                                 <td>
-                                  R$ {currency(p.marketValue)}
+                                  <Money>R$ {currency(p.marketValue)}</Money>
                                   {p.currency === 'USD' && p.fxRateToBRL && (
-                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
                                   )}
                                   {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                    <div className={styles.cellNote}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                    <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / usdToBrl)}</Money></div>
                                   )}
                                 </td>
                                 <td>
@@ -519,7 +534,7 @@ export function Patrimonio() {
                                 </td>
                                 {showDividends && (
                                   <td>
-                                    {p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}
+                                    {p.dividends != null ? <Money>{`R$ ${currency(p.dividends)}`}</Money> : '—'}
                                     {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
                                       <div className={styles.cellNote}>
                                         <MonthDelta current={p.dividends} previous={p.previousDividends} />
@@ -558,9 +573,9 @@ export function Patrimonio() {
                             <div className={styles.positionCardRow}>
                               <span className={styles.positionCardLabel}>Saldo</span>
                               <span>
-                                R$ {currency(p.marketValue)}
+                                <Money>R$ {currency(p.marketValue)}</Money>
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
                                 )}
                               </span>
                             </div>
@@ -579,31 +594,31 @@ export function Patrimonio() {
                                 </div>
                                 <div className={styles.positionCardRow}>
                                   <span className={styles.positionCardLabel}>Preço unit.</span>
-                                  <span>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</span>
+                                  <span>{p.unitValue != null ? <Money>{`R$ ${currency(p.unitValue)}`}</Money> : '—'}</span>
                                 </div>
                               </>
                             )}
                             <div className={styles.positionCardRow}>
                               <span className={styles.positionCardLabel}>Investido</span>
                               <span>
-                                R$ {currency(p.investedAmount)}
+                                <Money>R$ {currency(p.investedAmount)}</Money>
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.cellNote}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / p.fxRateToBRL)}</Money></div>
                                 )}
                                 {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                  <div className={styles.cellNote}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.investedAmount / usdToBrl)}</Money></div>
                                 )}
                               </span>
                             </div>
                             <div className={styles.positionCardRow}>
                               <span className={styles.positionCardLabel}>Valor atual</span>
                               <span>
-                                R$ {currency(p.marketValue)}
+                                <Money>R$ {currency(p.marketValue)}</Money>
                                 {p.currency === 'USD' && p.fxRateToBRL && (
-                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / p.fxRateToBRL)}</Money></div>
                                 )}
                                 {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
-                                  <div className={styles.cellNote}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                  <div className={styles.cellNote}><Money>US$ {currency(p.marketValue / usdToBrl)}</Money></div>
                                 )}
                               </span>
                             </div>
@@ -615,7 +630,7 @@ export function Patrimonio() {
                               <div className={styles.positionCardRow}>
                                 <span className={styles.positionCardLabel}>Proventos (mês)</span>
                                 <span>
-                                  {p.dividends != null ? `R$ ${currency(p.dividends)}` : '—'}
+                                  {p.dividends != null ? <Money>{`R$ ${currency(p.dividends)}`}</Money> : '—'}
                                   {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
                                     <div className={styles.cellNote}>
                                       <MonthDelta current={p.dividends} previous={p.previousDividends} />
@@ -669,13 +684,13 @@ export function Patrimonio() {
               <>
                 <div className={cards.dailyGoalTop} style={{ marginTop: 'var(--space-5)' }}>
                   <div>
-                    <div className={cards.heroLabel}>Progresso até R$ {currency(wealth.wealthGoal.targetAmount)}</div>
+                    <div className={cards.heroLabel}>Progresso até <Money>R$ {currency(wealth.wealthGoal.targetAmount)}</Money></div>
                     <div className={cards.heroValue}>{goalProgress.toFixed(0)}%</div>
                   </div>
                   <div className={cards.dailyGoalMeta}>
                     <span className={cards.heroLabel}>Faltam</span>
                     <span style={{ fontWeight: 600 }}>
-                      R$ {currency(Math.max(0, wealth.wealthGoal.targetAmount - total))}
+                      <Money>R$ {currency(Math.max(0, wealth.wealthGoal.targetAmount - total))}</Money>
                     </span>
                   </div>
                 </div>
@@ -736,8 +751,8 @@ export function Patrimonio() {
                       {wealth.yearlyBreakdown.map((row) => (
                         <tr key={row.year}>
                           <td>{row.year}</td>
-                          <td>R$ {currency(row.startBalance)}</td>
-                          <td>R$ {currency(row.contribution)}</td>
+                          <td><Money>R$ {currency(row.startBalance)}</Money></td>
+                          <td><Money>R$ {currency(row.contribution)}</Money></td>
                           {/* Só o ano corrente tem "real" (histórico ainda
                            * não existe pros anos futuros da projeção). Base de
                            * comparação é "planejado de janeiro até agora"
@@ -750,7 +765,7 @@ export function Patrimonio() {
                           <td>
                             {row.realContribution != null ? (
                               <>
-                                R$ {currency(row.realContribution)}
+                                <Money>R$ {currency(row.realContribution)}</Money>
                                 {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
                                   <span className={styles.realContributionPct}>
                                     {' '}
@@ -762,7 +777,7 @@ export function Patrimonio() {
                               '—'
                             )}
                           </td>
-                          <td>R$ {currency(row.endBalance)}</td>
+                          <td><Money>R$ {currency(row.endBalance)}</Money></td>
                         </tr>
                       ))}
                     </tbody>
@@ -777,18 +792,18 @@ export function Patrimonio() {
                       <div className={styles.positionCardTop}>{row.year}</div>
                       <div className={styles.positionCardRow}>
                         <span className={styles.positionCardLabel}>Saldo inicial</span>
-                        <span>R$ {currency(row.startBalance)}</span>
+                        <span><Money>R$ {currency(row.startBalance)}</Money></span>
                       </div>
                       <div className={styles.positionCardRow}>
                         <span className={styles.positionCardLabel}>Aporte planejado</span>
-                        <span>R$ {currency(row.contribution)}</span>
+                        <span><Money>R$ {currency(row.contribution)}</Money></span>
                       </div>
                       <div className={styles.positionCardRow}>
                         <span className={styles.positionCardLabel}>Aportado real</span>
                         <span>
                           {row.realContribution != null ? (
                             <>
-                              R$ {currency(row.realContribution)}
+                              <Money>R$ {currency(row.realContribution)}</Money>
                               {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
                                 <span className={styles.realContributionPct}>
                                   {' '}
@@ -803,7 +818,7 @@ export function Patrimonio() {
                       </div>
                       <div className={styles.positionCardRow}>
                         <span className={styles.positionCardLabel}>Saldo final</span>
-                        <span>R$ {currency(row.endBalance)}</span>
+                        <span><Money>R$ {currency(row.endBalance)}</Money></span>
                       </div>
                     </div>
                   ))}

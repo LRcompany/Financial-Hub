@@ -9,6 +9,7 @@ import { CategoryManager } from '../components/CategoryManager'
 import { SecuritySettings } from '../components/SecuritySettings'
 import { MonthlyReport } from '../components/MonthlyReport'
 import { currency } from '../lib/format'
+import { Money } from '../components/Money'
 import cards from '../styles/cards.module.css'
 import styles from './Settings.module.css'
 
@@ -149,7 +150,7 @@ export function Settings() {
           <div className={styles.currentGoal}>
             <span className={cards.heroLabel}>Vigente desde {currentGoal ? formatDate(currentGoal.effectiveFrom) : '—'}</span>
             <span className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-              {currentGoal ? `R$ ${currency(currentGoal.amount)}` : 'não definida'}
+              {currentGoal ? <Money>{`R$ ${currency(currentGoal.amount)}`}</Money> : 'não definida'}
             </span>
           </div>
 
@@ -172,7 +173,7 @@ export function Settings() {
               <div className={styles.historyList}>
                 {dailyGoals.map((g) => (
                   <div key={g.id} className={styles.historyRow}>
-                    <span>R$ {currency(g.amount)}</span>
+                    <span><Money>R$ {currency(g.amount)}</Money></span>
                     <span className={cards.heroLabel}>desde {formatDate(g.effectiveFrom)}</span>
                   </div>
                 ))}

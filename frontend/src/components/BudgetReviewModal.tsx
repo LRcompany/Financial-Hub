@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api, type BudgetReviewCategory } from '../lib/api'
 import { currency } from '../lib/format'
+import { Money } from './Money'
 import { Input } from './Input'
 import { IconButton } from './IconButton'
 import styles from './BudgetReviewModal.module.css'
@@ -89,7 +90,7 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                       <td>
                         <span className={styles.kindTag}>{KIND_LABEL[c.kind]}</span>
                       </td>
-                      <td className={styles.previousCell}>R$ {currency(c.previousSpent)}</td>
+                      <td className={styles.previousCell}><Money>R$ {currency(c.previousSpent)}</Money></td>
                       <td>
                         <Input
                           type="number"
@@ -121,7 +122,7 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                       </div>
                       <div className={styles.cardRow}>
                         <span className={styles.cardLabel}>Mês passado</span>
-                        <span>R$ {currency(c.previousSpent)}</span>
+                        <span><Money>R$ {currency(c.previousSpent)}</Money></span>
                       </div>
                       <div className={styles.cardRow}>
                         <span className={styles.cardLabel}>Meta deste mês</span>
