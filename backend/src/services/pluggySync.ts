@@ -105,16 +105,25 @@ async function fetchDividendsByMonth(investmentId: string): Promise<Map<string, 
 }
 
 /** Busca o extrato completo de uma posição e:
- * 1) PREENCHE RETROATIVAMENTE o `dividends` de todo `PositionSnapshot` já
- *    existente dessa posição (`updateMany` — só toca snapshot que já existe,
- *    nunca cria um novo) — sem isso, o gráfico "proventos por mês" só teria
- *    barra a partir de hoje, quando essa feature nasceu (11/09), mesmo a
- *    Pluggy já tendo o histórico completo desde sempre.
- * 2) Devolve o valor do mês/ano pedido (o que está sendo sincronizado agora),
- *    pro chamador incluir no upsert principal (que pode ser um `create`, se
- *    a posição for nova — updateMany não cobre esse caso).
- * `undefined` em erro (Prisma trata como "não mexe nesse campo" no upsert),
- * nunca `null` fake por cima de um provento já coletado num sync anterior. */
+ * 1) Grava TODO mês do extrato em `DividendPayment` (upsert incondicional) —
+ *    fonte de verdade pro gráfico "por mês do ano" em Patrimônio. Não depende
+ *    de já existir `PositionSnapshot` pra aquele mês (achado real, 11/09:
+ *    BTG só passou a sincronizar Ação/FII por ticker individual via Pluggy a
+ *    partir de agosto/2026 — de jan a jul a carteira inteira vivia agregada
+ *    num `PositionSnapshot` manual só, sem granularidade por ativo — mas o
+ *    extrato de transações da Pluggy já tinha histórico desde muito antes,
+ *    ex: HTMX11 pagando desde set/2025. Com `updateMany` sozinho, esses
+ *    meses ficariam pra sempre sem provento nenhum, mesmo o dinheiro tendo
+ *    entrado de verdade).
+ * 2) Também faz `updateMany` no `PositionSnapshot` de meses ANTERIORES que
+ *    JÁ existirem (alimenta a coluna "Proventos (mês)" por posição, que só
+ *    faz sentido pra mês com snapshot de verdade).
+ * 3) Devolve o valor do mês/ano pedido (o que está sendo sincronizado agora),
+ *    pro chamador incluir no upsert principal do `PositionSnapshot` (pode
+ *    ser um `create`, se a posição for nova).
+ * `undefined` em erro (Prisma trata como "não mexe nesse campo" no upsert do
+ * PositionSnapshot), nunca `null` fake por cima de um provento já coletado
+ * num sync anterior. */
 async function fetchAndSyncDividends(
   brokerId: string,
   securityId: string,
@@ -127,8 +136,16 @@ async function fetchAndSyncDividends(
   await Promise.all(
     [...byMonth.entries()].map(([key, total]) => {
       const [y, m] = key.split("-").map(Number);
-      if (m === month && y === year) return Promise.resolve(); // esse mês entra pelo upsert principal, não aqui
-      return prisma.positionSnapshot.updateMany({ where: { brokerId, securityId, month: m, year: y }, data: { dividends: total } });
+      const upsertPayment = prisma.dividendPayment.upsert({
+        where: { brokerId_securityId_month_year: { brokerId, securityId, month: m, year: y } },
+        update: { amount: total },
+        create: { brokerId, securityId, month: m, year: y, amount: total },
+      });
+      if (m === month && y === year) return upsertPayment; // mês corrente: o PositionSnapshot dele entra pelo upsert principal, não aqui
+      return Promise.all([
+        upsertPayment,
+        prisma.positionSnapshot.updateMany({ where: { brokerId, securityId, month: m, year: y }, data: { dividends: total } }),
+      ]);
     })
   );
   return byMonth.get(`${year}-${month}`) ?? 0;

@@ -132,51 +132,49 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
   const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
 
-  // ---- proventos: soma do campo dividends do período (11/09: dado real via
-  // GET /investments/{id}/transactions, não mais placeholder — só Ação/FII
-  // têm; null = "não se aplica a esse ativo" ou "ainda não sincronizado",
-  // nunca 0 fake). Diferente de `marketValue`/`investedAmount`, dividendo é
-  // um FLUXO do mês (quanto ENTROU naquele mês), não um estado — por isso
-  // soma o snapshot EXATO daquele mês/ano, nunca `activeSnapshotsAsOf` (que
-  // arrasta pra frente o último valor conhecido quando uma corretora ainda
-  // não ressincronizou no mês — certo pra "quanto vale hoje", errado aqui,
-  // duplicaria o provento de agosto pra setembro). Mantém o card em sintonia
-  // com a última barra de `dividendsByMonth` abaixo, que usa a mesma regra. ----
-  function dividendsForYm(ym: number): number | null {
+  // ---- proventos: soma de DividendPayment do período (11/09: dado real via
+  // GET /investments/{id}/transactions; null = "ainda sem provento coletado
+  // nesse período", nunca 0 fake). Tabela PRÓPRIA (não `PositionSnapshot.
+  // dividends`) de propósito — dividendo é um FLUXO ligado à DATA REAL da
+  // transação na Pluggy, não ao mês em que a gente por acaso já tinha um
+  // snapshot daquela posição (ver comentário no schema: BTG só passou a
+  // sincronizar Ação/FII por ticker individual a partir de ago/2026, mas o
+  // extrato de transações já tinha histórico bem anterior — sem uma tabela
+  // própria, jan-jul ficariam pra sempre sem provento nenhum mesmo com
+  // dinheiro real recebido). Nunca `activeSnapshotsAsOf` aqui: arrastar o
+  // último valor conhecido duplicaria o provento de um mês pro seguinte. ----
+  async function dividendsForYm(ym: number): Promise<number | null> {
     const year = Math.floor((ym - 1) / 12);
     const month = ym - year * 12;
-    const snaps = all.filter(
-      (s) => s.year === year && s.month === month && (s.security.type === "Ação" || s.security.type === "FII") && s.dividends !== null
-    );
-    if (snaps.length === 0) return null;
-    return snaps.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+    const payments = await prisma.dividendPayment.findMany({ where: { year, month } });
+    if (payments.length === 0) return null;
+    return payments.reduce((sum, p) => sum + p.amount, 0);
   }
-  const dividendsThisMonth = dividendsForYm(nowYm);
-  const dividendsLastMonth = dividendsForYm(nowYm - 1);
+  const dividendsThisMonth = await dividendsForYm(nowYm);
+  const dividendsLastMonth = await dividendsForYm(nowYm - 1);
 
   // ---- proventos por mês do ano corrente, separado Ação x FII (11/09,
   // pedido do Luiz: "gráfico por mês do ano... o que veio do FII e o que
-  // veio da Ação... quanto já ganhei de proventos no ano total"). SEMPRE o
-  // ano-calendário de verdade (`now`), janeiro até o mês atual — mesmo
-  // critério já usado em "Recebido no ano"/"Média mensal" de Projetos
-  // (nunca mistura mês do ano passado). Soma toda `PositionSnapshot` do ano
-  // (não só a ativa hoje) — um provento de março continua contando pro ano
-  // mesmo que a posição tenha sido vendida depois. `dividends` nulo conta
-  // como 0 aqui (é gráfico, não card de valor único) — a maioria dos meses
-  // já vem preenchida de verdade por `fetchAndSyncDividends` (backfill
-  // retroativo a partir do extrato completo da Pluggy, não só o mês corrente).
+  // veio da Ação... quanto já ganhei de proventos no ano total... traga
+  // todos desse ano, de janeiro até agora"). SEMPRE o ano-calendário de
+  // verdade (`now`), janeiro até o mês atual — mesmo critério já usado em
+  // "Recebido no ano"/"Média mensal" de Projetos (nunca mistura mês do ano
+  // passado). Vem de `DividendPayment` (não do snapshot) — cobre um mês
+  // mesmo sem `PositionSnapshot` por ticker naquele mês (jan-jul/2026, antes
+  // do BTG sincronizar Ação/FII individualmente via Pluggy).
   const nowReal = new Date();
   const currentYear = nowReal.getFullYear();
   const currentMonth = nowReal.getMonth() + 1;
-  const dividendSnapsThisYear = all.filter(
-    (s) => s.year === currentYear && s.month <= currentMonth && (s.security.type === "Ação" || s.security.type === "FII")
-  );
+  const dividendPaymentsThisYear = await prisma.dividendPayment.findMany({
+    where: { year: currentYear, month: { lte: currentMonth } },
+    include: { security: true },
+  });
   const dividendsByMonth: { label: string; acao: number; fii: number; breakdown: { label: string; value: number }[] }[] = [];
   let dividendsThisYear = 0;
   for (let m = 1; m <= currentMonth; m++) {
-    const monthSnaps = dividendSnapsThisYear.filter((s) => s.month === m);
-    const acao = monthSnaps.filter((s) => s.security.type === "Ação").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
-    const fii = monthSnaps.filter((s) => s.security.type === "FII").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+    const monthPayments = dividendPaymentsThisYear.filter((p) => p.month === m);
+    const acao = monthPayments.filter((p) => p.security.type === "Ação").reduce((sum, p) => sum + p.amount, 0);
+    const fii = monthPayments.filter((p) => p.security.type === "FII").reduce((sum, p) => sum + p.amount, 0);
     // De onde veio a grana daquele mês (pedido do Luiz, 11/09: "quando eu
     // passar o mouse em proventos, quero saber de onde veio a grana") — soma
     // por ativo (ticker, ou nome quando não tem ticker), pro caso raro de a
@@ -184,11 +182,10 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     // duplicar linha no hover. Só entra quem realmente pagou algo (>0) —
     // nunca lista posição zerada só pra "preencher" o hover.
     const breakdownMap = new Map<string, number>();
-    for (const s of monthSnaps) {
-      const amount = s.dividends ?? 0;
-      if (amount <= 0) continue;
-      const key = s.security.ticker ?? s.security.name;
-      breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + amount);
+    for (const p of monthPayments) {
+      if (p.amount <= 0) continue;
+      const key = p.security.ticker ?? p.security.name;
+      breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + p.amount);
     }
     const breakdown = [...breakdownMap.entries()]
       .map(([label, value]) => ({ label, value }))

@@ -46,27 +46,26 @@ positionsRouter.get("/positions", async (_req, res) => {
   }
 
   // Provento por (broker, security) do mês EXATO — mês atual e anterior (11/09,
-  // seta tipo MonthDelta na coluna "Proventos"). Diferente de `previousByKey`
-  // acima, NÃO usa `activeSnapshotsAsOf` — dividendo é um FLUXO do mês (quanto
-  // entrou naquele mês), não um estado, então pegar o snapshot "ativo hoje"
-  // arrastaria pra frente o provento de um mês antigo (corretora que ainda não
-  // ressincronizou esse mês) e mostraria como se fosse do mês atual. Só entra
-  // no map quando aquele mês exato TEM dividendo coletado (nunca null) — vira
-  // `undefined` no lookup senão, e o front sabe que não tem dado real daquele
-  // mês (não mostra R$0 ou seta fingindo).
-  function dividendsByExactMonth(ym: number): Map<string, number> {
+  // seta tipo MonthDelta na coluna "Proventos"). Vem de `DividendPayment`
+  // (não de `PositionSnapshot.dividends`) pelo mesmo motivo de `wealth.ts`:
+  // dividendo é um FLUXO ligado à data real da transação, não ao mês em que
+  // por acaso já existe snapshot daquela posição — `activeSnapshotsAsOf`
+  // arrastaria pra frente o provento de um mês antigo e mostraria como se
+  // fosse do mês atual. Só entra no map quando aquele mês exato TEM
+  // pagamento registrado — vira `undefined` no lookup senão, e o front sabe
+  // que não tem dado real daquele mês (não mostra R$0 ou seta fingindo).
+  async function dividendsByExactMonth(ym: number): Promise<Map<string, number>> {
     const year = Math.floor((ym - 1) / 12);
     const month = ym - year * 12;
+    const payments = await prisma.dividendPayment.findMany({ where: { year, month } });
     const map = new Map<string, number>();
-    for (const s of all) {
-      if (s.year === year && s.month === month && s.dividends != null) {
-        map.set(`${s.brokerId}:${s.securityId}`, s.dividends);
-      }
+    for (const p of payments) {
+      map.set(`${p.brokerId}:${p.securityId}`, p.amount);
     }
     return map;
   }
-  const currentDividendsByKey = dividendsByExactMonth(nowYm);
-  const previousDividendsByKey = dividendsByExactMonth(nowYm - 1);
+  const currentDividendsByKey = await dividendsByExactMonth(nowYm);
+  const previousDividendsByKey = await dividendsByExactMonth(nowYm - 1);
 
   const byType = new Map<
     string,

@@ -248,6 +248,7 @@ model Broker {
   transactions     Transaction[]
   positionSnapshots PositionSnapshot[]
   contributions     Contribution[]
+  dividendPayments  DividendPayment[]
 }
 
 model Security {
@@ -272,6 +273,7 @@ model Security {
 
   positionSnapshots PositionSnapshot[]
   contributions     Contribution[]
+  dividendPayments  DividendPayment[]
 }
 
 // Registro de aporte/resgate lançado à mão (05/09) — histórico auditável de
@@ -319,6 +321,33 @@ model PositionSnapshot {
   annualRatePct  Float?
   quantity       Float? // nº de cotas/ações — isso sim a Pluggy manda de verdade
   unitValue      Float? // valor de mercado de 1 cota/ação nesse momento
+
+  @@unique([brokerId, securityId, month, year])
+}
+
+// Provento (dividendo/JCP/rendimento) por ativo/mês — separado de
+// PositionSnapshot de propósito (11/09): dividendo é um FLUXO ligado à DATA
+// REAL da transação na Pluggy, não ao mês em que a GENTE já tinha um
+// snapshot daquela posição. Achado real: BTG só passou a sincronizar
+// Ação/FII por ativo individual (via Pluggy) a partir de agosto/2026 — antes
+// disso a carteira inteira vivia agregada num só `PositionSnapshot` manual
+// ("MANUAL:BTG:AÇÕES"/"FIIS"), sem granularidade por ticker. Só que a Pluggy
+// já tinha o extrato de transações completo desde MUITO antes (ex: HTMX11
+// pagando desde set/2025) — sem essa tabela própria, `fetchAndSyncDividends`
+// só conseguia fazer `updateMany` num `PositionSnapshot` que já existisse
+// pro mês, e pra jan-jul/2026 nenhum existia por ticker, então esses meses
+// ficavam pra sempre sem provento nenhum no gráfico "por mês do ano", mesmo
+// o dinheiro tendo entrado de verdade. Aqui grava incondicionalmente, sem
+// depender de nenhum snapshot existir.
+model DividendPayment {
+  id         String   @id @default(uuid())
+  brokerId   String
+  broker     Broker   @relation(fields: [brokerId], references: [id])
+  securityId String
+  security   Security @relation(fields: [securityId], references: [id])
+  month      Int
+  year       Int
+  amount     Float
 
   @@unique([brokerId, securityId, month, year])
 }
