@@ -299,6 +299,29 @@ export function Patrimonio() {
               )}
             </div>
 
+            <div className={cards.card}>
+              <CardHeader icon={Activity} title="Destaques do mês" />
+              {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
+              {wealth.movers.map((m, i) => (
+                <div key={`${m.category}-${i}`} className={cards.moverRow}>
+                  <span className={cards.moverTicker}>{m.category}</span>
+                  <span className={cards.moverChange}>
+                    {m.changePct >= 0 ? (
+                      <TrendingUp size={14} className={cards.dirIn} />
+                    ) : (
+                      <TrendingDown size={14} className={cards.dirOut} />
+                    )}
+                    {m.changePct >= 0 ? '+' : ''}
+                    {m.changePct.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Full-width, embaixo de Alocação+Destaques (pedido do Luiz,
+                11/09: "Alocação + Destaque do mês em uma linha e os
+                proventos em outra linha") — antes ficava ENTRE os dois,
+                quebrando a linha dos dois cards normais sem precisar. */}
             <div className={`${cards.card} ${cards.fullWidth}`}>
               <CardHeader icon={Coins} title="Proventos recebidos" />
               {/* Dividendo/JCP/rendimento — dado real via Pluggy (11/09), só
@@ -327,25 +350,6 @@ export function Patrimonio() {
               ) : (
                 <div className={cards.emptyState}>Sem provento coletado ainda pra Ação/FII.</div>
               )}
-            </div>
-
-            <div className={cards.card}>
-              <CardHeader icon={Activity} title="Destaques do mês" />
-              {wealth.movers.length === 0 && <div className={cards.emptyState}>Sem histórico suficiente pra comparar.</div>}
-              {wealth.movers.map((m, i) => (
-                <div key={`${m.category}-${i}`} className={cards.moverRow}>
-                  <span className={cards.moverTicker}>{m.category}</span>
-                  <span className={cards.moverChange}>
-                    {m.changePct >= 0 ? (
-                      <TrendingUp size={14} className={cards.dirIn} />
-                    ) : (
-                      <TrendingDown size={14} className={cards.dirOut} />
-                    )}
-                    {m.changePct >= 0 ? '+' : ''}
-                    {m.changePct.toFixed(1)}%
-                  </span>
-                </div>
-              ))}
             </div>
 
             {/* ---------- uma box por tipo de ativo, com gráficos específicos ---------- */}

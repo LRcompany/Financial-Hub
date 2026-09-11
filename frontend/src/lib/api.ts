@@ -252,7 +252,10 @@ export interface WealthOverview {
   // Proventos por mês do ANO-CALENDÁRIO corrente (janeiro até o mês atual,
   // nunca mistura ano passado — mesmo critério de "Recebido no ano" em
   // Projetos), separado Ação x FII pro gráfico empilhado em Patrimônio.
-  dividendsByMonth: { label: string; acao: number; fii: number }[]
+  // `breakdown` = de onde veio a grana naquele mês (por ativo, maior primeiro)
+  // — pedido do Luiz (11/09): "quando eu passar o mouse em proventos, quero
+  // saber de onde veio a grana". Vazio quando nenhum ativo pagou nesse mês.
+  dividendsByMonth: { label: string; acao: number; fii: number; breakdown: { label: string; value: number }[] }[]
   dividendsThisYear?: number
   movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null

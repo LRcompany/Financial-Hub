@@ -1,12 +1,17 @@
 import type { CSSProperties } from 'react'
 import { currency } from '../lib/format'
 import { Money } from './Money'
+import { HoverCard, HoverRow } from './HoverCard'
 import styles from './DividendsByMonthChart.module.css'
 
 interface MonthDividends {
   label: string
   acao: number
   fii: number
+  /** De onde veio a grana naquele mês, maior primeiro (pedido do Luiz,
+   * 11/09: "quando eu passar o mouse em proventos, quero saber de onde veio
+   * a grana") — vazio quando nenhum ativo pagou nesse mês. */
+  breakdown: { label: string; value: number }[]
 }
 
 /** Barra empilhada Ação+FII por mês (pedido do Luiz, 11/09: "gráfico por mês
@@ -52,7 +57,15 @@ export function DividendsByMonthChart({ data }: { data: MonthDividends[] }) {
                   />
                 )}
               </div>
-              <span className={styles.label}>{d.label}</span>
+              <HoverCard
+                content={
+                  d.breakdown.length > 0
+                    ? d.breakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
+                    : null
+                }
+              >
+                <span className={styles.label}>{d.label}</span>
+              </HoverCard>
             </div>
           )
         })}

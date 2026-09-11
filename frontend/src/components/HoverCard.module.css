@@ -12,6 +12,12 @@
   z-index: 5;
   min-width: 220px;
   max-width: 280px;
+  /* Trava a altura (11/09) — o hover de "de onde veio a grana" em Patrimônio
+     pode listar 40+ ativos num mês só (uma corretora com Ação/FII cheia de
+     posição), sem isso o popup esticava pra fora da tela. Rola dentro dele
+     em vez de crescer sem limite. */
+  max-height: 320px;
+  overflow-y: auto;
   white-space: normal;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -24,7 +30,10 @@
   visibility: hidden;
   transform: translateY(4px);
   transition: opacity 0.12s ease, transform 0.12s ease;
-  pointer-events: none;
+  /* auto (não none, 11/09) — o popup agora pode precisar rolar (ver
+     max-height acima); fica dentro de `.trigger`, então passar o mouse pra
+     cima dele continua contando como hover do gatilho, não quebra nada. */
+  pointer-events: auto;
 }
 
 .trigger:hover .popup {

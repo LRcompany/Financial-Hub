@@ -171,13 +171,29 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   const dividendSnapsThisYear = all.filter(
     (s) => s.year === currentYear && s.month <= currentMonth && (s.security.type === "Ação" || s.security.type === "FII")
   );
-  const dividendsByMonth: { label: string; acao: number; fii: number }[] = [];
+  const dividendsByMonth: { label: string; acao: number; fii: number; breakdown: { label: string; value: number }[] }[] = [];
   let dividendsThisYear = 0;
   for (let m = 1; m <= currentMonth; m++) {
     const monthSnaps = dividendSnapsThisYear.filter((s) => s.month === m);
     const acao = monthSnaps.filter((s) => s.security.type === "Ação").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
     const fii = monthSnaps.filter((s) => s.security.type === "FII").reduce((sum, s) => sum + (s.dividends ?? 0), 0);
-    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii });
+    // De onde veio a grana daquele mês (pedido do Luiz, 11/09: "quando eu
+    // passar o mouse em proventos, quero saber de onde veio a grana") — soma
+    // por ativo (ticker, ou nome quando não tem ticker), pro caso raro de a
+    // MESMA ação/FII aparecer em duas corretoras dentro do mesmo mês não
+    // duplicar linha no hover. Só entra quem realmente pagou algo (>0) —
+    // nunca lista posição zerada só pra "preencher" o hover.
+    const breakdownMap = new Map<string, number>();
+    for (const s of monthSnaps) {
+      const amount = s.dividends ?? 0;
+      if (amount <= 0) continue;
+      const key = s.security.ticker ?? s.security.name;
+      breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + amount);
+    }
+    const breakdown = [...breakdownMap.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii, breakdown });
     dividendsThisYear += acao + fii;
   }
 
