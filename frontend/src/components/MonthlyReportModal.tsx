@@ -5,6 +5,7 @@ import { currency } from '../lib/format'
 import { ClientPieChart } from './ClientPieChart'
 import { MonthDelta } from './MonthDelta'
 import { IconButton } from './IconButton'
+import cards from '../styles/cards.module.css'
 import styles from './MonthlyReportModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -97,6 +98,14 @@ export function MonthlyReportModal({
     .filter((p) => p.previousValue > 0 && p.delta > 0)
     .sort((a, b) => b.delta - a.delta)[0]
 
+  // Categoria(s) que estourou(aram) o planejado — mesma regra de "over" usada
+  // no Dashboard/Orçamento/modal de detalhamento (10/09: precisa ser global,
+  // não só onde foi implementada primeiro), aqui aplicada ao relatório.
+  const overBudgetCategories = (budget?.categories ?? [])
+    .filter((c) => c.planned > 0 && c.spent > c.planned)
+    .sort((a, b) => b.spent - b.planned - (a.spent - a.planned))
+  const totalProjected = budget?.totalProjected ?? 0
+
   const bestMover = wealth?.movers.filter((m) => m.changePct > 0).sort((a, b) => b.changePct - a.changePct)[0] ?? null
   const allocationData = wealth?.allocation.filter((a) => a.value > 0) ?? []
 
@@ -129,6 +138,10 @@ export function MonthlyReportModal({
                 <div className={styles.stat}>
                   <span className={styles.statLabel}>Total gasto</span>
                   <span className={styles.statValue}>R$ {currency(budget!.totalSpent)}</span>
+                  {/* Mesma nota de "Onde meu dinheiro foi" em Orçamento (10/09)
+                      — o total já inclui parcela projetada, precisa avisar
+                      aqui também pra não parecer um número "de outro lugar". */}
+                  {totalProjected > 0 && <span className={styles.projectedNote}>dos quais R$ {currency(totalProjected)} projetado</span>}
                   {previousTotalSpent > 0 && <MonthDelta current={budget!.totalSpent} previous={previousTotalSpent} higherIsBetter={false} />}
                 </div>
                 <div className={styles.stat}>
@@ -171,9 +184,25 @@ export function MonthlyReportModal({
                 <p className={styles.emptyNote}>Nenhum gasto categorizado em {monthLabel} ainda.</p>
               )}
 
+              {/* Estourou o planejado — mesma marca (vermelho) usada em toda
+                  a plataforma pra essa situação (Dashboard, Orçamento, modal
+                  de detalhamento), agora também aqui no relatório (10/09). */}
+              {overBudgetCategories.length > 0 && (
+                <p className={`${styles.highlight} ${styles.bad}`}>
+                  Estourou o planejado em: {overBudgetCategories.map((c) => `${c.name} (+R$ ${currency(c.spent - c.planned)})`).join(', ')}
+                </p>
+              )}
+
               {budget!.biggestPurchase && (
                 <p className={styles.highlight}>
-                  Maior compra: <strong>{budget!.biggestPurchase.description}</strong> — R$ {currency(budget!.biggestPurchase.amount)}
+                  Maior compra: <strong>{budget!.biggestPurchase.description}</strong>
+                  {budget!.biggestPurchase.installmentNumber && budget!.biggestPurchase.totalInstallments && (
+                    <span className={cards.installmentPill}>
+                      {budget!.biggestPurchase.installmentNumber}/{budget!.biggestPurchase.totalInstallments}
+                    </span>
+                  )}
+                  {' — R$ '}
+                  {currency(budget!.biggestPurchase.amount)}
                   {budget!.biggestPurchase.category ? ` · ${budget!.biggestPurchase.category}` : ''} · {formatDate(budget!.biggestPurchase.date)}
                 </p>
               )}

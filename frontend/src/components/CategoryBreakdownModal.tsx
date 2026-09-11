@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { api, type CategoryBreakdown, type CategoryBreakdownRow } from '../lib/api'
 import { currency } from '../lib/format'
 import { IconButton } from './IconButton'
+import cards from '../styles/cards.module.css'
 import styles from './CategoryBreakdownModal.module.css'
 
 function formatDate(iso: string): string {
@@ -115,9 +116,10 @@ function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolea
       <div className={styles.rowMain}>
         <span className={styles.rowDesc}>
           {row.description}
+          {/* Mesmo badge de "N/Total" usado em toda parcela do app (Dashboard,
+              Orçamento, Revisar parcelas) — nunca um estilo próprio novo. */}
           {row.installmentNumber && row.totalInstallments ? (
-            <span className={styles.rowInst}>
-              {' '}
+            <span className={cards.installmentPill}>
               {row.installmentNumber}/{row.totalInstallments}
             </span>
           ) : null}

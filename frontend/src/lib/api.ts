@@ -142,7 +142,14 @@ export interface BudgetSummary {
   categories: BudgetCategory[]
   // Maior gasto do mês (08/09, relatório mensal) — null quando não teve
   // nenhuma compra ainda nesse mês.
-  biggestPurchase: { description: string; amount: number; date: string; category: string | null } | null
+  biggestPurchase: {
+    description: string
+    amount: number
+    date: string
+    category: string | null
+    installmentNumber: number | null
+    totalInstallments: number | null
+  } | null
 }
 
 export interface CreditCard {
