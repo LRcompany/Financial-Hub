@@ -67,6 +67,16 @@ positionsRouter.get("/positions", async (_req, res) => {
   const currentDividendsByKey = await dividendsByExactMonth(nowYm);
   const previousDividendsByKey = await dividendsByExactMonth(nowYm - 1);
 
+  // Provento ACUMULADO desde sempre por (broker, security) — pedido do
+  // Luiz (11/09): "quanto eu recebi de um ativo desde o início até agora?".
+  // Soma TODO `DividendPayment` daquela posição, sem filtro de mês/ano —
+  // diferente do mês exato acima, aqui é histórico completo. `groupBy` faz
+  // a soma no banco em vez de trazer toda linha pra somar em memória.
+  const totalDividendsByKey = new Map<string, number>();
+  for (const d of await prisma.dividendPayment.groupBy({ by: ["brokerId", "securityId"], _sum: { amount: true } })) {
+    totalDividendsByKey.set(`${d.brokerId}:${d.securityId}`, d._sum.amount ?? 0);
+  }
+
   const byType = new Map<
     string,
     {
@@ -91,6 +101,7 @@ positionsRouter.get("/positions", async (_req, res) => {
       ratePeriodicity: string | null;
       dividends: number | null;
       previousDividends: number | null;
+      totalDividends: number | null;
     }[]
   >();
   for (const s of latest) {
@@ -134,6 +145,10 @@ positionsRouter.get("/positions", async (_req, res) => {
       // nunca 0 fake.
       dividends: currentDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
       previousDividends: previousDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
+      // Acumulado desde sempre (11/09, "quanto eu recebi desse ativo desde
+      // o início até agora?") — null = nunca teve provento coletado/lançado,
+      // nunca 0 fake pra ativo que não paga.
+      totalDividends: totalDividendsByKey.get(`${s.brokerId}:${s.securityId}`) ?? null,
     });
     byType.set(groupKey, list);
   }
@@ -169,6 +184,9 @@ positionsRouter.get("/positions", async (_req, res) => {
       }
       if (existing.previousDividends != null || p.previousDividends != null) {
         existing.previousDividends = (existing.previousDividends ?? 0) + (p.previousDividends ?? 0);
+      }
+      if (existing.totalDividends != null || p.totalDividends != null) {
+        existing.totalDividends = (existing.totalDividends ?? 0) + (p.totalDividends ?? 0);
       }
     }
     // Preço unitário recalculado sobre a quantidade TOTAL consolidada — o

@@ -86,7 +86,15 @@ function assetLabel(name: string) {
 // (ex: BRSTNCLF1RL5) — o nome ("CDB - BANCO C6 S.A.") é o que faz sentido ler.
 const TICKER_TYPES = new Set(['Ação', 'FII'])
 function displayName(p: Position, groupType: string) {
-  return TICKER_TYPES.has(groupType) && p.ticker ? p.ticker : p.name
+  if (TICKER_TYPES.has(groupType) && p.ticker) return p.ticker
+  // Ano de vencimento no nome (11/09, pedido do Luiz: "em vez de deixar o
+  // Tesouro LFT, coloca o ano, fica mais fácil pra entender de qual estamos
+  // falando") — depois de consolidar lotes por ISIN, duas linhas de
+  // "TESOURO DIRETO - LFT" com vencimentos diferentes ficavam com o MESMO
+  // nome na tabela, só diferenciáveis pelo hover (ISIN). Vale pra qualquer
+  // título com vencimento (Tesouro, CDB, CRA, debênture), não só Tesouro.
+  if (p.dueDate) return `${p.name} ${new Date(p.dueDate).getFullYear()}`
+  return p.name
 }
 
 /** Total em USD de uma box, quando faz sentido mostrar. Nomad (100% em
@@ -148,6 +156,13 @@ function assetHoverContent(p: Position) {
         </>
       ),
     })
+  }
+  // Acumulado desde sempre (11/09, pedido do Luiz: "quanto eu recebi de
+  // proventos desde o início até agora?") — soma de todo DividendPayment já
+  // registrado, não só o mês atual. Só aparece quando tem provento de
+  // verdade coletado/lançado alguma vez (nunca R$0 fingindo).
+  if (p.totalDividends != null && p.totalDividends > 0) {
+    rows.push({ label: 'Proventos totais (acumulado)', value: <Money>R$ {currency(p.totalDividends)}</Money> })
   }
   if (rows.length === 0) return null
   return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)

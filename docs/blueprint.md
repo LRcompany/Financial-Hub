@@ -1594,6 +1594,14 @@ Luiz mandou 7 pontos numa mensagem só, com prints. Nem tudo virou código nessa
 
 Verificado local (dev.db) em desktop e dark mode: tabela de Renda Fixa consolidada, hover flutuando corretamente sobre a tabela, `BudgetReviewModal`/`ContributionModal`/`InstallmentReviewModal` com cabeçalho+rodapé fixos e só o meio rolando, accordion de categoria em cinza.
 
+### 3 ajustes finos no que saiu acima (11/09, mesmo dia)
+
+1. **Ano de vencimento no nome do título**: mesmo depois de consolidar por ISIN, duas linhas de "TESOURO DIRETO - LFT" (vencimentos diferentes) ainda tinham o MESMO nome na tabela — só dava pra diferenciar pelo hover. `displayName()` (Patrimonio.tsx) agora acrescenta o ano de `dueDate` no nome pra qualquer título com vencimento (Tesouro, CDB, CRA, debênture) — "TESOURO DIRETO - LFT 2029", "CDB - BANCO C6 S.A. 2027".
+2. **Fundo do `HoverCard` 100% opaco**: o popup continuava com o fundo glass translúcido (`--glass-bg` + blur) — como agora ele pode flutuar por cima de tabelas DENSAS (não só uma área vazia de gráfico), o conteúdo de trás vazava através, ilegível. Trocado pra `var(--surface)` sólido + `var(--border)`. Tooltip de VALOR de gráfico (um número sozinho) continua glass — a diferença é lista de várias linhas vs. um número só.
+3. **Proventos acumulados por ativo**: pedido do Luiz — "quanto eu recebi de proventos desde o início até agora, em KNCR11 por exemplo?". `positions.ts` soma TODO `DividendPayment` daquela posição via `groupBy` (sem filtro de mês/ano, diferente do "mês exato" já existente) e expõe como `totalDividends`. Aparece no hover do nome do ativo ("Proventos totais (acumulado)") quando > 0 — não vira coluna nova pra não lotar a tabela mais.
+
+Verificado local (dev.db, fake `DividendPayment` pra KNCR11 apagado depois): nomes de Tesouro/CDB com ano, popup opaco, hover mostrando total acumulado batendo com a soma inserida.
+
 - [ ] Decidir se "Lazer" (Games, Cinema) vira categoria consolidada ou fica solto
 - [x] `pluggyTransactionSync.ts` nunca atualiza uma transação já sincronizada — aconteceu de novo (Google Workspace preso em "MASTERCARD INTERNACIONAL"), então dessa vez veio a correção geral: `Transaction.pluggyPending` + reconciliação automática no próximo sync (04/09, ver "Reconciliação de transação PENDING" acima). Cobre o caso de descrição/valor mudarem entre PENDING→POSTED; não cobre uma transação que a Pluggy já marcou POSTED da primeira vez e só depois corrige (esse foi o caso original da parcela BTG — mais raro, sem sinal (`pluggyPending`) pra saber quando revisitar).
 - [x] Dividendos por posição (`PositionSnapshot.dividends`) — resolvido em 11/09, ver seção "Proventos reais de Ação/FII" abaixo

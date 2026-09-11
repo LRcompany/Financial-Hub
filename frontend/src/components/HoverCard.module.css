@@ -23,10 +23,14 @@
   max-height: 320px;
   overflow-y: auto;
   white-space: normal;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  /* Fundo 100% opaco (11/09, pedido do Luiz) — não glass aqui. Esse popup
+     flutua por cima de listas/tabelas DENSAS de texto (posições, breakdown
+     de proventos); o glass translúcido deixava o conteúdo de trás vazando
+     através, ilegível. Diferente do tooltip de VALOR de gráfico (um número
+     sozinho sobre área vazia do SVG), que continua glass — aqui é uma
+     lista inteira de linhas, precisa de contraste sólido. */
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: var(--space-3);
   box-shadow: var(--shadow-md);

@@ -444,6 +444,10 @@ export interface Position {
   // menor que o mês passado"). Null quando o mês anterior não tem provento
   // coletado (primeira vez, ou ativo que não paga) — sem seta fingindo 0.
   previousDividends: number | null
+  // Acumulado desde sempre (11/09, "quanto eu recebi desse ativo desde o
+  // início até agora?") — soma de todo DividendPayment já registrado pra
+  // essa posição, sem filtro de mês/ano. Null = nunca teve provento.
+  totalDividends: number | null
 }
 
 // Um lançamento (mês/ano + valor) na modal "+ Rendimento" — ver
