@@ -39,8 +39,11 @@
   /* Gráfico "proventos por mês" (Patrimônio, 11/09) — Ação usa `--accent`
      direto (mesma cor azul de sempre); FII precisa de uma segunda cor FIXA
      pra empilhar ao lado dela na mesma barra — mesmo teal já usado como um
-     dos stops do `--grad` abaixo, então não introduz um tom novo no app. */
+     dos stops do `--grad` abaixo, então não introduz um tom novo no app.
+     Fundo (mesmo dia, lançamento manual pro VALORA) é a terceira série —
+     reaproveita o laranja, outro stop já existente do mesmo `--grad`. */
   --dividends-fii: #3FB6A8;
+  --dividends-fundo: #F2934A;
 
   /* ---------- gradiente — assinatura visual dos gráficos ---------- */
   --grad: linear-gradient(90deg, #F0605A 0%, #F2934A 22%, #F0C24B 42%, #7FC96B 62%, #3FB6A8 80%, #3E5BFA 100%);
@@ -112,6 +115,7 @@
     --danger: #F08A80;
     --danger-soft: #3A1D1B;
     --dividends-fii: #5CCFC1;
+    --dividends-fundo: #FFAB6B;
 
     --glass-bg: rgba(25, 28, 33, 0.55);
     --glass-border: rgba(255, 255, 255, 0.08);
@@ -143,6 +147,7 @@
   --danger: #F08A80;
   --danger-soft: #3A1D1B;
   --dividends-fii: #5CCFC1;
+  --dividends-fundo: #FFAB6B;
 
   --glass-bg: rgba(25, 28, 33, 0.55);
   --glass-border: rgba(255, 255, 255, 0.08);

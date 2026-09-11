@@ -70,6 +70,8 @@ positionsRouter.get("/positions", async (_req, res) => {
   const byType = new Map<
     string,
     {
+      brokerId: string;
+      securityId: string;
       broker: string;
       name: string;
       ticker: string | null;
@@ -100,6 +102,13 @@ positionsRouter.get("/positions", async (_req, res) => {
     const groupKey = s.broker.standalone ? s.broker.name : s.security.type;
     const list = byType.get(groupKey) ?? [];
     list.push({
+      // brokerId/securityId (11/09) — pro front conseguir identificar a
+      // posição exata ao lançar um provento manual (botão "+ Rendimento",
+      // hoje só pra Fundo — a Pluggy não manda transação de dividendo pra
+      // esse tipo). Antes só tinha o NOME da corretora (`broker`), que não
+      // serve pra endereçar um registro no banco.
+      brokerId: s.brokerId,
+      securityId: s.securityId,
       broker: s.broker.name,
       name: s.security.name,
       ticker: s.security.ticker,
@@ -173,5 +182,59 @@ positionsRouter.get("/positions/history", async (req, res) => {
     });
   }
   res.json({ history });
+});
+
+// ---- Lançamento manual de provento (11/09) — pedido do Luiz pro fundo
+// VALORA: a Pluggy não manda transação de dividendo pra tipo "Fundo" (só
+// Ação/FII, ver pluggySync.ts), mas ele quer acompanhar o rendimento mensal
+// mesmo assim, "pra saber a valorização do fundo de forma clara". Grava
+// direto em `DividendPayment` — a MESMA tabela que a sincronização da
+// Pluggy usa pra Ação/FII, então esse provento manual automaticamente entra
+// no card/gráfico agregado "Proventos recebidos" e na coluna "Proventos
+// (mês)" da posição, sem precisar de nenhum código separado pra exibição.
+
+// GET /api/dividend-payments?brokerId=X&securityId=Y — histórico de
+// lançamentos de uma posição, mais recente primeiro (alimenta a lista da
+// modal "Rendimentos" antes de adicionar um novo).
+positionsRouter.get("/dividend-payments", async (req, res) => {
+  const brokerId = req.query.brokerId as string | undefined;
+  const securityId = req.query.securityId as string | undefined;
+  if (!brokerId || !securityId) return res.status(400).json({ error: "brokerId e securityId são obrigatórios" });
+
+  const payments = await prisma.dividendPayment.findMany({
+    where: { brokerId, securityId },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
+  res.json({ payments });
+});
+
+// POST /api/dividend-payments — cria/corrige o provento de UM mês (a data
+// enviada só serve pra saber a QUE mês aquele valor pertence — a Pluggy
+// também trabalha em granularidade de mês, nunca por dia). Enviar de novo
+// pro mesmo mês SUBSTITUI o valor anterior (não soma) — é assim que o Luiz
+// corrige um lançamento errado, sem precisar apagar e recriar.
+positionsRouter.post("/dividend-payments", async (req, res) => {
+  const { brokerId, securityId, date, amount } = req.body as { brokerId?: string; securityId?: string; date?: string; amount?: number };
+  if (!brokerId || !securityId || !date || amount == null) {
+    return res.status(400).json({ error: "brokerId, securityId, date e amount são obrigatórios" });
+  }
+  if (amount <= 0) return res.status(400).json({ error: "amount precisa ser maior que zero" });
+
+  const [year, month] = date.split("-").map(Number); // "2026-03-15" -> [2026, 3], sem passar por Date/UTC
+  if (!year || !month) return res.status(400).json({ error: "date inválida" });
+
+  const payment = await prisma.dividendPayment.upsert({
+    where: { brokerId_securityId_month_year: { brokerId, securityId, month, year } },
+    update: { amount },
+    create: { brokerId, securityId, month, year, amount },
+  });
+  res.json({ payment });
+});
+
+// DELETE /api/dividend-payments/:id — remove um lançamento manual (ex:
+// adicionado no mês errado por engano).
+positionsRouter.delete("/dividend-payments/:id", async (req, res) => {
+  await prisma.dividendPayment.delete({ where: { id: req.params.id } }).catch(() => {});
+  res.json({ deleted: true });
 });
 

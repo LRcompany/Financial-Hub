@@ -132,17 +132,20 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
   const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
 
-  // ---- proventos: soma de DividendPayment do período (11/09: dado real via
-  // GET /investments/{id}/transactions; null = "ainda sem provento coletado
-  // nesse período", nunca 0 fake). Tabela PRÓPRIA (não `PositionSnapshot.
-  // dividends`) de propósito — dividendo é um FLUXO ligado à DATA REAL da
-  // transação na Pluggy, não ao mês em que a gente por acaso já tinha um
-  // snapshot daquela posição (ver comentário no schema: BTG só passou a
-  // sincronizar Ação/FII por ticker individual a partir de ago/2026, mas o
-  // extrato de transações já tinha histórico bem anterior — sem uma tabela
-  // própria, jan-jul ficariam pra sempre sem provento nenhum mesmo com
-  // dinheiro real recebido). Nunca `activeSnapshotsAsOf` aqui: arrastar o
-  // último valor conhecido duplicaria o provento de um mês pro seguinte. ----
+  // ---- proventos: soma de DividendPayment do período (11/09: Ação/FII vêm
+  // de verdade da Pluggy via GET /investments/{id}/transactions; Fundo é
+  // lançamento MANUAL — pedido do Luiz pro fundo VALORA, que a Pluggy não
+  // reporta dividendo — mas os dois entram na mesma soma, sem distinção
+  // aqui. null = "ainda sem provento coletado/lançado nesse período", nunca
+  // 0 fake. Tabela PRÓPRIA (não `PositionSnapshot.dividends`) de propósito
+  // — dividendo é um FLUXO ligado à DATA REAL do pagamento, não ao mês em
+  // que a gente por acaso já tinha um snapshot daquela posição (ver
+  // comentário no schema: BTG só passou a sincronizar Ação/FII por ticker
+  // individual a partir de ago/2026, mas o extrato de transações já tinha
+  // histórico bem anterior — sem uma tabela própria, jan-jul ficariam pra
+  // sempre sem provento nenhum mesmo com dinheiro real recebido). Nunca
+  // `activeSnapshotsAsOf` aqui: arrastar o último valor conhecido
+  // duplicaria o provento de um mês pro seguinte. ----
   async function dividendsForYm(ym: number): Promise<number | null> {
     const year = Math.floor((ym - 1) / 12);
     const month = ym - year * 12;
@@ -169,29 +172,39 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     where: { year: currentYear, month: { lte: currentMonth } },
     include: { security: true },
   });
-  const dividendsByMonth: { label: string; acao: number; fii: number; breakdown: { label: string; value: number }[] }[] = [];
+  // `fundo` (11/09) — Luiz pediu lançamento MANUAL de provento pra posição
+  // tipo Fundo (a Pluggy não manda isso pra esse tipo, ver pluggySync.ts) e
+  // confirmou que deve somar no mesmo total/gráfico agregado, não ficar de
+  // fora. Terceira série ao lado de Ação/FII — DividendPayment não distingue
+  // "veio da Pluggy" de "lançado à mão", então qualquer tipo com provento
+  // registrado aparece aqui automaticamente.
+  const dividendsByMonth: { label: string; acao: number; fii: number; fundo: number; breakdown: { label: string; value: number }[] }[] = [];
   let dividendsThisYear = 0;
   for (let m = 1; m <= currentMonth; m++) {
     const monthPayments = dividendPaymentsThisYear.filter((p) => p.month === m);
     const acao = monthPayments.filter((p) => p.security.type === "Ação").reduce((sum, p) => sum + p.amount, 0);
     const fii = monthPayments.filter((p) => p.security.type === "FII").reduce((sum, p) => sum + p.amount, 0);
+    const fundo = monthPayments.filter((p) => p.security.type === "Fundo").reduce((sum, p) => sum + p.amount, 0);
     // De onde veio a grana daquele mês (pedido do Luiz, 11/09: "quando eu
     // passar o mouse em proventos, quero saber de onde veio a grana") — soma
-    // por ativo (ticker, ou nome quando não tem ticker), pro caso raro de a
-    // MESMA ação/FII aparecer em duas corretoras dentro do mesmo mês não
-    // duplicar linha no hover. Só entra quem realmente pagou algo (>0) —
-    // nunca lista posição zerada só pra "preencher" o hover.
+    // por ativo, pro caso raro de a MESMA ação/FII aparecer em duas
+    // corretoras dentro do mesmo mês não duplicar linha no hover. Ticker só
+    // é um nome de verdade pra Ação/FII (PETR4, HGLG11) — mesma regra já
+    // usada em `displayName` no front (Patrimonio.tsx): pra Fundo a Pluggy
+    // manda o CNPJ no campo `ticker` (ex: "60.645.828/0001-29"), que não diz
+    // nada no hover — usa o nome nesse caso. Só entra quem realmente pagou
+    // algo (>0) — nunca lista posição zerada só pra "preencher" o hover.
     const breakdownMap = new Map<string, number>();
     for (const p of monthPayments) {
       if (p.amount <= 0) continue;
-      const key = p.security.ticker ?? p.security.name;
+      const key = (p.security.type === "Ação" || p.security.type === "FII") && p.security.ticker ? p.security.ticker : p.security.name;
       breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + p.amount);
     }
     const breakdown = [...breakdownMap.entries()]
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
-    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii, breakdown });
-    dividendsThisYear += acao + fii;
+    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii, fundo, breakdown });
+    dividendsThisYear += acao + fii + fundo;
   }
 
   // ---- destaques do mês: maior variação % por CATEGORIA (não por ativo) ----

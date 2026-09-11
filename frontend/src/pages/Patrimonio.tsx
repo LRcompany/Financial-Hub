@@ -23,10 +23,12 @@ import { VerticalBarChart } from '../components/VerticalBarChart'
 import { DividendsByMonthChart } from '../components/DividendsByMonthChart'
 import { CardHeader } from '../components/CardHeader'
 import { HoverCard, HoverRow } from '../components/HoverCard'
+import { IconButton } from '../components/IconButton'
 import { ReturnBadge } from '../components/ReturnBadge'
 import { BalanceChangeBadge } from '../components/BalanceChangeBadge'
 import { Input } from '../components/Input'
 import { ContributionModal } from '../components/ContributionModal'
+import { ManualDividendModal } from '../components/ManualDividendModal'
 import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
@@ -164,6 +166,9 @@ export function Patrimonio() {
   const [savingGoal, setSavingGoal] = useState(false)
 
   const [showContributionModal, setShowContributionModal] = useState(false)
+  // Posição escolhida pra lançar rendimento manual (botão "+ Rendimento",
+  // 11/09) — null = modal fechada.
+  const [dividendTarget, setDividendTarget] = useState<{ brokerId: string; securityId: string; name: string } | null>(null)
 
   function load() {
     api
@@ -255,6 +260,16 @@ export function Patrimonio() {
             setShowContributionModal(false)
             load()
           }}
+        />
+      )}
+
+      {dividendTarget && (
+        <ManualDividendModal
+          brokerId={dividendTarget.brokerId}
+          securityId={dividendTarget.securityId}
+          securityName={dividendTarget.name}
+          onClose={() => setDividendTarget(null)}
+          onSaved={load}
         />
       )}
 
@@ -378,9 +393,12 @@ export function Patrimonio() {
               const history = groupHistories[group.type]
 
               const title = BROKER_AS_LABEL_TYPES.has(group.type) && singleBroker ? singleBroker : group.type
-              // Proventos só existem de verdade pra Ação/FII (11/09) — ver
-              // fetchMonthlyDividends em pluggySync.ts.
-              const showDividends = group.type === 'Ação' || group.type === 'FII'
+              // Proventos vêm de verdade da Pluggy pra Ação/FII (11/09) —
+              // ver fetchAndSyncDividends em pluggySync.ts. Fundo entrou
+              // depois (mesmo dia): a Pluggy não manda dividendo pra esse
+              // tipo, então é lançamento MANUAL (botão "+ Rendimento",
+              // pedido do Luiz pro VALORA) — mas a coluna é a mesma.
+              const showDividends = group.type === 'Ação' || group.type === 'FII' || group.type === 'Fundo'
               const usdTotal = groupUsdTotal(group, usdToBrl)
 
               return (
@@ -544,6 +562,23 @@ export function Patrimonio() {
                                         <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                       </div>
                                     )}
+                                    {/* A Pluggy não manda dividendo pra Fundo
+                                        (pedido do Luiz, 11/09, pro VALORA) —
+                                        botão de lançamento manual aparece só
+                                        aqui, nunca em Ação/FII (que já vem
+                                        de verdade da Pluggy, lançar por
+                                        cima seria inventar dado). */}
+                                    {group.type === 'Fundo' && (
+                                      <IconButton
+                                        size="sm"
+                                        variant="ghost"
+                                        className={styles.addDividendBtn}
+                                        aria-label={`Lançar rendimento de ${displayName(p, group.type)}`}
+                                        onClick={() => setDividendTarget({ brokerId: p.brokerId, securityId: p.securityId, name: displayName(p, group.type) })}
+                                      >
+                                        <Plus size={12} strokeWidth={2} />
+                                      </IconButton>
+                                    )}
                                   </td>
                                 )}
                               </>
@@ -639,6 +674,17 @@ export function Patrimonio() {
                                     <div className={styles.cellNote}>
                                       <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                     </div>
+                                  )}
+                                  {group.type === 'Fundo' && (
+                                    <IconButton
+                                      size="sm"
+                                      variant="ghost"
+                                      className={styles.addDividendBtn}
+                                      aria-label={`Lançar rendimento de ${displayName(p, group.type)}`}
+                                      onClick={() => setDividendTarget({ brokerId: p.brokerId, securityId: p.securityId, name: displayName(p, group.type) })}
+                                    >
+                                      <Plus size={12} strokeWidth={2} />
+                                    </IconButton>
                                   )}
                                 </span>
                               </div>

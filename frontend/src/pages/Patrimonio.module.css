@@ -178,6 +178,15 @@
   font-weight: 400;
 }
 
+/* Botão "+ Rendimento" na coluna Proventos, só pra posição tipo Fundo
+   (11/09, lançamento manual pro VALORA) — inline com o valor/seta em vez de
+   empilhado, célula de tabela já é apertada o bastante. */
+.addDividendBtn {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
 /* ---------- nome do ativo na tabela (o popup de hover é o componente
    genérico HoverCard, components/HoverCard.module.css) ---------- */
 .assetName {

@@ -251,11 +251,13 @@ export interface WealthOverview {
   dividendsLastMonth?: number | null
   // Proventos por mês do ANO-CALENDÁRIO corrente (janeiro até o mês atual,
   // nunca mistura ano passado — mesmo critério de "Recebido no ano" em
-  // Projetos), separado Ação x FII pro gráfico empilhado em Patrimônio.
-  // `breakdown` = de onde veio a grana naquele mês (por ativo, maior primeiro)
-  // — pedido do Luiz (11/09): "quando eu passar o mouse em proventos, quero
-  // saber de onde veio a grana". Vazio quando nenhum ativo pagou nesse mês.
-  dividendsByMonth: { label: string; acao: number; fii: number; breakdown: { label: string; value: number }[] }[]
+  // Projetos), separado Ação x FII x Fundo (`fundo` é lançamento manual,
+  // pedido do Luiz pro VALORA — a Pluggy não manda dividendo desse tipo)
+  // pro gráfico empilhado em Patrimônio. `breakdown` = de onde veio a grana
+  // naquele mês (por ativo, maior primeiro) — pedido do Luiz (11/09):
+  // "quando eu passar o mouse em proventos, quero saber de onde veio a
+  // grana". Vazio quando nenhum ativo pagou nesse mês.
+  dividendsByMonth: { label: string; acao: number; fii: number; fundo: number; breakdown: { label: string; value: number }[] }[]
   dividendsThisYear?: number
   movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null
@@ -406,6 +408,11 @@ export interface DailyGoalEntry {
 }
 
 export interface Position {
+  // brokerId/securityId (11/09) — endereçam a posição de verdade (o `broker`
+  // abaixo é só o NOME pra exibir). Usados pelo botão "+ Rendimento"
+  // (lançamento manual de provento pra Fundo, ver ManualDividendModal).
+  brokerId: string
+  securityId: string
   broker: string
   name: string
   ticker: string | null
@@ -427,14 +434,27 @@ export interface Position {
   dueDate: string | null
   fixedAnnualRate: number | null
   ratePeriodicity: string | null
-  // Proventos do mês (11/09) — só Ação/FII têm valor real; null = "não se
-  // aplica" pra esse tipo de ativo ou "ainda não sincronizado".
+  // Proventos do mês (11/09) — real via Pluggy pra Ação/FII, lançado à mão
+  // pra Fundo (botão "+ Rendimento", pedido do Luiz pro VALORA — a Pluggy
+  // não manda essa transação pra esse tipo). null = "não se aplica" pra
+  // outro tipo de ativo, ou "ainda sem dado esse mês".
   dividends: number | null
   // Proventos do mês ANTERIOR da mesma posição — alimenta a seta de MonthDelta
   // na coluna "Proventos" (pedido do Luiz, 11/09: "quero saber se foi maior ou
   // menor que o mês passado"). Null quando o mês anterior não tem provento
   // coletado (primeira vez, ou ativo que não paga) — sem seta fingindo 0.
   previousDividends: number | null
+}
+
+// Um lançamento (mês/ano + valor) na modal "+ Rendimento" — ver
+// ManualDividendModal.tsx.
+export interface DividendPayment {
+  id: string
+  brokerId: string
+  securityId: string
+  month: number
+  year: number
+  amount: number
 }
 
 export interface PositionsByType {
@@ -770,6 +790,16 @@ export const api = {
     postJson<TaxPayment>('/tax-payments', input),
   positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
+  // Lançamento manual de provento (11/09) — botão "+ Rendimento" em posição
+  // tipo Fundo (a Pluggy não manda dividendo pra esse tipo, ver pluggySync.ts
+  // no backend). `date` no formato "AAAA-MM-DD" (só o mês/ano importam — o
+  // dia é só pra o Luiz lembrar quando recebeu). Reenviar pro mesmo mês
+  // SUBSTITUI o valor (corrige um lançamento errado sem apagar antes).
+  dividendPayments: (brokerId: string, securityId: string) =>
+    request<{ payments: DividendPayment[] }>(`/dividend-payments?brokerId=${brokerId}&securityId=${securityId}`),
+  addDividendPayment: (input: { brokerId: string; securityId: string; date: string; amount: number }) =>
+    postJson<{ payment: DividendPayment }>('/dividend-payments', input),
+  deleteDividendPayment: (id: string) => request<{ deleted: true }>(`/dividend-payments/${id}`, { method: 'DELETE' }),
   brokerPositions: (brokerId: string) =>
     request<{ positions: BrokerPosition[]; brokerLastSyncedAt: string | null; fieldConfig: PositionFieldConfig }>(`/brokers/${brokerId}/positions`),
   updateBrokerPositions: async (
