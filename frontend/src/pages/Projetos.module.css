@@ -107,8 +107,16 @@
 
 .projectHeaderTop {
   display: flex;
+  /* Achado real (11/09): "ABERTO", "FRAIHA" etc (.projectName, flex-shrink:0)
+     + separador + status chip + botões não cabiam numa linha só em telas
+     estreitas — sem wrap, o nome secundário do projeto (.projectNameSecondary)
+     ficava espremido a ponto de o texto colidir visualmente com o chip de
+     status em vez de truncar limpo com "...". Mesma regra de sempre: o
+     BLOCO inteiro (chip + ações) quebra pra linha de baixo, nunca o texto
+     por dentro. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
 }
 
 /* "Cliente • Projeto" — o wrapper (não o .projectName sozinho) que ocupa o
@@ -118,7 +126,14 @@
   display: flex;
   align-items: baseline;
   gap: 4px;
-  flex: 1;
+  /* `flex: 1` puro (flex-basis:0%) nunca conta como "não coube" pro
+     flex-wrap do .projectHeaderTop — o wrap só reage ao tamanho PREFERIDO
+     dos itens, e basis:0 sempre parece caber. Resultado real (11/09): em
+     tela estreita o título era espremido quase a zero (só "ABERTO" sobrava,
+     sem nem o "..." do nome do projeto) em vez de o chip+botões quebrarem
+     pra linha de baixo. Basis de 140px dá um tamanho preferido de verdade,
+     então "não cabe" agora dispara o wrap corretamente. */
+  flex: 1 1 140px;
   min-width: 0;
 }
 
@@ -150,9 +165,14 @@
    ações), sem competir por espaço com o valor do contrato */
 .projectHeaderBottom {
   display: flex;
+  /* Sem wrap, a data (min-width:0) era espremida até quebrar palavra por
+     palavra numa coluna minúscula quando o valor+"recebido/falta" não
+     cabiam do lado (achado real, 11/09 — mesmo padrão do resto do app:
+     o bloco INTEIRO quebra de linha, nunca o texto de dentro dele). */
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-1) var(--space-3);
 }
 
 .projectHeaderMeta {
@@ -170,6 +190,7 @@
   align-items: flex-end;
   gap: 2px;
   flex-shrink: 0;
+  margin-left: auto;
   text-align: right;
 }
 

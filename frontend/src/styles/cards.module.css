@@ -269,13 +269,13 @@
 .progressTrack {
   height: 8px;
   background: var(--fill-muted);
-  border-radius: var(--r-full);
+  border-radius: var(--r-bar);
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  border-radius: var(--r-full);
+  border-radius: var(--r-bar);
 }
 
 .deltaRow {
@@ -307,13 +307,10 @@
   background: var(--fill-muted);
 }
 
-/* Estourou o planejado — número em vermelho + ícone de alerta (mesma
-   linguagem visual do accordion de categorias na página Orçamento). */
-.progressRowOver .progressLabel span:last-child {
-  color: var(--danger);
-  font-weight: 600;
-}
-
+/* Estourou o planejado — SÓ o ícone de alerta fica vermelho (pedido do
+   Luiz, 11/09: "não mude a cor do texto pra vermelho... deixa apenas o
+   alerta em vermelho e o arrow-up em vermelho"). O valor em si nunca muda
+   de cor — ver `SpentPlannedValue`. */
 .progressOverIcon {
   color: var(--danger);
   vertical-align: -2px;
@@ -367,13 +364,13 @@
 .totalTrack {
   height: 8px;
   background: var(--surface);
-  border-radius: var(--r-full);
+  border-radius: var(--r-bar);
   overflow: hidden;
 }
 
 .totalFill {
   height: 100%;
-  border-radius: var(--r-full);
+  border-radius: var(--r-bar);
 }
 
 /* ---------- projects ---------- */
@@ -474,25 +471,6 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
   vertical-align: middle;
-}
-
-/* compra que a Pluggy já marcou como parcelada (creditCardMetadata) — pedido
-   do Luiz (08/09: "deixa marcado que é uma compra parcelada"), pra não
-   aparecer como transação avulsa igual a qualquer outra na hora de
-   categorizar. Cor neutra (accent), não de aviso — não é problema, é só
-   informação. */
-.installmentPill {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: var(--r-full);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  vertical-align: middle;
-  white-space: nowrap;
 }
 
 .listSub {

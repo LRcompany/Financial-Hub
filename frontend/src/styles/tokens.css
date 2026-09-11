@@ -50,6 +50,13 @@
   --r-md: 20px;  /* cards */
   --r-lg: 28px;  /* blocos grandes */
   --r-full: 999px; /* botões, pills, toggle */
+  /* Todo gráfico de barra (progresso, cartão de crédito, ranking por ativo)
+     — pedido do Luiz (11/09): "diminuir o border-radius, pelo menos metade
+     menor... isso tem que ser replicado em todos os gráficos de barra". Um
+     radius tão grande quanto a própria altura da barra (--r-full/--r-lg)
+     faz toda barra curta virar uma pílula arredondada igual às outras,
+     escondendo a diferença de proporção entre elas. */
+  --r-bar: 4px;
 
   /* ---------- elevação — leve, só quando necessário ---------- */
   --shadow-sm: 0 2px 10px rgba(21, 23, 28, 0.05);

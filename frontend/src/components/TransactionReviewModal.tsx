@@ -4,7 +4,7 @@ import { api, type UncategorizedTransactionGroup, type LeafCategoryOption } from
 import { currency } from '../lib/format'
 import { Select } from './Select'
 import { IconButton } from './IconButton'
-import cards from '../styles/cards.module.css'
+import { InstallmentBadge } from './Badge'
 import styles from './TransactionReviewModal.module.css'
 
 function formatDate(iso: string): string {
@@ -45,11 +45,7 @@ function GroupRow({
         {/* Compra parcelada (08/09, pedido do Luiz: "deixa marcado que é
             uma compra parcelada") — sem isso a compra aparecia igualzinha
             a qualquer transação avulsa, só com a opção de categorizar. */}
-        {group.totalInstallments != null && (
-          <span className={cards.installmentPill}>
-            {group.installmentNumber ?? '?'}/{group.totalInstallments}
-          </span>
-        )}
+        <InstallmentBadge number={group.installmentNumber} total={group.totalInstallments} />
       </td>
       <td className={styles.numCell}>{group.count}x</td>
       <td className={styles.numCell}>{formatDate(group.lastDate)}</td>

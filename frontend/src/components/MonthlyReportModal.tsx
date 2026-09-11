@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { X, Download } from 'lucide-react'
+import { AlertTriangle, X, Download } from 'lucide-react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { ClientPieChart } from './ClientPieChart'
 import { MonthDelta } from './MonthDelta'
 import { IconButton } from './IconButton'
-import cards from '../styles/cards.module.css'
+import { InstallmentBadge } from './Badge'
 import styles from './MonthlyReportModal.module.css'
 
 const MONTH_NAMES_FULL = [
@@ -184,11 +184,12 @@ export function MonthlyReportModal({
                 <p className={styles.emptyNote}>Nenhum gasto categorizado em {monthLabel} ainda.</p>
               )}
 
-              {/* Estourou o planejado — mesma marca (vermelho) usada em toda
-                  a plataforma pra essa situação (Dashboard, Orçamento, modal
-                  de detalhamento), agora também aqui no relatório (10/09). */}
+              {/* Estourou o planejado — só o ícone acusa (pedido do Luiz,
+                  11/09: "deixa apenas o alerta em vermelho"), mesma marca
+                  usada em toda a plataforma pra essa situação. */}
               {overBudgetCategories.length > 0 && (
-                <p className={`${styles.highlight} ${styles.bad}`}>
+                <p className={styles.highlight}>
+                  <AlertTriangle size={12} strokeWidth={2} className={styles.overIcon} />
                   Estourou o planejado em: {overBudgetCategories.map((c) => `${c.name} (+R$ ${currency(c.spent - c.planned)})`).join(', ')}
                 </p>
               )}
@@ -196,11 +197,7 @@ export function MonthlyReportModal({
               {budget!.biggestPurchase && (
                 <p className={styles.highlight}>
                   Maior compra: <strong>{budget!.biggestPurchase.description}</strong>
-                  {budget!.biggestPurchase.installmentNumber && budget!.biggestPurchase.totalInstallments && (
-                    <span className={cards.installmentPill}>
-                      {budget!.biggestPurchase.installmentNumber}/{budget!.biggestPurchase.totalInstallments}
-                    </span>
-                  )}
+                  <InstallmentBadge number={budget!.biggestPurchase.installmentNumber} total={budget!.biggestPurchase.totalInstallments} />
                   {' — R$ '}
                   {currency(budget!.biggestPurchase.amount)}
                   {budget!.biggestPurchase.category ? ` · ${budget!.biggestPurchase.category}` : ''} · {formatDate(budget!.biggestPurchase.date)}

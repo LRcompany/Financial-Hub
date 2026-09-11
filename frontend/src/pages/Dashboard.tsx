@@ -30,6 +30,8 @@ import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
+import { InstallmentBadge, ProjectedTag } from '../components/Badge'
+import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
@@ -282,9 +284,9 @@ export function Dashboard() {
                     <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
                       <div className={styles.totalLabel}>
                         <span>Total do mês</span>
-                        <span style={totalOver ? { color: 'var(--danger)' } : undefined}>
+                        <span>
                           {totalOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
-                          R$ {currency(budget.totalSpent)} / R$ {currency(budget.totalPlanned)}
+                          <SpentPlannedValue spent={budget.totalSpent} planned={budget.totalPlanned} />
                         </span>
                       </div>
                       <div className={styles.totalTrack}>
@@ -292,7 +294,7 @@ export function Dashboard() {
                           className={styles.totalFill}
                           style={{
                             width: `${Math.min((budget.totalSpent / budget.totalPlanned) * 100, 100)}%`,
-                            background: totalOver ? 'var(--danger)' : 'var(--accent)',
+                            background: 'var(--accent)',
                           }}
                         />
                       </div>
@@ -305,7 +307,7 @@ export function Dashboard() {
                     <button
                       type="button"
                       key={group.parentName}
-                      className={`${styles.progressRowButton} ${isOver ? styles.progressRowOver : ''}`}
+                      className={styles.progressRowButton}
                       onClick={() =>
                         setBreakdown({ title: group.parentName, categoryIds: group.categoryIds, planned: group.planned })
                       }
@@ -314,10 +316,10 @@ export function Dashboard() {
                         <span>
                           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.progressOverIcon} />}
                           {group.parentName}
-                          {group.spentProjected > 0 && <span className={styles.installmentPill}>projetado</span>}
+                          {group.spentProjected > 0 && <ProjectedTag />}
                         </span>
                         <span>
-                          R$ {currency(group.spent)} / R$ {currency(group.planned)}
+                          <SpentPlannedValue spent={group.spent} planned={group.planned} />
                         </span>
                       </div>
                       <div className={styles.progressTrack}>
@@ -325,7 +327,7 @@ export function Dashboard() {
                           className={styles.progressFill}
                           style={{
                             width: `${group.planned > 0 ? Math.min((group.spent / group.planned) * 100, 100) : 0}%`,
-                            background: isOver ? 'var(--danger)' : 'var(--accent)',
+                            background: 'var(--accent)',
                           }}
                         />
                       </div>
@@ -359,11 +361,7 @@ export function Dashboard() {
                       {t.description}
                       {t.awaitingPluggyMatch && <span className={styles.pendingPill}>pendente</span>}
                       {/* Compra parcelada (08/09) */}
-                      {t.totalInstallments != null && (
-                        <span className={styles.installmentPill}>
-                          {t.installmentNumber ?? '?'}/{t.totalInstallments}
-                        </span>
-                      )}
+                      <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
                     </div>
                     <div className={styles.listSub}>
                       {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}

@@ -1,0 +1,37 @@
+/* Duas pills fixas do design system — nunca redefinir estilo novo pra
+   "N de Total de parcela" ou pra "projetado" em outro lugar do app, sempre
+   importar daqui (pedido do Luiz, 11/09: "onde aparece o número de parcela,
+   tem que vir assim, em todos os lugares" / "a tag projetado precisa ser
+   padrão em todo o site, não mude de cor, é um estilo fixo"). */
+
+.installment {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Cinza neutro, sempre — nunca acompanha a cor de "estourou"/alerta nem
+   nenhuma outra variação. É só "isso aqui tem uma fatia ainda não
+   confirmada", não é bom nem ruim. */
+.projected {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  white-space: nowrap;
+}

@@ -12,21 +12,35 @@ interface CarouselProps<T> {
 
 const CHIP_MIN_WIDTH = 140 // bate com o minmax(140px, 1fr) do grid abaixo
 
+// 32px de padding do card (--space-4 de cada lado) + ~64px pras duas setas
+// de navegação — aproximação suficiente, só decide quantas colunas cabem,
+// não precisa ser exato ao pixel.
+function computeFittingPerPage(requested: number): number {
+  if (typeof window === 'undefined') return requested
+  const available = window.innerWidth - 96
+  const fits = Math.max(1, Math.floor(available / CHIP_MIN_WIDTH))
+  return Math.min(requested, fits)
+}
+
 /** `perPage` de tela estreita: cada chip precisa de pelo menos CHIP_MIN_WIDTH,
  * senão o carrossel ultrapassa a borda do card (pedido do Luiz, 07/09 — 6 por
  * página estourava a largura toda no mobile). Nunca aumenta além do `perPage`
- * pedido pelo chamador, só reduz quando a tela não cabe tudo. */
+ * pedido pelo chamador, só reduz quando a tela não cabe tudo.
+ *
+ * Inicializa já calculado (lazy initializer), não com `requested` cru —
+ * calcular só depois, num `useEffect`, deixava a PRIMEIRA renderização
+ * larga demais (grid com `perPage` pedido inteiro, ex: 6 colunas de
+ * 140px = 840px) antes do efeito corrigir. Sem nenhum limite de largura no
+ * body, esse primeiro frame largo empurrava o VIEWPORT INTEIRO pra caber
+ * (achado real, 11/09: `window.innerWidth` chegava a reportar 993 num
+ * emulador de 375px) — o carrossel de "Comprometido em parcelas futuras"
+ * era a causa raiz do scroll horizontal do Orçamento inteiro no mobile. */
 function useResponsivePerPage(requested: number): number {
-  const [perPage, setPerPage] = useState(requested)
+  const [perPage, setPerPage] = useState(() => computeFittingPerPage(requested))
 
   useEffect(() => {
     function recompute() {
-      // 32px de padding do card (--space-4 de cada lado) + ~64px pras duas
-      // setas de navegação — aproximação suficiente, só decide quantas
-      // colunas cabem, não precisa ser exato ao pixel.
-      const available = window.innerWidth - 96
-      const fits = Math.max(1, Math.floor(available / CHIP_MIN_WIDTH))
-      setPerPage(Math.min(requested, fits))
+      setPerPage(computeFittingPerPage(requested))
     }
     recompute()
     window.addEventListener('resize', recompute)

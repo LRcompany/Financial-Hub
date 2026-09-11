@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, ListTree } from 'lucide-react'
 import { api, type Category, type CategoryKind } from '../lib/api'
 import { Input } from './Input'
 import { Select } from './Select'
 import { IconButton } from './IconButton'
+import { CardHeader } from './CardHeader'
+import cards from '../styles/cards.module.css'
 import styles from './CategoryManager.module.css'
 
 const KIND_LABELS: Record<CategoryKind, string> = {
@@ -214,8 +216,15 @@ export function CategoryManager() {
   useEffect(load, [])
 
   return (
-    <div className={styles.wrap}>
-      {error && <div className={styles.error}>{error}</div>}
+    <div className={cards.card}>
+      {/* Lista solta direto embaixo do <h2> da seção parecia "flutuar" sem
+          moldura nenhuma (pedido do Luiz, 11/09) — box igual a "Meta diária
+          de gasto" logo acima, mesmo ícone+título, mesmo padding. De quebra
+          isso também resolve o chevron "colado na margem": antes o `.row`
+          ia direto na borda da página, agora tem o respiro do `.card`. */}
+      <CardHeader icon={ListTree} title="Categorias" />
+      <div className={styles.wrap}>
+        {error && <div className={styles.error}>{error}</div>}
       {loading ? (
         <div className={styles.loading}>Carregando categorias...</div>
       ) : (
@@ -243,6 +252,7 @@ export function CategoryManager() {
           Nova categoria-mãe
         </button>
       )}
+      </div>
     </div>
   )
 }

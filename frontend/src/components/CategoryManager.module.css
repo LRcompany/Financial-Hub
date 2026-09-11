@@ -67,7 +67,13 @@
 .name {
   font-size: 13.5px;
   font-weight: 600;
-  flex: 1;
+  /* `flex: 1` puro (flex-basis:0%) nunca "pesa" pro flex-wrap decidir que a
+     linha não coube — o item some pra caber no espaço que sobrar em vez de
+     empurrar o badge/ações pra linha de baixo. Achado real (11/09, mesmo
+     bug do header de Projetos): nome de categoria comprido ("Administrativo")
+     ficava espremido a ponto de colidir visualmente com o badge ao lado.
+     Basis de 100px dá um tamanho preferido de verdade pro cálculo de wrap. */
+  flex: 1 1 100px;
   min-width: 0;
 }
 

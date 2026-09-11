@@ -389,7 +389,15 @@ export function Patrimonio() {
                       {/* Conta Corrente não tem cota/preço/investido (pedido
                           do Luiz, 08/09) — colunas próprias: só saldo e
                           variação desde o mês anterior, sem fingir uma
-                          rentabilidade que não existe pra dinheiro parado. */}
+                          rentabilidade que não existe pra dinheiro parado.
+                          Corretora standalone (NOMAD, INCO — `isBroker`) TEM
+                          rentabilidade, mas não tem cota/qtd./preço unitário
+                          de verdade (é uma posição única por ativo, não um
+                          papel com preço de mercado por cota) — mostrar "—"
+                          nessas colunas só poluía a tabela sem informar nada
+                          (pedido do Luiz, 11/09: "não temos campos de cotas e
+                          preço unitário em Nomad, por que estamos exibindo
+                          isso?"). */}
                       <thead>
                         <tr>
                           <th>Ativo</th>
@@ -398,6 +406,12 @@ export function Patrimonio() {
                             <>
                               <th>Saldo</th>
                               <th>Variação (mês)</th>
+                            </>
+                          ) : group.isBroker ? (
+                            <>
+                              <th>Investido</th>
+                              <th>Valor atual</th>
+                              <th>Rentab.</th>
                             </>
                           ) : (
                             <>
@@ -436,8 +450,12 @@ export function Patrimonio() {
                               </>
                             ) : (
                               <>
-                                <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
-                                <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
+                                {!group.isBroker && (
+                                  <>
+                                    <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
+                                    <td>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</td>
+                                  </>
+                                )}
                                 <td>
                                   R$ {currency(p.investedAmount)}
                                   {p.currency === 'USD' && p.fxRateToBRL && (
@@ -465,6 +483,88 @@ export function Patrimonio() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Tela estreita: tabela vira um card por posição — mesmo
+                      padrão já usado em "Comprometido em parcelas futuras"
+                      no Orçamento (07/09), agora replicado aqui (pedido do
+                      Luiz, 11/09: "toda célula numa table vira um card...
+                      não rola termos tabela no mobile"). */}
+                  <div className={styles.positionCards} style={{ marginTop: 'var(--space-5)' }}>
+                    {group.positions.map((p, i) => (
+                      <div key={`${p.broker}-${p.name}-${i}`} className={styles.positionCard}>
+                        <div className={styles.positionCardTop}>
+                          <span className={styles.assetName}>
+                            {displayName(p, group.type)}
+                            {p.currency === 'USD' && <span className={styles.usdTag}>USD</span>}
+                          </span>
+                        </div>
+                        <div className={styles.positionCardRow}>
+                          <span className={styles.positionCardLabel}>Corretora</span>
+                          <span>{p.broker}</span>
+                        </div>
+                        {group.type === 'Conta Corrente' ? (
+                          <>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Saldo</span>
+                              <span>
+                                R$ {currency(p.marketValue)}
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Variação (mês)</span>
+                              <BalanceChangeBadge current={p.marketValue} previous={p.previousMarketValue} />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {!group.isBroker && (
+                              <>
+                                <div className={styles.positionCardRow}>
+                                  <span className={styles.positionCardLabel}>Cotas/qtd.</span>
+                                  <span>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</span>
+                                </div>
+                                <div className={styles.positionCardRow}>
+                                  <span className={styles.positionCardLabel}>Preço unit.</span>
+                                  <span>{p.unitValue != null ? `R$ ${currency(p.unitValue)}` : '—'}</span>
+                                </div>
+                              </>
+                            )}
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Investido</span>
+                              <span>
+                                R$ {currency(p.investedAmount)}
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / p.fxRateToBRL)}</div>
+                                )}
+                                {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                  <div className={styles.usdSecondary}>US$ {currency(p.investedAmount / usdToBrl)}</div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Valor atual</span>
+                              <span>
+                                R$ {currency(p.marketValue)}
+                                {p.currency === 'USD' && p.fxRateToBRL && (
+                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / p.fxRateToBRL)}</div>
+                                )}
+                                {p.currency === 'BRL' && group.type === 'Cripto' && usdToBrl && (
+                                  <div className={styles.usdSecondary}>US$ {currency(p.marketValue / usdToBrl)}</div>
+                                )}
+                              </span>
+                            </div>
+                            <div className={styles.positionCardRow}>
+                              <span className={styles.positionCardLabel}>Rentab.</span>
+                              <ReturnBadge invested={p.investedAmount} current={p.marketValue} />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -605,6 +705,47 @@ export function Patrimonio() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Tela estreita: mesma conversão tabela→card das posições
+                    acima (pedido do Luiz, 11/09). */}
+                <div className={styles.positionCards}>
+                  {wealth.yearlyBreakdown.map((row) => (
+                    <div key={row.year} className={styles.positionCard}>
+                      <div className={styles.positionCardTop}>{row.year}</div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Saldo inicial</span>
+                        <span>R$ {currency(row.startBalance)}</span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Aporte planejado</span>
+                        <span>R$ {currency(row.contribution)}</span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Aportado real</span>
+                        <span>
+                          {row.realContribution != null ? (
+                            <>
+                              R$ {currency(row.realContribution)}
+                              {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                                <span className={styles.realContributionPct}>
+                                  {' '}
+                                  ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
+                      </div>
+                      <div className={styles.positionCardRow}>
+                        <span className={styles.positionCardLabel}>Saldo final</span>
+                        <span>R$ {currency(row.endBalance)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <p className={styles.helperText}>
                   "Aporte planejado" do ano corrente é só o que falta aportar dele pra frente (base da projeção) — "Aportado
                   real" é o que já entrou desde janeiro. São dois períodos diferentes do mesmo ano, não o mesmo valor visto

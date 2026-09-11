@@ -34,7 +34,12 @@
      barra fina boiando num vão grande, parecendo quebrado comparado com
      caixas de muito ativo (Ação, 15 tickers, preenche a coluna inteira). */
   max-width: 140px;
-  border-radius: var(--r-lg);
+  /* --r-lg (28px) era maior que a altura de boa parte das barras — toda
+     barra curta virava uma pílula arredondada igual, escondendo a diferença
+     de proporção entre elas ("está tudo igual", pedido do Luiz, 11/09: achado
+     real por trás do item 12). --r-bar é o mesmo radius pequeno de todo
+     gráfico de barra do site agora. */
+  border-radius: var(--r-bar);
   background: var(--accent-soft);
   transition: background 0.12s ease;
 }

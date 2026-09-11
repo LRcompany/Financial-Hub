@@ -182,6 +182,12 @@
   font-weight: 600;
 }
 
+.overIcon {
+  color: var(--danger);
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
 /* ---------- impressão / "baixar PDF" via window.print() ----------
    Esconde a página inteira por trás e mostra só o conteúdo do .sheet. */
 @media print {

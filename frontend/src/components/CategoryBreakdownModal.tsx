@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 import { api, type CategoryBreakdown, type CategoryBreakdownRow } from '../lib/api'
 import { currency } from '../lib/format'
 import { IconButton } from './IconButton'
-import cards from '../styles/cards.module.css'
+import { InstallmentBadge, ProjectedTag } from './Badge'
+import { SpentPlannedValue } from './SpentPlannedValue'
 import styles from './CategoryBreakdownModal.module.css'
 
 function formatDate(iso: string): string {
@@ -52,11 +53,15 @@ export function CategoryBreakdownModal({
       <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <div>
-            <h3 className={styles.title}>{title}</h3>
+            <h3 className={styles.title}>
+              {isOver && <AlertTriangle size={14} strokeWidth={2} className={styles.overIcon} />}
+              {title}
+            </h3>
             <p className={styles.subtitle}>
-              R$ {currency(total)}
-              {planned != null && planned > 0 && (
-                <span className={isOver ? styles.overText : undefined}> / R$ {currency(planned)} planejado</span>
+              {planned != null && planned > 0 ? (
+                <SpentPlannedValue spent={total} planned={planned} suffix="planejado" />
+              ) : (
+                `R$ ${currency(total)}`
               )}
             </p>
           </div>
@@ -65,9 +70,10 @@ export function CategoryBreakdownModal({
           </IconButton>
         </div>
 
-        {isOver && (
-          <div className={styles.overBanner}>Ultrapassou o planejado em R$ {currency(total - planned!)}.</div>
-        )}
+        {/* Só o ícone acusa o estouro (pedido do Luiz, 11/09) — nada de
+            banner/texto vermelho, o valor continua com a hierarquia padrão
+            de SpentPlannedValue. */}
+        {isOver && <div className={styles.overBanner}>Ultrapassou o planejado em R$ {currency(total - planned!)}.</div>}
 
         {error && <div className={styles.empty}>Não consegui carregar o detalhamento.</div>}
         {!error && !data && <div className={styles.empty}>Carregando…</div>}
@@ -78,7 +84,7 @@ export function CategoryBreakdownModal({
               <div className={styles.block}>
                 <div className={styles.blockHead}>
                   <span>Gastos confirmados</span>
-                  <span>R$ {currency(realTotal)}</span>
+                  <span className={styles.blockHeadValueReal}>R$ {currency(realTotal)}</span>
                 </div>
                 {data.transactions.map((r) => (
                   <Row key={r.id} row={r} />
@@ -90,9 +96,9 @@ export function CategoryBreakdownModal({
               <div className={styles.block}>
                 <div className={styles.blockHead}>
                   <span>
-                    Parcelas projetadas <span className={styles.pill}>projetado</span>
+                    Parcelas projetadas <ProjectedTag />
                   </span>
-                  <span>R$ {currency(projectedTotal)}</span>
+                  <span className={styles.blockHeadValueProjected}>R$ {currency(projectedTotal)}</span>
                 </div>
                 {data.projected.map((r) => (
                   <Row key={r.id} row={r} projected />
@@ -118,11 +124,7 @@ function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolea
           {row.description}
           {/* Mesmo badge de "N/Total" usado em toda parcela do app (Dashboard,
               Orçamento, Revisar parcelas) — nunca um estilo próprio novo. */}
-          {row.installmentNumber && row.totalInstallments ? (
-            <span className={cards.installmentPill}>
-              {row.installmentNumber}/{row.totalInstallments}
-            </span>
-          ) : null}
+          <InstallmentBadge number={row.installmentNumber} total={row.totalInstallments} />
         </span>
         {row.rawDescription && <span className={styles.rowRaw}>{row.rawDescription}</span>}
         <span className={styles.rowMeta}>
@@ -131,7 +133,7 @@ function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolea
           {row.category ? ` · ${row.category}` : ''}
         </span>
       </div>
-      <span className={styles.rowValue}>R$ {currency(row.amount)}</span>
+      <span className={`${styles.rowValue} ${projected ? styles.rowValueProjected : ''}`}>R$ {currency(row.amount)}</span>
     </div>
   )
 }

@@ -61,6 +61,55 @@
   overflow-x: auto;
 }
 
+.positionCards {
+  display: none;
+}
+
+/* Tabela vira card por posição em tela estreita (pedido do Luiz, 11/09) —
+   mesmo padrão/breakpoint já usado em "Comprometido em parcelas futuras"
+   no Orçamento (07/09): "não por colunas e linhas, assim não precisamos
+   do scroll" horizontal. */
+@media (max-width: 640px) {
+  .tableWrap {
+    display: none;
+  }
+  .positionCards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.positionCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.positionCardTop {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.positionCardRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.positionCardLabel {
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

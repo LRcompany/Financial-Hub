@@ -44,27 +44,32 @@
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
 
+/* Estourou o planejado — só o ícone acusa (pedido do Luiz, 11/09: "deixa
+   apenas o alerta em vermelho"), nunca o texto/número. */
+.overIcon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
 .subtitle {
   font-size: 13px;
-  color: var(--ink-soft);
   margin: 2px 0 0;
   font-variant-numeric: tabular-nums;
 }
 
-.overText {
-  color: var(--danger);
-}
-
 .overBanner {
-  background: var(--danger-soft);
-  color: var(--danger);
+  background: var(--fill-muted);
+  color: var(--ink-soft);
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--r-sm);
   margin-bottom: var(--space-4);
@@ -99,18 +104,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pill {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 1px 7px;
-  border-radius: var(--r-full);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  vertical-align: middle;
+/* Gastos confirmados = preto/forte (é o que de fato aconteceu); parcela
+   projetada = cinza/fino (ainda não é dado real) — mesma hierarquia de
+   `SpentPlannedValue`, pedido do Luiz (11/09) pra diferenciar os valores. */
+.blockHeadValueReal {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.blockHeadValueProjected {
+  color: var(--ink-soft);
+  font-weight: 400;
 }
 
 .row {
@@ -146,8 +150,14 @@
 
 .rowValue {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.rowValueProjected {
+  font-weight: 400;
+  color: var(--ink-soft);
 }

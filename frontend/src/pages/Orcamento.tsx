@@ -19,6 +19,8 @@ import { BudgetReviewModal } from '../components/BudgetReviewModal'
 import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
+import { InstallmentBadge, ProjectedTag } from '../components/Badge'
+import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Select } from '../components/Select'
 import { Input } from '../components/Input'
 import { currency } from '../lib/format'
@@ -395,7 +397,14 @@ export function Orcamento() {
           <div className={cards.dailyGoalTop}>
             <div>
               <div className={cards.heroLabel}>{dailySpendLabel}</div>
-              <div className={cards.heroValue}>R$ {currency(displaySpend)}</div>
+              <div className={cards.heroValue}>
+                {/* Estourou a meta diária — só o ícone acusa, o número
+                    continua preto (pedido do Luiz, 11/09). */}
+                {budget.dailyGoal != null && displaySpend > budget.dailyGoal && (
+                  <AlertTriangle size={16} strokeWidth={2} className={cards.progressOverIcon} />
+                )}
+                R$ {currency(displaySpend)}
+              </div>
             </div>
             <div className={cards.dailyGoalMeta}>
               <span className={cards.heroLabel}>Meta diária</span>
@@ -603,7 +612,7 @@ export function Orcamento() {
                           i.description
                         )}
                       </td>
-                      <td>{i.installmentNumber && i.totalInstallments ? `${i.installmentNumber}/${i.totalInstallments}` : '—'}</td>
+                      <td>{i.installmentNumber && i.totalInstallments ? <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} /> : '—'}</td>
                       <td>{i.cardLabel ?? '—'}</td>
                       <td>{i.category ?? '—'}</td>
                       <td>R$ {currency(i.amount)}</td>
@@ -633,7 +642,7 @@ export function Orcamento() {
                   </div>
                   <div className={styles.installmentCardRow}>
                     <span className={styles.installmentCardLabel}>Parcela</span>
-                    <span>{i.installmentNumber && i.totalInstallments ? `${i.installmentNumber}/${i.totalInstallments}` : '—'}</span>
+                    <span>{i.installmentNumber && i.totalInstallments ? <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} /> : '—'}</span>
                   </div>
                   <div className={styles.installmentCardRow}>
                     <span className={styles.installmentCardLabel}>Cartão</span>
@@ -707,11 +716,7 @@ export function Orcamento() {
                   {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
                   {/* Compra parcelada (08/09) — mesmo indicador do modal
                       "Compras sem categoria", pra não sumir aqui também. */}
-                  {t.totalInstallments != null && (
-                    <span className={cards.installmentPill}>
-                      {t.installmentNumber ?? '?'}/{t.totalInstallments}
-                    </span>
-                  )}
+                  <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
                 </div>
                 <div className={cards.listSub}>
                   {formatDayLabel(t.date.slice(0, 10))}
@@ -844,12 +849,10 @@ function ParentAccordion({
         <span className={styles.accordionName}>
           {isOver && <AlertTriangle size={13} strokeWidth={2} className={styles.overIcon} />}
           {parentName}
-          {spentProjected > 0 && <span className={cards.installmentPill}>projetado</span>}
+          {spentProjected > 0 && <ProjectedTag />}
         </span>
         <span className={styles.categoryRowValues}>
-          <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(spent)}</span>
-          {' / '}
-          <span className={`${styles.plannedBold} ${isOver ? styles.spentOver : ''}`}>R$ {currency(planned)}</span>
+          <SpentPlannedValue spent={spent} planned={planned} />
         </span>
       </button>
       {open && (
@@ -877,7 +880,7 @@ function CategoryRow({
   return (
     <button
       type="button"
-      className={`${styles.categoryRow} ${styles.categoryRowButton} ${isOver ? styles.categoryRowOver : ''}`}
+      className={`${styles.categoryRow} ${styles.categoryRowButton}`}
       onClick={() => onOpen({ title: item.name, categoryIds: [item.categoryId], planned: item.planned })}
     >
       <div className={styles.categoryRowTop}>
@@ -887,12 +890,10 @@ function CategoryRow({
           {/* Parcela futura já comprometida, contando no gasto sem a Pluggy
               ter confirmado ainda (09/09) — marca visualmente que uma fatia
               desse valor ainda não é dado real. */}
-          {item.spentProjected > 0 && <span className={cards.installmentPill}>projetado</span>}
+          {item.spentProjected > 0 && <ProjectedTag />}
         </span>
         <span className={styles.categoryRowValues}>
-          <span className={isOver ? styles.spentOver : styles.spentValue}>R$ {currency(item.spent)}</span>
-          {' / '}
-          <span className={`${styles.plannedBold} ${isOver ? styles.spentOver : ''}`}>R$ {currency(item.planned)}</span>
+          <SpentPlannedValue spent={item.spent} planned={item.planned} />
         </span>
       </div>
       <div className={cards.deltaRow}>

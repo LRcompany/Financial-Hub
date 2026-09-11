@@ -183,8 +183,10 @@ export function Settings() {
       </section>
 
       {/* ---------- Categorias ---------- */}
+      {/* CategoryManager já vem com seu próprio cards.card + CardHeader
+          (11/09) — sem <h2> duplicado aqui, mesmo padrão de "Variáveis
+          fixas" logo acima (que também não repete título fora do card). */}
       <section>
-        <h2 className={cards.sectionTitle}>Categorias</h2>
         <CategoryManager />
       </section>
 
