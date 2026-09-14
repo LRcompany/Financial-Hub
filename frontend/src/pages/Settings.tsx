@@ -37,6 +37,13 @@ export function Settings() {
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
   const [dailyGoalInput, setDailyGoalInput] = useState('')
   const [savingGoal, setSavingGoal] = useState(false)
+  // "Atualizar tudo" (14/09, pedido do Luiz: "não gostei de termos botões
+  // de atualização em lugares diferentes... centralizar tudo em
+  // configurações") — um clique só sincroniza posição + transação de todo
+  // banco conectado, no lugar do antigo "Atualizar transações" que morava
+  // em Orçamento (sync diferente, botão separado, confuso).
+  const [syncingAll, setSyncingAll] = useState(false)
+  const [syncAllError, setSyncAllError] = useState<string | null>(null)
 
   function loadBrokers() {
     api.brokers().then(setBrokers).catch(() => setError('Não consegui falar com o backend ainda.'))
@@ -84,6 +91,27 @@ export function Settings() {
     } finally {
       setBusyId(null)
     }
+  }
+
+  // Um clique sincroniza TODO banco conectado (posições + transações) — em
+  // sequência, não em paralelo, pra não estourar limite de taxa da Pluggy
+  // nem misturar erro de um banco com o de outro. Erro num banco não trava
+  // os demais; a mensagem final lista só quem falhou.
+  async function syncAllNow() {
+    setSyncingAll(true)
+    setSyncAllError(null)
+    const failed: string[] = []
+    for (const broker of activeBrokers) {
+      if (broker.dataSource !== 'pluggy' && broker.dataSource !== 'onchain_query') continue
+      try {
+        await api.syncBroker(broker.id)
+      } catch {
+        failed.push(broker.name)
+      }
+    }
+    loadBrokers()
+    if (failed.length > 0) setSyncAllError(`Não consegui sincronizar: ${failed.join(', ')}.`)
+    setSyncingAll(false)
   }
 
   async function toggleArchive(broker: Broker) {
@@ -195,12 +223,22 @@ export function Settings() {
       <section>
         <h2 className={cards.sectionTitle}>Conexões</h2>
         <div className={styles.headerRow}>
+          {/* Único botão de "atualizar tudo" do app (14/09) — sincroniza
+              posição + transação (cartão/Pix/boleto) de cada banco
+              conectado, um de cada vez. Antes existia um "Atualizar
+              transações" separado em Orçamento fazendo só metade disso;
+              agora só existe aqui. */}
+          <button className={styles.actionBtn} onClick={syncAllNow} disabled={syncingAll || activeBrokers.length === 0}>
+            <RefreshCw size={13} strokeWidth={2} className={syncingAll ? styles.spinning : ''} />
+            {syncingAll ? 'Sincronizando tudo...' : 'Atualizar tudo'}
+          </button>
           <button className={styles.connectBtn} onClick={() => openWidget()}>
             <Plus size={14} strokeWidth={2} />
             Conectar banco
           </button>
         </div>
 
+        {syncAllError && <div className={styles.error}>{syncAllError}</div>}
         {error && <div className={styles.error}>{error}</div>}
 
         {activeBrokers.length === 0 && !error && (

@@ -545,10 +545,6 @@ button.upcomingMonthChip:hover {
   border-bottom: none;
 }
 
-.spinningIcon {
-  animation: orcamentoSpin 0.8s linear infinite;
-}
-
 .transactionsHelperText {
   font-size: 12.5px;
   color: var(--ink-soft);
@@ -562,8 +558,3 @@ button.upcomingMonthChip:hover {
    modal e não diretamente na lista"). A lista agora usa só
    `cards.listRow`/`cards.listRowButton`, sem CSS próprio de página. */
 
-@keyframes orcamentoSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}

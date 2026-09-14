@@ -167,6 +167,19 @@ function pixDescription(tx: PluggyTransaction): string {
   return tx.description;
 }
 
+// Boleto de consumo pago pela conta corrente (14/09, pedido do Luiz: "o
+// boleto do aluguel vem com água, gás, internet e seguro juntos, como
+// resolver isso?") — confirmado com dado real de produção que a Pluggy NUNCA
+// manda `operationType: "BOLETO"` pra esse débito na conta 99 (só no cartão
+// C6); na conta corrente vem como `operationType: "OUTROS"` + `description:
+// "br_utility"`, todo mês, valor variando (aluguel + consumo do mês).
+// `"OUTROS"` sozinho é um saco de gato genérico — outros bancos (Sofisa)
+// usam pra débito de investimento e até Pix mal rotulado — por isso o match
+// exige a descrição EXATA junto, nunca só o operationType.
+function isUtilityBoleto(tx: PluggyTransaction): boolean {
+  return tx.type === "DEBIT" && tx.operationType === "OUTROS" && tx.description === "br_utility";
+}
+
 /** Último dia válido de um mês (28-31) — pra não estourar pro mês seguinte
  * projetando "dia 31" num mês de 30 dias (ex: `new Date(y, 1, 31)` vira 3 de
  * março, não fevereiro). */
@@ -201,6 +214,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
   let categorizedCount = 0;
   let pixSynced = 0;
   let pixIgnored = 0; // recebido, ou pra mim mesmo, ou sem documento do destinatário
+  let utilityBoletoSynced = 0;
 
   for (const account of creditAccounts) {
     const { results: transactions } = (await getTransactions(account.id)) as { results: PluggyTransaction[] };
@@ -358,44 +372,50 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
     const { results: transactions } = (await getTransactions(account.id)) as { results: PluggyTransaction[] };
 
     for (const tx of transactions) {
-      // LOG TEMPORÁRIO (14/09) — pra descobrir o `operationType` real que a
-      // Pluggy manda pra um boleto pago (documentado só como possibilidade
-      // em comentário desde 07/09, nunca confirmado com dado real). Só loga
-      // DEBIT que não é Pix, então não expõe nada de entrada de dinheiro.
-      // Remover assim que a resposta aparecer no log de produção.
-      if (tx.type === "DEBIT" && tx.operationType !== "PIX") {
-        console.log(
-          `[debug-operationType] banco=${broker.name} operationType=${tx.operationType} descricao="${tx.description}" valor=${tx.amount} data=${tx.date}`
-        );
-      }
-      if (tx.operationType !== "PIX" || tx.type !== "DEBIT") continue;
-      if (!isPixToThirdParty(tx)) {
+      const isPix = tx.operationType === "PIX" && tx.type === "DEBIT";
+      const isUtility = isUtilityBoleto(tx);
+      if (!isPix && !isUtility) continue;
+      if (isPix && !isPixToThirdParty(tx)) {
         pixIgnored++;
         continue;
       }
 
       const externalId = `pluggy:${tx.id}`;
       const existing = await prisma.transaction.findUnique({ where: { externalId } });
-      if (existing) continue; // já sincronizado antes, nada a fazer (Pix não tem estado PENDING pra reconciliar)
+      // Pix não tem estado PENDING pra reconciliar; boleto de consumo
+      // também não (chega direto POSTED) — os dois só existem ou não.
+      if (existing) continue;
 
-      const description = pixDescription(tx);
+      // "br_utility" é um rótulo interno da Pluggy, ilegível pra quem lê a
+      // lista — o Luiz decide o que tem dentro (aluguel/água/gás/internet/
+      // seguro) dividindo a transação em categorias na hora de revisar
+      // (ver TransactionSplit), então a descrição só precisa dizer "isso é
+      // aquele boleto mensal", nunca inventar um detalhe que a Pluggy não
+      // mandou de verdade.
+      const description = isUtility ? "Boleto — contas do mês (aluguel/água/luz/etc.)" : pixDescription(tx);
       const amount = Math.abs(realAmount(tx));
 
       // Mesmo lançamento manual adiantado + reconciliação já usado pra
       // cartão (ver findAwaitingMatch acima) — é literalmente o caso que
       // motivou o pedido: "Faxina"/"Hotel em Natal" lançados na hora,
-      // confirmados aqui quando o Pix de verdade aparece.
+      // confirmados aqui quando o Pix (ou o boleto) de verdade aparece.
       const manualMatch = await findAwaitingMatch(broker.id, amount, new Date(tx.date));
       if (manualMatch) {
         await prisma.transaction.update({
           where: { id: manualMatch.id },
           data: { date: new Date(tx.date), description, amount, externalId, awaitingPluggyMatch: false },
         });
-        pixSynced++;
+        if (isUtility) utilityBoletoSynced++;
+        else pixSynced++;
         continue;
       }
 
-      const categoryId = (await suggestCategory(description))?.id ?? null;
+      // Boleto de consumo nunca tenta auto-categorizar (o rótulo é nosso
+      // próprio, genérico — não tem comerciante real pra CategorizationRule
+      // aprender nada) — fica sem categoria até o Luiz dividir em Aluguel/
+      // Água/Gás/Internet/Seguro (ou categorizar como uma coisa só, se um
+      // mês não tiver mais de uma conta dentro).
+      const categoryId = isUtility ? null : (await suggestCategory(description))?.id ?? null;
       await prisma.transaction.create({
         data: {
           date: new Date(tx.date),
@@ -409,13 +429,14 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           brokerId: broker.id,
         },
       });
-      pixSynced++;
+      if (isUtility) utilityBoletoSynced++;
+      else pixSynced++;
     }
   }
 
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
 
-  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount, pixSynced, pixIgnored };
+  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount, pixSynced, pixIgnored, utilityBoletoSynced };
 }
 
 /**
@@ -435,6 +456,7 @@ export async function syncAllBrokersCreditCardTransactions() {
     categorizedCount: number;
     pixSynced: number;
     pixIgnored: number;
+    utilityBoletoSynced: number;
     error?: string;
   }[] = [];
 
@@ -452,6 +474,7 @@ export async function syncAllBrokersCreditCardTransactions() {
         categorizedCount: 0,
         pixSynced: 0,
         pixIgnored: 0,
+        utilityBoletoSynced: 0,
         error: (err as Error).message,
       });
     }
@@ -466,8 +489,18 @@ export async function syncAllBrokersCreditCardTransactions() {
       categorizedCount: acc.categorizedCount + r.categorizedCount,
       pixSynced: acc.pixSynced + r.pixSynced,
       pixIgnored: acc.pixIgnored + r.pixIgnored,
+      utilityBoletoSynced: acc.utilityBoletoSynced + r.utilityBoletoSynced,
     }),
-    { transactionsSynced: 0, transactionsSkipped: 0, transactionsReconciled: 0, installmentsCreated: 0, categorizedCount: 0, pixSynced: 0, pixIgnored: 0 }
+    {
+      transactionsSynced: 0,
+      transactionsSkipped: 0,
+      transactionsReconciled: 0,
+      installmentsCreated: 0,
+      categorizedCount: 0,
+      pixSynced: 0,
+      pixIgnored: 0,
+      utilityBoletoSynced: 0,
+    }
   );
 
   return { ...totals, perBroker };

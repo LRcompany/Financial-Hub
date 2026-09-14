@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, RefreshCw, Plus, Minus, TrendingUp } from 'lucide-react'
+import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, Plus, Minus, TrendingUp } from 'lucide-react'
 import {
   api,
   type BudgetSummary,
@@ -77,7 +77,10 @@ export function Orcamento() {
   // (pedido do Luiz, 10/09).
   const [breakdown, setBreakdown] = useState<{ title: string; categoryIds: string[]; planned: number } | null>(null)
   const [copying, setCopying] = useState(false)
-  const [syncingTx, setSyncingTx] = useState(false)
+  // "Atualizar transações" morava aqui (botão separado, só sincronizava
+  // transação) — centralizado em Configurações (14/09, pedido do Luiz: "não
+  // gostei de termos botões de atualização em lugares diferentes"), o botão
+  // "Atualizar tudo" de lá já sincroniza posição + transação de cada banco.
 
   // Lista de TODAS as transações do mês navegado. Edição de categoria/nota
   // virou modal (11/09, pedido do Luiz: "a edição tem que rolar através de
@@ -175,27 +178,6 @@ export function Orcamento() {
       alert(`${result.copied} categoria(s) copiada(s) do mês anterior. ${result.skippedExisting} já tinham meta e não foram sobrescritas.`)
     } finally {
       setCopying(false)
-    }
-  }
-
-  async function syncTransactions() {
-    setSyncingTx(true)
-    try {
-      const r = await api.syncCreditCardTransactions()
-      loadCardsAndUpcoming()
-      loadTransactions()
-      load()
-      alert(
-        `${r.transactionsSynced} transação(ões) nova(s) puxada(s) da Pluggy (${r.transactionsSkipped} já existiam).\n` +
-          `${r.transactionsReconciled} pendente(s) confirmada(s) agora (descrição/valor atualizados pro dado real).\n` +
-          `${r.installmentsCreated} parcela(s) futura(s) identificada(s) automaticamente.\n` +
-          `${r.categorizedCount} categorizada(s) sozinha(s) — o resto revisa em "Revisar parcelas".\n` +
-          `${r.pixSynced} Pix pra outra pessoa/empresa sincronizado(s) (${r.pixIgnored} ignorado(s): recebido ou pra você mesmo).`
-      )
-    } catch (err) {
-      alert(`Falha ao sincronizar: ${(err as Error).message}`)
-    } finally {
-      setSyncingTx(false)
     }
   }
 
@@ -442,16 +424,7 @@ export function Orcamento() {
         {/* ---------- cartões de crédito ---------- */}
         {cardsList.length > 0 && (
           <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader
-              icon={CreditCardIcon}
-              title="Cartões de crédito"
-              action={
-                <button className={styles.copyBtn} onClick={syncTransactions} disabled={syncingTx}>
-                  <RefreshCw size={13} strokeWidth={2} className={syncingTx ? styles.spinningIcon : ''} />
-                  {syncingTx ? 'Sincronizando...' : 'Atualizar transações'}
-                </button>
-              }
-            />
+            <CardHeader icon={CreditCardIcon} title="Cartões de crédito" />
             <div className={styles.cardsGrid}>
               {cardsList.map((c) => {
                 const hasLimit = c.creditLimit != null && c.creditLimit > 0

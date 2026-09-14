@@ -732,27 +732,6 @@ export const api = {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<{ cards: CreditCard[] }>(`/credit-cards${query}`)
   },
-  syncCreditCardTransactions: () =>
-    request<{
-      transactionsSynced: number
-      transactionsSkipped: number
-      transactionsReconciled: number
-      installmentsCreated: number
-      categorizedCount: number
-      pixSynced: number
-      pixIgnored: number
-      perBroker: {
-        broker: string
-        transactionsSynced: number
-        transactionsSkipped: number
-        transactionsReconciled: number
-        installmentsCreated: number
-        categorizedCount: number
-        pixSynced: number
-        pixIgnored: number
-        error?: string
-      }[]
-    }>('/credit-cards/sync-transactions', { method: 'POST' }),
   upcomingInstallments: (params?: { month?: number; year?: number }) => {
     const query = params?.month && params?.year ? `?month=${params.month}&year=${params.year}` : ''
     return request<UpcomingInstallmentsSummary>(`/upcoming-installments${query}`)

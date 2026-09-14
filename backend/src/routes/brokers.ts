@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
-import { syncAllBrokersCreditCardTransactions } from "../services/pluggyTransactionSync.js";
+import { syncBrokerCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
 import { getUsdToBrlRate } from "../services/fx.js";
 import { getAccounts } from "../services/pluggy.js";
@@ -16,6 +16,12 @@ brokersRouter.get("/brokers", async (_req, res) => {
 // POST /api/brokers/:id/sync — sincroniza de acordo com o dataSource do broker:
 // "pluggy" puxa da Pluggy (pluggyConnectorId = itemId da conexão), "onchain_query"
 // consulta a blockchain direto (onchainAddress = endereço público da carteira).
+// Pra "pluggy", também sincroniza TRANSAÇÕES (cartão + Pix + boleto de
+// consumo) do mesmo broker, não só posições — antes ficava só em "Atualizar
+// transações" (Orçamento), um botão separado pra um sync diferente do mesmo
+// banco. Achado real (14/09, pedido do Luiz: "não gostei de termos botões
+// de atualização em lugares diferentes... centralizar tudo em
+// configurações") — um clique aqui já cobre tudo que aquele banco manda.
 brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   const broker = await prisma.broker.findUnique({ where: { id: req.params.id } });
   if (!broker) return res.status(404).json({ error: "Broker não encontrado" });
@@ -24,7 +30,14 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
   if (broker.dataSource === "pluggy" && broker.pluggyConnectorId) {
     try {
       const result = await syncBrokerInvestments(broker.id, broker.pluggyConnectorId);
-      return res.json({ synced: true, ...result });
+      // Nem todo broker Pluggy tem escopo de transação (alguns só investem)
+      // — `scope` é a mesma lista já usada em outro lugar do arquivo pra
+      // decidir isso (`["transactions","investments"]`).
+      const scope: string[] = JSON.parse(broker.scope);
+      const transactions = scope.includes("transactions")
+        ? await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId)
+        : null;
+      return res.json({ synced: true, ...result, transactions });
     } catch (err) {
       return res.status(502).json({ error: `Falha ao sincronizar com a Pluggy: ${(err as Error).message}` });
     }
@@ -452,15 +465,11 @@ brokersRouter.get("/credit-cards", async (req, res) => {
   res.json({ cards });
 });
 
-// POST /api/credit-cards/sync-transactions — puxa as transações reais de
-// TODOS os cartões de crédito conectados via Pluggy (BTG, C6...) de uma vez.
-// Grava Transaction (source: "pluggy", externalId evita duplicar em sync
-// repetido) e, pra compra parcelada, as parcelas futuras restantes em
-// UpcomingInstallment — automatizando o que antes era feito à mão batendo
-// fatura (ver Caixa em 29/08). Tenta categorizar automaticamente (mapeamento
-// conservador de categoria da Pluggy + CategorizationRule já aprendida);
-// o que não bate com confiança fica sem categoria, pra revisar manualmente.
-brokersRouter.post("/credit-cards/sync-transactions", async (_req, res) => {
-  const result = await syncAllBrokersCreditCardTransactions();
-  res.json(result);
-});
+// POST /api/credit-cards/sync-transactions existiu até 14/09 — só o botão
+// "Atualizar transações" de Orçamento chamava, sincronizando TODOS os
+// cartões/bancos de uma vez, separado do sync de posição do mesmo banco.
+// Removido junto com o botão (pedido do Luiz: "centralizar tudo em
+// configurações") — `POST /brokers/:id/sync` agora sincroniza posição E
+// transação do MESMO broker num clique só; o agendador automático
+// (scheduler.ts) continua chamando `syncAllBrokersCreditCardTransactions`
+// direto do módulo pra sincronizar transação de todo mundo 1x/dia.

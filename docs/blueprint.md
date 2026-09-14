@@ -1677,7 +1677,13 @@ Causa raiz, achada no código (`pluggyTransactionSync.ts`): o sync automático d
 
 Consequência prática enquanto isso não existe: um lançamento manual pra esse boleto NUNCA reconcilia (o valor real do banco é um único débito somando tudo, os 5 manuais separados nunca batem exatamente com nada que a Pluggy manda) — fica "pendente" pra sempre, e se um dia o sync de boleto for implementado, o valor real vai criar uma 6ª linha duplicada em vez de confirmar as 5 manuais.
 
-**Não implementado ainda** — precisa confirmar com dado real (via sync manual pelo Luiz em Configurações) qual `operationType` a Pluggy realmente manda pra um boleto antes de estender o filtro, pra não arriscar capturar transferência interna entre contas próprias por engano (mesmo cuidado que já existe documentado pro Pix). Fica registrado aqui como próximo passo natural depois que o "dividir transação" (abaixo) já resolve a MODELAGEM do problema (uma transação, várias categorias) — falta só o boleto virar UMA Transaction real pra dividir.
+**Resolvido no mesmo dia** — log temporário (`console.log` em cada `DEBIT` de conta banco que não é Pix, nunca gravado, removido depois de confirmar) + o Luiz clicando "Atualizar transações" revelou o dado real de produção: o boleto vem com `operationType: "OUTROS"` + `description: "br_utility"` (nunca `"BOLETO"`, que é só o C6 usando pro cartão) — valor R$4.659,15 confirmado batendo com a soma que o Luiz descreveu (4400+100+98+25,50+35,64 = R$4.659,14, 1 centavo de diferença por arredondamento). Histórico mostra o MESMO padrão recorrente quase todo mês desde 2025, valor variando (consumo muda mês a mês).
+
+`"OUTROS"` sozinho é um saco de gato genérico demais pra confiar (o mesmo log revelou Sofisa usando `"OUTROS"` tanto pra débito de investimento quanto pro próprio Pix enviado, mal rotulado) — o match final (`isUtilityBoleto`, `pluggyTransactionSync.ts`) exige a descrição EXATA `"br_utility"` junto do `operationType`, nunca um dos dois sozinho. Cria a `Transaction` com descrição própria e legível ("Boleto — contas do mês (aluguel/água/luz/etc.)", já que `"br_utility"` não diz nada pra quem lê a lista), sem categoria (nada de auto-categorizar um rótulo genérico nosso) — o Luiz divide em Aluguel/Água/Gás/Internet/Seguro (ou deixa como uma coisa só) usando a feature de dividir transação, que resolveu a modelagem do problema no mesmo dia (ver abaixo).
+
+**Achado incidental, não corrigido**: Sofisa nunca importa Pix de verdade (`"PIX ENVIADOS - Walkio Prachedes da Silva"`, um terceiro real) porque rotula como `"OUTROS"` em vez de `"PIX"` — o import de Pix (07/09) só reconhece `operationType === "PIX"` literal. Fora do escopo de hoje; registrado pra quando o Luiz quiser trazer Pix da Sofisa também.
+
+**Pendente**: os 5 lançamentos manuais antigos ("Aluguel" R$4.500, "Água" R$98, "Gas" R$25,50, "Seguro Casa" R$35,65, todos `source: manual`, nunca reconciliados) ficam órfãos pra sempre — o boleto real de setembro já é uma `Transaction` própria agora, não vai casar com eles. O Luiz pode apagar os 5 manuais pelo botão "Excluir" (são exatamente o caso que ele permite: manual, nunca confirmado) sempre que quiser fazer a limpeza — não mexi nisso automaticamente, é dado real da conta dele.
 
 ### Dividir transação em várias categorias (14/09, mesmo dia)
 
@@ -1690,7 +1696,19 @@ Luiz: *"logo o boleto pago pode ter mais de uma categoria dentro dele"* — o ca
 
 Verificado ao vivo em `dev.db`: dividi "ENERGISA PARAIBA" (R$296,89, antes "Sem categoria") em Moradia > Luz (R$200) + Moradia > Internet (R$96,89) — accordion "Despesas essenciais > Moradia" foi de R$0 pra R$296,89 exatamente, a folha "Internet" mostrou R$96,89/R$100,00 certinho, e o modal "o que está incluso" da categoria Internet mostrou só a fatia de R$96,89 (não os R$296,89 inteiros). "Desfazer divisão" reverteu pra "Sem categoria" limpo. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos, migration `add_transaction_split` aplicada local sem perda de dado (594 transações intactas).
 
-**Pendente**: migration + deploy em produção (backup do `prod.db` antes, confirmar contagem de linhas depois).
+**Deployado em produção** (mesmo dia): backup do `prod.db` antes da migration (apagado depois de confirmar 602 transações intactas), `prisma migrate deploy`, `prisma generate`, build + `pm2 restart`.
+
+### Um botão só de "atualizar tudo", centralizado em Configurações (14/09, mesmo dia)
+
+Luiz: *"não gostei de termos botões de atualização em lugares diferentes, assim fica muito confuso ter que clicar em dois lugares pra atualizar o geral... centralizar tudo em configurações?"* — achado real que motivou a reclamação: "Sincronizar" (por banco, em Configurações) só sincronizava POSIÇÃO de investimento; "Atualizar transações" (em Orçamento, card "Cartões de crédito") só sincronizava TRANSAÇÃO (cartão/Pix/boleto) de TODOS os bancos de uma vez — dois botões, dois sync diferentes, sem nenhuma relação óbvia de qual fazia o quê.
+
+**Fix**: `POST /api/brokers/:id/sync` (o endpoint por trás de "Sincronizar") agora roda os dois — sincroniza posição E (quando o broker tem escopo `"transactions"`) transação do MESMO banco, sequencialmente, numa chamada só. Novo botão **"Atualizar tudo"** no topo de Configurações > Conexões — passa por cada banco conectado chamando esse mesmo sync, um de cada vez (nunca em paralelo, pra não estourar limite de taxa da Pluggy nem misturar erro de um banco com o de outro); erro num banco não trava os demais, mensagem final lista só quem falhou. "Atualizar transações" removido de Orçamento (o card "Cartões de crédito" virou só leitura de novo) — o botão fazia estritamente MENOS do que "Atualizar tudo" faz agora, então não sobrava motivo pra existir separado. Removida junto a rota `POST /credit-cards/sync-transactions` e `api.syncCreditCardTransactions` (front), ambas mortas — o agendador automático (`scheduler.ts`) continua chamando `syncAllBrokersCreditCardTransactions` direto do módulo de serviço pro sync diário, isso não mudou.
+
+**O que NÃO mudou de propósito**: o ícone "Atualizar dados" no header (topo do app) continua onde está — não sincroniza nada com o banco, só dá `window.location.reload()` (recarrega a tela com o que já está salvo). É um conceito diferente (refresh de tela vs. sync com o banco); mantido separado pra não perder o atalho rápido de "só recarrega a página", que nada tem a ver com bater na Pluggy.
+
+Verificado ao vivo em `dev.db`: "Atualizar tudo" aparece do lado de "Conectar banco" em Configurações; card "Cartões de crédito" em Orçamento sem nenhum botão de sync, só o título. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
+
+**Pendente**: deploy em produção (sem migration).
 
 ## Decisões de navegação/IA
 
