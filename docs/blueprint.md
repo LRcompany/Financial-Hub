@@ -1745,6 +1745,18 @@ Verificado ao vivo em `dev.db` (3 `DividendPayment` de teste pro VALORA real —
 
 **Pendente**: deploy em produção (sem migration).
 
+### Reserva de Emergência da Sofisa: dado manual obsoleto, apagado (14/09, mesmo dia)
+
+Depois do fix de visibilidade acima ("Bug real: patrimônio inteiro escondendo dinheiro de corretora 'meio migrada'"), a Reserva de Emergência manual da Sofisa (`MANUAL:SOFISA:EMERGENCIA`, tipo "Conta Corrente", R$25.659,29 em jul/2026) voltou a aparecer — e o Luiz, vendo ela de novo, questionou a classificação num print ("por que Sofisa está aqui, se ele é renda fixa?"). Investiguei com SQL direto em produção: a classificação estava certa e não tinha mudado (decisão de 08/09, documentada acima em "Sofisa, C6 e BTG têm as duas coisas") — o fix daquele dia só devolveu a VISIBILIDADE, nunca mexeu em tipo. Expliquei isso com os números reais.
+
+Só que aí o Luiz perguntou o que interessava de verdade: *"então isso é informação antiga? Remova ela então, já que o Pluggy já traz isso, certo?"* — Fazia sentido: essa reserva é um lançamento manual histórico (nov/2024 a jul/2026, saldo subindo mês a mês como CDB de liquidez diária); ao mesmo tempo, o Sofisa real (via Pluggy) tem dezenas de CDBs "Renda Fixa" sincronizados automaticamente desde ago/2026. Hipótese forte: esse dinheiro foi de fato investido nos CDBs reais da Sofisa por volta de ago/2026, e o lançamento manual virou um duplicado obsoleto — o Pluggy já traz a posição de verdade, então manter o manual conta dinheiro que já está contado noutro lugar.
+
+Perguntei ao Luiz se preferia (a) apagar tudo — a posição e todo o histórico mensal (2024–jul/2026), some até do gráfico de evolução — ou (b) só parar de contar dela daqui pra frente, preservando o histórico já registrado. Ele escolheu **"Apagar tudo"**.
+
+**Execução** (dado de produção, sem código/migration): antes de apagar, confirmei via SQL que nenhuma `Contribution` nem `DividendPayment` referenciava esse `securityId` (nenhuma delas existia — 0 linhas nos dois casos), então não tinha filho pra apagar antes por causa de FK. Backup (`cp prod.db prod.db.bak_<timestamp>`) tirado antes de qualquer escrita. Apagadas as 21 linhas de `PositionSnapshot` (nov/2024 a jul/2026, brokerId da Sofisa) e depois a linha de `Security` (`MANUAL:SOFISA:EMERGENCIA`). Verificado depois: `Security` 235→234, `PositionSnapshot` 1478→1457 (exatamente -21), `PRAGMA foreign_key_check` limpo, e a lista de posições restantes da Sofisa é só CDBs "Renda Fixa" (manuais legados + automáticos via Pluggy) — nenhuma "Conta Corrente" sobrando. Backup apagado depois de confirmar.
+
+Efeito visível: R$25.659,29 some do patrimônio total, da tabela "Conta Corrente" e do gráfico de evolução da Sofisa — de vez, incluindo o histórico.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
