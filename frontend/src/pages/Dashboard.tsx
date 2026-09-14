@@ -316,7 +316,10 @@ export function Dashboard() {
             {!budgetError && budget && budget.categories.length > 0 && (
               <>
                 {(() => {
-                  const totalOver = budget.totalPlanned > 0 && budget.totalSpent > budget.totalPlanned
+                  // Sem `totalPlanned > 0` no gate (11/09, achado pelo Luiz em
+                  // Orçamento — mesmo fix aqui e no group.planned abaixo):
+                  // meta zerada com gasto real também é estouro.
+                  const totalOver = budget.totalSpent > budget.totalPlanned
                   return (
                     <div className={styles.totalRow} style={{ marginBottom: 'var(--space-5)' }}>
                       <div className={styles.totalLabel}>
@@ -339,7 +342,7 @@ export function Dashboard() {
                   )
                 })()}
                 {groupByParent(budget.categories).map((group) => {
-                  const isOver = group.planned > 0 && group.spent > group.planned
+                  const isOver = group.spent > group.planned
                   return (
                     <button
                       type="button"

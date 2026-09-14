@@ -43,6 +43,10 @@ export interface Transaction {
   // (pedido do Luiz, 05/09: sempre mostrar a categoria-mãe junto).
   categoryPath: string | null
   broker: { id: string; name: string } | null
+  // "manual" | "pluggy" | "ofx_import" — só "manual" pode ser apagada pelo
+  // Luiz (14/09): uma transação que veio do banco precisa continuar batendo
+  // com a fatura/extrato real, nunca pode só sumir da tela.
+  source: string
   // true = lançado manualmente adiantado, ainda esperando o sync da Pluggy
   // confirmar contra a fatura real (ver pluggyTransactionSync.ts).
   awaitingPluggyMatch: boolean
@@ -636,6 +640,7 @@ export const api = {
     request<{ updated: number }>('/transactions/group', { method: 'PUT', body: JSON.stringify({ ids, categoryId }) }),
   updateTransactionNote: (id: string, note: string | null) =>
     request<{ id: string; note: string | null }>(`/transactions/${id}/note`, { method: 'PUT', body: JSON.stringify({ note }) }),
+  deleteTransaction: (id: string) => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
   transactionLeafCategories: () => request<LeafCategoryOption[]>('/transactions/leaf-categories'),
   createTransaction: (input: { date: string; type: 'income' | 'expense'; description: string; amount: number; categoryId?: string; brokerId?: string }) =>
     postJson<Transaction>('/transactions', input),

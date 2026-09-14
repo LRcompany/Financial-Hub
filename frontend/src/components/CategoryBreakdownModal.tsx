@@ -46,7 +46,11 @@ export function CategoryBreakdownModal({
   const realTotal = data?.transactions.reduce((s, r) => s + r.amount, 0) ?? 0
   const projectedTotal = data?.projected.reduce((s, r) => s + r.amount, 0) ?? 0
   const total = realTotal + projectedTotal
-  const isOver = planned != null && planned > 0 && total > planned
+  // Sem `planned > 0` no gate (11/09, achado pelo Luiz): meta de R$0,00 pra
+  // essa categoria e gasto real > 0 já é estouro (a meta EXISTE, é zero de
+  // propósito) — só `planned == null` (sem meta nenhuma cadastrada) é que
+  // não tem "estourou" pra falar. Ver mesmo fix em Orcamento.tsx.
+  const isOver = planned != null && total > planned
 
   return (
     <ModalShell
@@ -57,7 +61,7 @@ export function CategoryBreakdownModal({
         </>
       }
       subtitle={
-        planned != null && planned > 0 ? (
+        planned != null ? (
           <SpentPlannedValue spent={total} planned={planned} suffix="planejado" />
         ) : (
           <Money>{`R$ ${currency(total)}`}</Money>

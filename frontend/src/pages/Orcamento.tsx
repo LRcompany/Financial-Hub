@@ -20,6 +20,7 @@ import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
 import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { TransactionEditModal } from '../components/TransactionEditModal'
+import { Select } from '../components/Select'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
@@ -87,12 +88,22 @@ export function Orcamento() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [leafCategories, setLeafCategories] = useState<LeafCategoryOption[]>([])
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  // Filtro por banco/corretora (14/09, pedido do Luiz: "quero ver quando vem
+  // de banco específico") — '' = todos, '__none__' = só as sem banco (ex:
+  // receita de projeto). Lista de opções vem das próprias transações do mês
+  // carregado, não de um cadastro de corretoras à parte — só aparece banco
+  // que realmente tem transação nesse mês.
+  const [bankFilter, setBankFilter] = useState('')
 
   function loadTransactions() {
     api.transactions({ month, year }).then(setTransactions).catch(() => {})
   }
 
-  useEffect(loadTransactions, [month, year])
+  useEffect(() => {
+    loadTransactions()
+    setBankFilter('') // banco filtrado pode não existir no mês novo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year])
   useEffect(() => {
     api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
   }, [])
@@ -671,42 +682,92 @@ export function Orcamento() {
         </div>
 
         <div className={`${cards.card} ${cards.fullWidth}`}>
-          <CardHeader icon={ListChecks} title="Todas as transações do mês" />
-          <p className={styles.transactionsHelperText}>
-            Clique numa transação pra corrigir categoria ou adicionar uma nota.
-          </p>
-          {transactions.length === 0 && <div className={cards.emptyState}>Nenhuma transação em {MONTH_NAMES[month - 1]}/{year}.</div>}
-          {transactions.map((t) => (
-            <button
-              type="button"
-              key={t.id}
-              className={`${cards.listRow} ${cards.listRowButton}`}
-              onClick={() => setSelectedTransaction(t)}
-            >
-              <div className={cards.listIcon}>💳</div>
-              <div className={cards.listBody}>
-                <div className={cards.listTitle}>
-                  {t.description}
-                  {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
-                  {/* Compra parcelada (08/09) — mesmo indicador do modal
-                      "Compras sem categoria", pra não sumir aqui também. */}
-                  <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
-                </div>
-                <div className={cards.listSub}>
-                  {formatDayLabel(t.date.slice(0, 10))}
-                  {t.broker && ` · ${t.broker.name}`}
-                  {' · '}
-                  {t.isTransfer ? 'Transferência' : t.type === 'income' ? 'Receita de projeto' : t.categoryPath || 'Sem categoria'}
-                  {/* Nota livre (08/09) — só leitura aqui, edição é no clique
-                      da linha (modal). */}
-                  {t.note && ` · "${t.note}"`}
-                </div>
-              </div>
-              <div className={cards.listValue}>
-                <Money>R$ {currency(t.amount)}</Money>
-              </div>
-            </button>
-          ))}
+          {(() => {
+            // Bancos com transação nesse mês, ordenado por nome — não vem de
+            // um cadastro de corretoras à parte, só o que aparece na lista
+            // carregada (14/09, pedido do Luiz: "filtro pra ver quando vem
+            // de banco específico").
+            const bankMap = new Map<string, string>()
+            let hasNoBank = false
+            for (const t of transactions) {
+              if (t.broker) bankMap.set(t.broker.id, t.broker.name)
+              else hasNoBank = true
+            }
+            const bankOptions = [...bankMap.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+            const visibleTransactions = !bankFilter
+              ? transactions
+              : bankFilter === '__none__'
+                ? transactions.filter((t) => !t.broker)
+                : transactions.filter((t) => t.broker?.id === bankFilter)
+
+            return (
+              <>
+                <CardHeader
+                  icon={ListChecks}
+                  title="Todas as transações do mês"
+                  action={
+                    (bankOptions.length > 0 || hasNoBank) && (
+                      <Select
+                        aria-label="Filtrar por banco"
+                        value={bankFilter}
+                        onChange={(e) => setBankFilter(e.target.value)}
+                        style={{ width: 'auto', minWidth: 150, height: 32, fontSize: '12.5px' }}
+                      >
+                        <option value="">Todos os bancos</option>
+                        {bankOptions.map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                        {hasNoBank && <option value="__none__">Sem banco</option>}
+                      </Select>
+                    )
+                  }
+                />
+                <p className={styles.transactionsHelperText}>
+                  Clique numa transação pra corrigir categoria ou adicionar uma nota.
+                </p>
+                {visibleTransactions.length === 0 && (
+                  <div className={cards.emptyState}>
+                    {transactions.length === 0
+                      ? `Nenhuma transação em ${MONTH_NAMES[month - 1]}/${year}.`
+                      : 'Nenhuma transação desse banco nesse mês.'}
+                  </div>
+                )}
+                {visibleTransactions.map((t) => (
+                  <button
+                    type="button"
+                    key={t.id}
+                    className={`${cards.listRow} ${cards.listRowButton}`}
+                    onClick={() => setSelectedTransaction(t)}
+                  >
+                    <div className={cards.listIcon}>💳</div>
+                    <div className={cards.listBody}>
+                      <div className={cards.listTitle}>
+                        {t.description}
+                        {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
+                        {/* Compra parcelada (08/09) — mesmo indicador do modal
+                            "Compras sem categoria", pra não sumir aqui também. */}
+                        <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
+                      </div>
+                      <div className={cards.listSub}>
+                        {formatDayLabel(t.date.slice(0, 10))}
+                        {t.broker && ` · ${t.broker.name}`}
+                        {' · '}
+                        {t.isTransfer ? 'Transferência' : t.type === 'income' ? 'Receita de projeto' : t.categoryPath || 'Sem categoria'}
+                        {/* Nota livre (08/09) — só leitura aqui, edição é no clique
+                            da linha (modal). */}
+                        {t.note && ` · "${t.note}"`}
+                      </div>
+                    </div>
+                    <div className={cards.listValue}>
+                      <Money>R$ {currency(t.amount)}</Money>
+                    </div>
+                  </button>
+                ))}
+              </>
+            )
+          })()}
         </div>
       </div>
 
@@ -790,7 +851,13 @@ function ParentAccordion({
   const planned = items.reduce((s, c) => s + c.planned, 0)
   const spent = items.reduce((s, c) => s + c.spent, 0)
   const spentProjected = items.reduce((s, c) => s + c.spentProjected, 0)
-  const isOver = planned > 0 && spent > planned
+  // Sem `planned > 0` no gate (11/09, achado pelo Luiz): categoria com meta
+  // planejada de R$0,00 e gasto real > 0 estourou tanto quanto (ou mais que)
+  // uma com meta positiva — "planned" aqui já vem de um `BudgetTarget`
+  // que EXISTE pra esse mês (0 é um valor real, "não planejei gastar nada
+  // aqui", não "sem meta cadastrada"). `spent > planned` sozinho já cobre
+  // os dois casos (0/0 continua sem alerta, > 0/0 passa a alertar).
+  const isOver = spent > planned
 
   return (
     <div className={`${styles.accordion} ${open ? styles.accordionOpen : ''}`}>
@@ -826,7 +893,8 @@ function CategoryRow({
   item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number }
   onOpen: (sel: BreakdownSel) => void
 }) {
-  const isOver = item.planned > 0 && item.spent > item.planned
+  // Ver comentário equivalente em `ParentAccordion` acima — mesmo fix.
+  const isOver = item.spent > item.planned
   return (
     <button
       type="button"

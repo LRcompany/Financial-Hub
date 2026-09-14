@@ -102,8 +102,10 @@ export function MonthlyReportModal({
   // Categoria(s) que estourou(aram) o planejado — mesma regra de "over" usada
   // no Dashboard/Orçamento/modal de detalhamento (10/09: precisa ser global,
   // não só onde foi implementada primeiro), aqui aplicada ao relatório.
+  // Sem `c.planned > 0` (11/09, achado pelo Luiz): meta zerada com gasto
+  // real também estourou.
   const overBudgetCategories = (budget?.categories ?? [])
-    .filter((c) => c.planned > 0 && c.spent > c.planned)
+    .filter((c) => c.spent > c.planned)
     .sort((a, b) => b.spent - b.planned - (a.spent - a.planned))
   const totalProjected = budget?.totalProjected ?? 0
 

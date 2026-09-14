@@ -195,3 +195,19 @@ transactionsRouter.post("/transactions", async (req, res) => {
 
   res.status(201).json(transaction);
 });
+
+// DELETE /api/transactions/:id — só apaga lançamento MANUAL (pedido do Luiz,
+// 14/09: "quando vier do banco, não tem como deletar"). Uma transação
+// `source: "pluggy"`/`"ofx_import"` precisa continuar batendo com a
+// fatura/extrato real pra sempre — nunca pode só sumir da tela; se ela tiver
+// sido lançada errado, o jeito é corrigir a categoria/nota, não apagar.
+transactionsRouter.delete("/transactions/:id", async (req, res) => {
+  const { id } = req.params;
+  const transaction = await prisma.transaction.findUnique({ where: { id }, select: { source: true } });
+  if (!transaction) return res.status(404).json({ error: "Transação não encontrada." });
+  if (transaction.source !== "manual") {
+    return res.status(400).json({ error: "Só é possível apagar um lançamento manual — essa transação veio do banco." });
+  }
+  await prisma.transaction.delete({ where: { id } });
+  res.status(204).end();
+});

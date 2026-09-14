@@ -1640,6 +1640,29 @@ Verificado ao vivo no browser (não só lendo o CSS, dessa vez): logado local (`
 - [x] Botão "+" liberado em Orçamento — modal "Lançar gasto manual" (05/09), pra compra que não vem automático pela Pluggy (ex: Wise, usada só como reserva em dólar sem conexão de transação). Sempre gasto — receita continua só de Salário/Projetos. Banco/corretora de origem é campo opcional, aceita QUALQUER corretora cadastrada (`POST /transactions` ganhou `brokerId` opcional). Extraído `leafExpenseCategories()` compartilhado (categorization.ts) pro novo `GET /transactions/leaf-categories`.
 - [x] Auditoria de valor errado (dólar em vez de reais) em OUTRAS assinaturas internacionais (04/09) — varrida TODA conta de crédito conectada (BTG, 99, Sofisa, C6) ao vivo na Pluggy procurando `currencyCode != "BRL"`: só existem 13 transações em moeda estrangeira no total, e são exatamente as 13 do Google Workspace já corrigidas (ver "Bug sério: valor de compra internacional..." acima). Adobe/Apple/Claude/Digital Ocean faturam em reais direto (ou não passam por conta conectada) — sem outro caso pra corrigir.
 
+### Bug real: categoria com meta zerada nunca marcava "estourou" (14/09)
+
+Luiz reparou num print: "Itens de Casa" (R$2.242,59 gasto / **R$0,00 planejado**) não tinha o triângulo de alerta, enquanto "Moradia" (a mãe, com meta agregada > 0) e "Faxina" (meta > 0) tinham. Pergunta: "por que ele ainda não aconteceu?"
+
+Causa raiz: todo lugar que decide `isOver` (categoria estourou o planejado) tinha o mesmo gate `planned > 0 && spent > planned` — herdado da primeira implementação e copiado 6 VEZES pelo app (`Orcamento.tsx` no card-mãe do accordion e na linha-folha, `CategoryBreakdownModal.tsx`, `Dashboard.tsx` no total do mês e no grupo por categoria-mãe, `MonthlyReportModal.tsx` na lista "estourou o planejado em"). `planned` aqui SEMPRE vem de um `BudgetTarget` que EXISTE pra aquele mês (a rota só itera sobre `targets`, nunca inventa uma categoria sem meta) — então `planned: 0` é um valor real, "planejei gastar zero aqui", não "sem meta cadastrada". Gastar qualquer coisa acima de uma meta de R$0 é estouro tanto quanto (ou mais que) estourar uma meta de R$180 — o gate `> 0` escondia justamente o caso mais extremo (infinitos % acima do planejado).
+
+**Fix**: removido o `planned > 0` (ou `c.planned > 0`/`group.planned > 0`/`totalPlanned > 0`) das 6 ocorrências — a condição vira só `spent > planned` (ou `planned != null && total > planned` no `CategoryBreakdownModal`, que aceita `planned` opcional pra quando a modal abre sem meta nenhuma). Categoria 0/0 (sem gasto, sem meta) continua sem alerta, como deveria. `CategoryBreakdownModal` também parou de esconder o "R$X / R$0,00" atrás de um `Money` cru quando `planned === 0` — mostra `SpentPlannedValue` normalmente, mesma UI de sempre, só que revelando a meta zerada em vez de escondê-la.
+
+Verificado ao vivo (não só lendo código): `dev.db` reproduz o MESMO cenário real (Moradia > Itens de Casa, R$2.708,03/R$0,00) — antes do fix sem ícone, depois do fix com o triângulo aparecendo, exatamente como o Luiz esperava. `npx tsc -b` + `npm run build` (front) e `tsc --noEmit` (back) limpos.
+
+### Filtro por banco em "Todas as transações do mês" + apagar lançamento manual (14/09, mesmo dia)
+
+Dois pedidos do Luiz na mesma leva:
+
+1. **Filtro por banco**: `<Select>` no cabeçalho do card "Todas as transações do mês" (Orçamento) — "Todos os bancos" (padrão) + um item por corretora que TEM transação nesse mês (não vem de um cadastro de corretoras à parte, só o que aparece na lista já carregada) + "Sem banco" quando existe alguma transação sem `broker` (ex: receita de projeto). Filtra client-side (`transactions.filter(...)`), reseta pra "Todos" toda vez que o mês muda (evita ficar preso num banco que não existe no mês novo).
+2. **Apagar transação manual**: botão "Excluir" na `TransactionEditModal`, só aparece quando `transaction.source === "manual"` — uma transação vinda do banco (`source: "pluggy"`/`"ofx_import"`) precisa continuar batendo com a fatura/extrato real pra sempre, então NUNCA pode ser apagada (se foi categorizada errado, o jeito é corrigir categoria/nota, não sumir com a linha). Clique armado, 2 passos (mesmo padrão já usado em `CategoryManager` pra excluir categoria: 1º clique vira o botão vermelho "Confirmar exclusão", só o 2º clique chama a API de verdade) — apagar uma transação inteira merece um passo a mais que trocar categoria/nota. Novo `DELETE /api/transactions/:id` no backend confere `source === "manual"` de novo do lado do servidor antes de apagar (defesa em profundidade — o front já esconde o botão, mas a rota nunca confia só nisso), 400 com mensagem clara se não for. `Transaction.source` (já existia no schema: `manual | pluggy | ofx_import`) exposto no tipo `Transaction` do front pela primeira vez.
+
+Achado ao caçar um exemplo real pro Luiz testar: a transação "Hamburguer" (R$44,89, "pendente") que ele mencionou já é `source: "manual"` em produção — vai ganhar o botão "Excluir" assim que isso for deployado, sem precisar de nenhum dado extra.
+
+Verificado ao vivo em `dev.db`: criei uma transação manual de teste, filtrei "Todos os bancos" → "C6" (lista realmente filtra), abri a transação manual → botão "Excluir" aparece, 1º clique arma ("Confirmar exclusão", vermelho), 2º clique apaga de verdade e a lista recarrega sem ela; abri uma transação `source: "pluggy"` (banco C6 de verdade) → sem botão de excluir nenhum, só Cancelar/Salvar. `npx tsc -b` limpo.
+
+**Pendente**: deploy de produção (frontend + backend, sem migration — `source` já existe no schema desde antes).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

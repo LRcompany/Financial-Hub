@@ -32,10 +32,16 @@ export function TransactionEditModal({
   onSaved: () => void
 }) {
   const canEditCategory = !transaction.isTransfer && transaction.type !== 'income'
+  // Só um lançamento MANUAL pode ser apagado (14/09, pedido do Luiz: "quando
+  // vier do banco, não tem como deletar") — uma transação vinda da Pluggy/OFX
+  // precisa continuar batendo com a fatura/extrato real pra sempre.
+  const canDelete = transaction.source === 'manual'
   const [categoryId, setCategoryId] = useState(transaction.category?.id ?? '')
   const [note, setNote] = useState(transaction.note ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function handleSave() {
     setSaving(true)
@@ -57,6 +63,27 @@ export function TransactionEditModal({
     }
   }
 
+  // Clique armado (mesmo padrão de CategoryManager: 1º clique arma, 2º
+  // confirma de verdade) — apagar uma transação inteira merece um passo a
+  // mais, diferente de trocar categoria/nota.
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setDeleting(true)
+    setError(null)
+    try {
+      await api.deleteTransaction(transaction.id)
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+      setConfirmDelete(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <ModalShell
       title={transaction.description}
@@ -69,10 +96,20 @@ export function TransactionEditModal({
       onClose={onClose}
       footer={
         <>
-          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+          {canDelete && (
+            <button
+              type="button"
+              className={confirmDelete ? styles.deleteConfirmBtn : styles.deleteBtn}
+              onClick={handleDelete}
+              disabled={deleting || saving}
+            >
+              {deleting ? 'Apagando...' : confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
+            </button>
+          )}
+          <button type="button" className={styles.cancelBtn} onClick={onClose} disabled={saving || deleting}>
             Cancelar
           </button>
-          <button type="button" className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+          <button type="button" className={styles.saveBtn} onClick={handleSave} disabled={saving || deleting}>
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </>
