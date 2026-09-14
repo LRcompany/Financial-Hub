@@ -26,14 +26,35 @@
   font-variant-numeric: tabular-nums;
 }
 
-.bar {
+/* Track = a "pista" de referência (onde a barra cheia caberia inteira).
+   Em pé (desktop) fica sem fundo — a própria coluna de 190px já serve de
+   régua visual (barra mais alta = mais perto do teto), então um fundo aqui
+   só duplicaria informação. Em tela estreita (linha, ver media query) o
+   track PRECISA de fundo: é ele quem diz "isso aqui é o espaço inteiro" pra
+   a barra (a filha, com largura proporcional ao valor) fazer sentido dentro
+   dele. Track e barra são elementos SEPARADOS de propósito — achado real,
+   14/09 (print do Luiz: "não consigo identificar o porquê das barras, não
+   mostra os tamanhos"): antes eram a mesma div fazendo dois papéis (`flex: 1`
+   pra ocupar a linha inteira E `width` proporcional ao valor ao mesmo
+   tempo) — `flex: 1` sempre ganha de `width` num item flex, então toda
+   barra saía do mesmo tamanho (o da linha inteira), não importa o valor. */
+.track {
   width: 100%;
-  height: var(--bar-size);
   /* Teto generoso — com poucas categorias (Renda Fixa: CDB/Tesouro/CRA/
      Debêntures, só 4) a coluna fica bem larga; um teto baixo deixava a
      barra fina boiando num vão grande, parecendo quebrado comparado com
      caixas de muito ativo (Ação, 15 tickers, preenche a coluna inteira). */
   max-width: 140px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: var(--r-bar);
+  overflow: hidden;
+}
+
+.bar {
+  width: 100%;
+  height: var(--bar-size);
   /* --r-lg (28px) era maior que a altura de boa parte das barras — toda
      barra curta virava uma pílula arredondada igual, escondendo a diferença
      de proporção entre elas ("está tudo igual", pedido do Luiz, 11/09: achado
@@ -98,12 +119,21 @@
     text-overflow: clip;
     word-break: break-word;
   }
-  .bar {
+  .track {
     order: 2;
     flex: 1;
     height: 14px;
-    width: var(--bar-size);
     max-width: none;
+    align-items: stretch;
+    /* Só aqui o track ganha fundo — mesmo tom (--fill-muted) da barra de
+       progresso padrão do app (pedido do Luiz, 09/09: "padronize o tamanho
+       das barras em todo o site"), pra servir de régua de 100% por trás do
+       preenchimento proporcional. */
+    background: var(--fill-muted);
+  }
+  .bar {
+    height: 100%;
+    width: var(--bar-size);
   }
   .pct {
     order: 3;

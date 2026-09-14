@@ -1757,6 +1757,16 @@ Perguntei ao Luiz se preferia (a) apagar tudo — a posição e todo o históric
 
 Efeito visível: R$25.659,29 some do patrimônio total, da tabela "Conta Corrente" e do gráfico de evolução da Sofisa — de vez, incluindo o histórico.
 
+### Bug real: barra "Por ativo" do Patrimônio sem proporção nenhuma no mobile (14/09, mesmo dia)
+
+Luiz mandou print (3 telas do Patrimônio no celular) reclamando das barras de "Por ativo": *"não conseguimos identificar o porquê das barras... não mostra os tamanhos"* — e lembrou que isso já tinha sido mexido antes (11/09, o ajuste de border-radius pra não esconder proporção — ver "está tudo igual" no changelog). Não era o mesmo bug, mas a raiz era parecida: no `VerticalBarChart` (o gráfico por trás de "Por ativo"), a versão mobile (linha, não coluna) usava a MESMA `<div>` pra dois papéis que não podem coexistir — `flex: 1` (ocupar a largura toda da linha) e `width: var(--bar-size)` (largura proporcional ao valor). Num item flex, `flex: 1` sempre ganha de `width` (o shorthand fixa `flex-basis: 0`, que tem prioridade sobre `width`) — resultado: toda barra saía do tamanho da linha inteira, não importa se o ativo era 0,4% ou 14,7% do total. A % numérica ao lado estava certa; só a barra em si não representava nada.
+
+**Fix**: separado em dois elementos — `.track` (a pista, quem de fato ocupa a linha via `flex: 1`) e `.bar` (o preenchimento, filho do track, com `width: var(--bar-size)` — agora sem concorrência, porque não é mais item flex do mesmo pai que precisa `flex:1`). Ganhou de brinde um fundo (`--fill-muted`, mesmo tom padrão de barra de progresso do site desde 09/09) no track só na versão mobile — sem ele não dá pra perceber onde "acabaria" uma barra de 100%, só com ele o preenchimento faz sentido visualmente. Desktop (coluna vertical) manteve o comportamento de sempre — lá o track é transparente de propósito, porque a própria coluna de altura fixa (190px) já serve de régua, sem precisar duplicar informação com fundo.
+
+Verificado ao vivo em `dev.db`, mobile (375px): "Conta Corrente" 0,0% e "DEBENTURES" 4,5% ficam quase vazias dentro da pista; "TESOURO DIRETO" 33,1% preenche um terço; "CDB" 55,4% passa da metade — proporção visível de verdade agora. Desktop (1400px) idêntico a antes, sem regressão. `npx tsc -b` limpo.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
