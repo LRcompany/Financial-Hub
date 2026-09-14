@@ -419,8 +419,36 @@ export function Patrimonio() {
               return (
                 <div key={group.type} className={`${cards.card} ${cards.fullWidth}`}>
                   <CardHeader icon={Icon} title={title} />
-                  <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
-                    <Money>R$ {currency(group.total)}</Money>
+                  {/* Botão "+ Rendimento" saiu da tabela (14/09, pedido do
+                      Luiz: "o botão + proventos tem que sair da tabela e ir
+                      pra cima, junto com o preço, do lado direito") — a
+                      Pluggy não manda dividendo pra Fundo (11/09), então
+                      precisa do lançamento manual; antes ficava dentro da
+                      célula "Proventos (mês)", empilhado com o valor. Só
+                      aparece quando o box tem UMA posição só (é o caso real
+                      hoje, VALORA) — com mais de uma, não dá pra saber qual
+                      delas o botão aqui em cima representaria, então some
+                      (lançar continua possível, só não tem atalho aqui). */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                    <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+                      <Money>R$ {currency(group.total)}</Money>
+                    </div>
+                    {group.type === 'Fundo' && group.positions.length === 1 && (
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Lançar rendimento de ${displayName(group.positions[0], group.type)}`}
+                        onClick={() =>
+                          setDividendTarget({
+                            brokerId: group.positions[0].brokerId,
+                            securityId: group.positions[0].securityId,
+                            name: displayName(group.positions[0], group.type),
+                          })
+                        }
+                      >
+                        <Plus size={16} strokeWidth={2} />
+                      </IconButton>
+                    )}
                   </div>
                   {usdTotal != null && <div className={styles.cellNote}><Money>US$ {currency(usdTotal)}</Money></div>}
                   <div className={cards.chartMeta}>
@@ -502,8 +530,19 @@ export function Patrimonio() {
                             </>
                           ) : (
                             <>
-                              <th>Cotas/qtd.</th>
-                              <th>Preço unit.</th>
+                              {/* Fundo não mostra cota/preço unitário (14/09,
+                                  pedido do Luiz: "pode ocultar as cotas e
+                                  preço unit., não preciso ver isso") — menos
+                                  colunas ajuda a tabela caber sem scroll
+                                  horizontal, e não fazia tanto sentido pro
+                                  Fundo mesmo (mesmo raciocínio já usado pra
+                                  tirar essas colunas de NOMAD/INCO, 11/09). */}
+                              {group.type !== 'Fundo' && (
+                                <>
+                                  <th>Cotas/qtd.</th>
+                                  <th>Preço unit.</th>
+                                </>
+                              )}
                               <th>Investido</th>
                               <th>Valor atual</th>
                               <th>Rentab.</th>
@@ -512,7 +551,7 @@ export function Patrimonio() {
                                   mostra coluna que faz sentido pra esse
                                   tipo", igual já vale pra Conta Corrente/
                                   standalone. */}
-                              {showDividends && <th>Proventos (mês)</th>}
+                              {showDividends && <th className={styles.thWrap}>Proventos (mês)</th>}
                               {/* Coluna PRÓPRIA pro acumulado (14/09) — antes
                                   vivia dentro da célula de "Proventos (mês)",
                                   mas são dois assuntos diferentes (o que
@@ -523,7 +562,7 @@ export function Patrimonio() {
                                   Fundo tem essa coluna — Ação/FII já mostram
                                   o mesmo dado no hover do nome do ativo (ver
                                   `assetHoverContent`), não precisam repetir. */}
-                              {group.type === 'Fundo' && <th>Proventos acumulados</th>}
+                              {group.type === 'Fundo' && <th className={styles.thWrap}>Proventos acumulados</th>}
                             </>
                           )}
                         </tr>
@@ -531,7 +570,7 @@ export function Patrimonio() {
                       <tbody>
                         {group.positions.map((p, i) => (
                           <tr key={`${p.broker}-${p.name}-${i}`}>
-                            <td>
+                            <td className={styles.assetCell}>
                               <HoverCard content={assetHoverContent(p)}>
                                 <span className={styles.assetName}>
                                   {displayName(p, group.type)}
@@ -554,7 +593,7 @@ export function Patrimonio() {
                               </>
                             ) : (
                               <>
-                                {!group.isBroker && (
+                                {!group.isBroker && group.type !== 'Fundo' && (
                                   <>
                                     <td>{p.quantity != null ? (p.quantity % 1 === 0 ? p.quantity : p.quantity.toFixed(2)) : '—'}</td>
                                     <td>{p.unitValue != null ? <Money>{`R$ ${currency(p.unitValue)}`}</Money> : '—'}</td>
@@ -588,23 +627,6 @@ export function Patrimonio() {
                                       <div className={styles.cellNote}>
                                         <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                       </div>
-                                    )}
-                                    {/* A Pluggy não manda dividendo pra Fundo
-                                        (pedido do Luiz, 11/09, pro VALORA) —
-                                        botão de lançamento manual aparece só
-                                        aqui, nunca em Ação/FII (que já vem
-                                        de verdade da Pluggy, lançar por
-                                        cima seria inventar dado). */}
-                                    {group.type === 'Fundo' && (
-                                      <IconButton
-                                        size="sm"
-                                        variant="ghost"
-                                        className={styles.addDividendBtn}
-                                        aria-label={`Lançar rendimento de ${displayName(p, group.type)}`}
-                                        onClick={() => setDividendTarget({ brokerId: p.brokerId, securityId: p.securityId, name: displayName(p, group.type) })}
-                                      >
-                                        <Plus size={12} strokeWidth={2} />
-                                      </IconButton>
                                     )}
                                   </td>
                                 )}
@@ -666,7 +688,7 @@ export function Patrimonio() {
                           </>
                         ) : (
                           <>
-                            {!group.isBroker && (
+                            {!group.isBroker && group.type !== 'Fundo' && (
                               <>
                                 <div className={styles.positionCardRow}>
                                   <span className={styles.positionCardLabel}>Cotas/qtd.</span>
@@ -715,17 +737,6 @@ export function Patrimonio() {
                                     <div className={styles.cellNote}>
                                       <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                     </div>
-                                  )}
-                                  {group.type === 'Fundo' && (
-                                    <IconButton
-                                      size="sm"
-                                      variant="ghost"
-                                      className={styles.addDividendBtn}
-                                      aria-label={`Lançar rendimento de ${displayName(p, group.type)}`}
-                                      onClick={() => setDividendTarget({ brokerId: p.brokerId, securityId: p.securityId, name: displayName(p, group.type) })}
-                                    >
-                                      <Plus size={12} strokeWidth={2} />
-                                    </IconButton>
                                   )}
                                 </span>
                               </div>

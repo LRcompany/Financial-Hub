@@ -1814,6 +1814,20 @@ Verificado com uma cópia local do `prod.db` (nunca toquei produção): antes do
 
 **Deployado em produção** (mesmo dia, sem migration de schema — só lógica).
 
+### Tabela do Fundo sem scroll horizontal + botão "+ Rendimento" saiu da tabela (14/09, mesmo dia)
+
+Luiz, olhando a tabela do Fundo: *"tira o scroll horizontal da tabela dos fundos. Qlq coisa corte o nome, adicione reticências se for preciso. Pode ocultar as cotas e preço unit., não preciso ver isso. O botão + proventos tem que sair da tabela e ir pra cima, junto com o preço, do lado direito."* Três pedidos, todos implementados:
+
+1. **Nome do ativo trunca com reticências** (`.assetCell`, `max-width: 160px; overflow: hidden; text-overflow: ellipsis`) em vez de forçar a tabela a crescer — aplicado na coluna Ativo de TODAS as tabelas de posição (não só Fundo), já que qualquer nome comprido tinha o mesmo problema. O hover (`HoverCard`) continua mostrando o nome completo + detalhe.
+2. **Cotas/qtd. e Preço unit. saem da tabela pro tipo Fundo** — mesmo raciocínio já usado pra NOMAD/INCO (11/09: não tem cota/preço unitário de verdade que faça sentido mostrar), agora estendido ao Fundo por pedido direto.
+3. **Botão "+ Rendimento" saiu da tabela e foi pro topo do box**, ao lado do valor total (`R$ 20.001,71`), alinhado à direita na mesma linha — só aparece quando o box tem UMA posição (é o caso real hoje, VALORA); com mais de uma, não teria como saber qual delas o botão representaria, então ele simplesmente não aparece ali (lançar continua possível reabrindo o fluxo quando isso mudar). Mesmo componente/lugar nas duas telas (desktop e mobile), já que o header do box é compartilhado pelas duas.
+
+**Achado no caminho**: mesmo depois de tirar 2 colunas, a tabela ainda estourava — os cabeçalhos "PROVENTOS (MÊS)"/"PROVENTOS ACUMULADOS" (os mais compridos) forçavam a coluna a abrir bem mais espaço do que o dado embaixo precisa (`—`, `R$200,00`), porque cabeçalho de tabela é `white-space: nowrap` por padrão em todo o site. Nova classe `.thWrap` (`white-space: normal`) deixa esses dois cabeçalhos específicos quebrar em duas linhas, encolhendo a coluna até o tamanho da MAIOR PALAVRA em vez da frase inteira — precisou de `.table th.thWrap` (não só `.thWrap`) pra vencer a especificidade de `.table th` (classe+elemento bate classe sozinha, regra básica de CSS que quase gerou um bug silencioso: a classe tava aplicada mas sem efeito nenhum).
+
+Verificado ao vivo em `dev.db`, testado em três larguras de janela: 1280px+ (nenhuma tabela do Patrimônio tem scroll horizontal, incluindo a do Fundo), 1024px (bem mais apertado — o Fundo ficou equivalente às outras tabelas de mais colunas, não pior mais), mobile (card mostra "+" no topo do box, sem Cotas/Preço unit., duas linhas de Proventos separadas). Clique no "+" testado ponta a ponta: abre a modal certa, mirando o VALORA. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
