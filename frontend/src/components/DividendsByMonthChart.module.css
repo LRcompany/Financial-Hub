@@ -20,58 +20,13 @@
   flex-shrink: 0;
 }
 
-/* Traço reto curto — representa a linha de acumulado na legenda, mesma
-   linguagem do "linha tracejada = meta" já usado no gráfico de gasto
-   diário, só que sólida (essa não é uma meta/threshold, é um total real). */
-.legendLine {
-  width: 14px;
-  height: 2px;
-  background: var(--ink);
-  flex-shrink: 0;
-}
-
 .chart {
-  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-2);
   height: 190px;
   width: 100%;
-}
-
-/* Linha de "acumulado no ano" (14/09) — sobreposta às barras, escala
-   PRÓPRIA (nunca a mesma da barra, ver comentário no .tsx). `inset:0` +
-   `preserveAspectRatio="none"` alinha o viewBox 0-100 exatamente com a
-   área de desenho das barras (`.chart` tem altura FIXA de 190px, igual à
-   altura literal de `.bar` — nunca precisa medir via JS). `pointer-events:
-   none` nos dois (svg e bolinha) — nunca podem roubar o hover/clique do
-   `.col`/`.label` por baixo. */
-.lineOverlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.lineStroke {
-  stroke: var(--ink);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.lineDot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  margin-left: -3.5px;
-  margin-top: -3.5px;
-  border-radius: 50%;
-  background: var(--ink);
-  border: 1.5px solid var(--surface);
-  pointer-events: none;
 }
 
 .col {
@@ -155,14 +110,5 @@
     order: 3;
     margin-bottom: 0;
     flex-shrink: 0;
-  }
-  /* Coluna vertical virou linha horizontal aqui em cima — o eixo inteiro
-     girou 90°, uma linha desenhada pro eixo vertical não bate mais com
-     nada. Acumulado continua no hover de cada mês e no total "recebido no
-     ano" abaixo do gráfico. */
-  .lineOverlay,
-  .lineDot,
-  .legendItemLine {
-    display: none;
   }
 }
