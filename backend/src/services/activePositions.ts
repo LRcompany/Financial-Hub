@@ -23,23 +23,40 @@ export const yearMonth = (y: number, m: number) => y * 12 + m;
  *
  * Regra extra pra broker que migrou de planilha manual pra fonte automática
  * (Pluggy — BTG, C6, 99, Sofisa — ou consulta on-chain — Phantom): uma vez
- * que existe QUALQUER snapshot `pluggy:*`/`onchain:*` pra aquele broker, os
- * Security antigos `MANUAL:*` do MESMO broker somem — senão o mesmo dinheiro
- * conta duas vezes (a linha manual estimada e o dado automático são o mesmo
- * saldo, não dois).
+ * que existe QUALQUER snapshot `pluggy:*`/`onchain:*` pra aquele broker
+ * NAQUELA CLASSE DE ATIVO (`security.type`), os Security antigos `MANUAL:*`
+ * do MESMO broker E MESMO TIPO somem — senão o mesmo dinheiro conta duas
+ * vezes (a linha manual estimada e o dado automático são o mesmo saldo, não
+ * dois).
+ *
+ * Bug real (14/09, achado investigando por que um aporte no Tesouro Selic
+ * do BTG não aparecia): a checagem original era só por `brokerId`, sem olhar
+ * o tipo. BTG migrou Ação/FII pra sync automático por ativo em ago/2026, mas
+ * a Renda Fixa (Tesouro Direto) NUNCA migrou — continua 100% manual
+ * (`MANUAL:BTG:TESOURO SELIC`, criada pelo modal "Registrar aporte"). Como a
+ * checagem só olhava "esse broker tem QUALQUER snapshot automático", a
+ * chegada do sync automático de Ação/FII em ago/2026 apagou da visão TODA
+ * Renda Fixa manual do BTG a partir daquele mês — R$47mil+ que continuavam
+ * lá de verdade, só que sem fonte automática pra confirmar, sumiram do
+ * Patrimônio/wealth overview inteiros (não só desse ativo — a mesma função
+ * alimenta a tabela de posições E os totais de patrimônio). Escopar por
+ * `brokerId + security.type` corrige: só exclui o manual de um TIPO que
+ * realmente ganhou fonte automática pra aquele broker, nunca um tipo
+ * diferente que continua 100% manual.
  */
 export function activeSnapshotsAsOf(all: Snap[], cutoffYm: number): Snap[] {
-  // "Esse broker já tinha dado automático nesse ponto do tempo?" — não pode
-  // ser uma checagem global (senão exclui a fonte automática do passado
-  // inteiro, antes dela sequer existir, e o histórico manual desaparece com
-  // ela). Só exclui o manual de um mês em que o automático JÁ estava rodando
-  // pra aquele broker.
-  const automatedStartYmByBroker = new Map<string, number>();
+  // "Esse broker+tipo já tinha dado automático nesse ponto do tempo?" — não
+  // pode ser uma checagem global (senão exclui a fonte automática do
+  // passado inteiro, antes dela sequer existir, e o histórico manual
+  // desaparece com ela). Só exclui o manual de um mês em que o automático
+  // JÁ estava rodando pra aquele broker+tipo especificamente.
+  const automatedStartYmByBrokerType = new Map<string, number>();
   for (const s of all) {
     if (!s.securityId.startsWith("pluggy:") && !s.securityId.startsWith("onchain:")) continue;
+    const key = `${s.brokerId}:${s.security.type}`;
     const symd = yearMonth(s.year, s.month);
-    const current = automatedStartYmByBroker.get(s.brokerId);
-    if (current === undefined || symd < current) automatedStartYmByBroker.set(s.brokerId, symd);
+    const current = automatedStartYmByBrokerType.get(key);
+    if (current === undefined || symd < current) automatedStartYmByBrokerType.set(key, symd);
   }
 
   const seen = new Set<string>();
@@ -49,7 +66,7 @@ export function activeSnapshotsAsOf(all: Snap[], cutoffYm: number): Snap[] {
     if (symd > cutoffYm) continue;
 
     if (s.securityId.startsWith("MANUAL:")) {
-      const automatedStart = automatedStartYmByBroker.get(s.brokerId);
+      const automatedStart = automatedStartYmByBrokerType.get(`${s.brokerId}:${s.security.type}`);
       if (automatedStart !== undefined && cutoffYm >= automatedStart) continue;
     }
 

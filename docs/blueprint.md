@@ -1708,7 +1708,19 @@ Luiz: *"não gostei de termos botões de atualização em lugares diferentes, as
 
 Verificado ao vivo em `dev.db`: "Atualizar tudo" aparece do lado de "Conectar banco" em Configurações; card "Cartões de crédito" em Orçamento sem nenhum botão de sync, só o título. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
 
-**Pendente**: deploy em produção (sem migration).
+**Deployado em produção** (mesmo dia, sem migration): build + `pm2 restart`.
+
+### Bug real: patrimônio inteiro escondendo dinheiro de corretora "meio migrada" (14/09, mesmo dia)
+
+Luiz pediu pra confirmar se um aporte recente no Tesouro Selic (BTG) já tinha entrado — investigando isso com dado real de produção (cópia local do `prod.db`, só leitura, apagada depois), achei DOIS resultados distintos:
+
+1. **Tesouro Selic: sem bug, está tudo certo.** BTG migrou Renda Fixa inteira pra sync automático por ativo em ago/2026 (mesma migração que já valia pra Ação/FII) — confirmado comparando snapshot de agosto (10 lotes de "TESOURO DIRETO - LFT", R$50.496,24 investido) com o de setembro (11 lotes, R$53.067,68) — apareceu um lote NOVO de R$2.571,44 (vencimento 2031) que não existia em agosto. Isso é o aporte do Luiz, sincronizado automaticamente pela Pluggy — não passa pelo modal "Registrar aporte" (esse é só pra corretora/ativo que a Pluggy não segue sozinha), e não precisa passar.
+
+2. **Bug real achado no caminho, não relacionado ao Tesouro**: `activeSnapshotsAsOf` (`services/activePositions.ts` — a função por trás de TODO patrimônio: tabela de posições E os totais de wealth overview/dashboard) tinha uma regra "corretora migrou de manual pra automático" que checava só `brokerId`, sem olhar o TIPO de ativo. Sofisa migrou "CDB - BANCO SOFISA S.A." (Renda Fixa) pra automático em ago/2026, mas a "Reserva de Emergência" dela (`MANUAL:SOFISA:EMERGENCIA`, tipo "Conta Corrente", R$25.659,29) é um produto DIFERENTE, nunca migrado — continuava 100% manual. Como a regra era só por corretora, a chegada do automático da Renda Fixa em agosto apagou da visão TODA posição manual da Sofisa a partir daquele mês, incluindo essa reserva que não tem nada a ver — R$25.659,29 reais sumidos do patrimônio total (Dashboard e Patrimônio) desde agosto, sem nenhum erro visível, só um número mais baixo do que devia.
+
+**Fix**: a regra de "esse manual já é redundante" passou a ser escopada por `brokerId + security.type` — só exclui um `MANUAL:*` quando EXISTE automático daquele MESMO tipo pra aquela corretora, nunca "qualquer automático da corretora inteira". Verificado com uma cópia local do `prod.db` (nunca mexi no banco de produção): rodei a função antiga e a nova lado a lado sobre o mesmo dado real — a única mudança em TODO o patrimônio é essa reserva da Sofisa reaparecendo (R$25.659,29), nada mais muda de lugar (Tesouro Selic do BTG já estava certo dos dois jeitos, contagem de posições ativas do BTG idêntica). `tsc --noEmit` limpo.
+
+**Pendente**: deploy em produção (sem migration — só lógica de leitura, nenhum dado foi escrito/alterado).
 
 ## Decisões de navegação/IA
 
