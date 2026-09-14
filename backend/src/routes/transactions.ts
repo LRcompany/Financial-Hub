@@ -56,7 +56,11 @@ transactionsRouter.get("/transactions", async (req, res) => {
 // "status bar" de compra sem categoria + o modal de revisão.
 transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) => {
   const transactions = await prisma.transaction.findMany({
-    where: { categoryId: null, type: "expense", isTransfer: false, date: { gte: CATEGORIZATION_TRACKING_START } },
+    // `splits: { none: {} }` (14/09) — uma transação dividida em categorias
+    // (ver TransactionSplit) já tem categoria de verdade, cada fatia na
+    // sua; `categoryId` da Transaction em si continua null pra sempre
+    // (nunca é usado depois do split), mas ela não é mais "sem categoria".
+    where: { categoryId: null, type: "expense", isTransfer: false, date: { gte: CATEGORIZATION_TRACKING_START }, splits: { none: {} } },
     orderBy: { date: "desc" },
   });
 

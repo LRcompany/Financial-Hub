@@ -1720,7 +1720,19 @@ Luiz pediu pra confirmar se um aporte recente no Tesouro Selic (BTG) já tinha e
 
 **Fix**: a regra de "esse manual já é redundante" passou a ser escopada por `brokerId + security.type` — só exclui um `MANUAL:*` quando EXISTE automático daquele MESMO tipo pra aquela corretora, nunca "qualquer automático da corretora inteira". Verificado com uma cópia local do `prod.db` (nunca mexi no banco de produção): rodei a função antiga e a nova lado a lado sobre o mesmo dado real — a única mudança em TODO o patrimônio é essa reserva da Sofisa reaparecendo (R$25.659,29), nada mais muda de lugar (Tesouro Selic do BTG já estava certo dos dois jeitos, contagem de posições ativas do BTG idêntica). `tsc --noEmit` limpo.
 
-**Pendente**: deploy em produção (sem migration — só lógica de leitura, nenhum dado foi escrito/alterado).
+**Deployado em produção** (mesmo dia, sem migration): build + `pm2 restart`.
+
+### Dividir também na modal "Compras sem categoria" (14/09, mesmo dia)
+
+Luiz reparou (print da modal): o boleto de contas do mês, agora importado como transação real (ver "Por que o boleto do aluguel não sincroniza" acima), caía em "Compras sem categoria" — mas essa modal só tinha o fluxo antigo de UMA categoria por comerciante, sem jeito de dividir.
+
+- **`SplitEditor` extraído pra componente próprio** (`components/SplitEditor.tsx` + `.module.css`) — antes vivia só dentro de `TransactionEditModal`. Expõe `SplitEditor` (as N linhas categoria+valor) + `initialSplitRows`/`validateSplitRows`/`splitRemaining` (helpers puros, sem estado) — o HOST (quem chama) segura o estado das linhas e decide como salvar; o componente só desenha e valida. `TransactionEditModal` foi refatorado pra usar esse componente em vez de ter a lógica embutida — mesmo conceito ("dividir um valor real"), dois lugares que precisam disso, nunca duas versões da UI.
+- **`TransactionReviewModal` ("Compras sem categoria") ganha "Dividir"** — só aparece quando o grupo é de UMA transação só (`group.count === 1`); dividir é uma decisão sobre um valor ESPECÍFICO (essa fatura desse mês), não faz sentido aplicar em bloco pra N compras de valores diferentes do mesmo comerciante. Clicar "Dividir" troca a linha da tabela (ou o card, no mobile) pelo `SplitEditor` inteiro dentro de um `<td colSpan={6}>` — mesmo padrão dos outros hosts, sem modal dentro de modal.
+- **Bug achado no caminho**: `GET /transactions/uncategorized-groups` filtrava só `categoryId: null`, sem excluir transação já dividida — uma transação com `TransactionSplit` continua com `categoryId` null pra sempre (nunca muda), então depois de dividida ela continuaria aparecendo em "Compras sem categoria" pra sempre, mesmo já tendo categoria de verdade (via os splits). Fix: `splits: { none: {} }` adicionado ao filtro, mesmo princípio já usado em `budget.ts` pra não contar uma transação dividida 2x.
+
+Verificado ao vivo em `dev.db`, ponta a ponta: abri "Compras sem categoria", cliquei "Dividir" no boleto real (R$4.659,15), dividi em Aluguel R$4.400 + Internet R$100 + Água R$98 + Gás R$25,50 + Seguro Residência R$35,65 (exatamente os valores que o Luiz descreveu) — "Salvar divisão", o boleto sumiu da lista (26→25 comerciantes), e "Moradia" no Orçamento subiu exatamente R$4.659,15. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
+
+**Pendente**: deploy em produção (sem migration).
 
 ## Decisões de navegação/IA
 

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
 import { api, type Transaction, type LeafCategoryOption } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
@@ -7,18 +6,13 @@ import { Input } from './Input'
 import { Select } from './Select'
 import { InstallmentBadge } from './Badge'
 import { ModalShell } from './ModalShell'
+import { SplitEditor, initialSplitRows, validateSplitRows, type SplitRowValue } from './SplitEditor'
 import styles from './TransactionEditModal.module.css'
+import splitStyles from './SplitEditor.module.css'
 
 function formatFullDate(iso: string): string {
   return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
-
-interface SplitRow {
-  categoryId: string
-  amount: string
-}
-
-const SPLIT_TOLERANCE = 0.01
 
 /** Editar categoria/nota de uma transação (11/09, pedido do Luiz: "a edição
  * tem que rolar através de modal e não diretamente na lista... assim não
@@ -30,11 +24,9 @@ const SPLIT_TOLERANCE = 0.01
  * lista, nunca duas modais duplicadas pro mesmo conceito.
  *
  * Dividir em categorias (14/09, pedido do Luiz: "o boleto do aluguel vem
- * com água, gás, internet e seguro juntos, como resolver isso?") — uma
- * despesa que representa VÁRIAS categorias na vida real vira N linhas
- * categoria+valor que precisam somar exatamente o valor da transação (o
- * valor real do banco nunca muda, só é redistribuído — ver
- * TransactionSplit no schema). */
+ * com água, gás, internet e seguro juntos, como resolver isso?") — editor
+ * em si é `SplitEditor` (compartilhado com `TransactionReviewModal`), aqui
+ * só o botão de convite + o "Desfazer"/"Cancelar" ao redor dele. */
 export function TransactionEditModal({
   transaction,
   categories,
@@ -66,19 +58,13 @@ export function TransactionEditModal({
   const [deleting, setDeleting] = useState(false)
 
   const [splitMode, setSplitMode] = useState(isSplit)
-  const [splitRows, setSplitRows] = useState<SplitRow[]>(
+  const [splitRows, setSplitRows] = useState<SplitRowValue[]>(
     isSplit ? transaction.splits.map((s) => ({ categoryId: s.categoryId, amount: s.amount.toFixed(2) })) : []
   )
   const [undoingSplit, setUndoingSplit] = useState(false)
 
   function startSplit() {
-    // Primeira linha já vem com o valor cheio (e a categoria já escolhida,
-    // se tinha uma) — o Luiz só precisa "tirar" o pedaço das outras
-    // categorias da primeira, não montar tudo do zero.
-    setSplitRows([
-      { categoryId, amount: transaction.amount.toFixed(2) },
-      { categoryId: '', amount: '0' },
-    ])
+    setSplitRows(initialSplitRows(transaction.amount, categoryId))
     setSplitMode(true)
     setError(null)
   }
@@ -88,21 +74,6 @@ export function TransactionEditModal({
     setSplitRows([])
     setError(null)
   }
-
-  function updateSplitRow(index: number, field: keyof SplitRow, value: string) {
-    setSplitRows((rows) => rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)))
-  }
-
-  function addSplitRow() {
-    setSplitRows((rows) => [...rows, { categoryId: '', amount: '0' }])
-  }
-
-  function removeSplitRow(index: number) {
-    setSplitRows((rows) => rows.filter((_, i) => i !== index))
-  }
-
-  const splitAllocated = splitRows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
-  const splitRemaining = transaction.amount - splitAllocated
 
   async function handleUndoSplit() {
     setUndoingSplit(true)
@@ -120,16 +91,9 @@ export function TransactionEditModal({
   async function handleSave() {
     setError(null)
     if (splitMode) {
-      if (splitRows.some((r) => !r.categoryId || !(Number(r.amount) > 0))) {
-        setError('Toda linha precisa de categoria e um valor maior que zero.')
-        return
-      }
-      if (Math.abs(splitRemaining) > SPLIT_TOLERANCE) {
-        setError(
-          splitRemaining > 0
-            ? `Falta distribuir R$ ${currency(splitRemaining)}.`
-            : `Passou R$ ${currency(Math.abs(splitRemaining))} do valor da transação.`
-        )
+      const validationError = validateSplitRows(splitRows, transaction.amount)
+      if (validationError) {
+        setError(validationError)
         return
       }
     }
@@ -220,71 +184,20 @@ export function TransactionEditModal({
       ) : transaction.type === 'income' ? (
         <p className={styles.staticNote}>Receita de projeto — categoria automática.</p>
       ) : splitMode ? (
-        <div className={styles.splitBlock}>
-          <div className={styles.splitHeader}>
-            <span className={styles.splitLabel}>Dividida em categorias</span>
+        <div className={splitStyles.splitBlock}>
+          <div className={splitStyles.splitHeader}>
+            <span className={splitStyles.splitLabel}>Dividida em categorias</span>
             {isSplit ? (
-              <button type="button" className={styles.splitLinkBtn} onClick={handleUndoSplit} disabled={busy}>
+              <button type="button" className={splitStyles.splitLinkBtn} onClick={handleUndoSplit} disabled={busy}>
                 {undoingSplit ? 'Desfazendo...' : 'Desfazer divisão'}
               </button>
             ) : (
-              <button type="button" className={styles.splitLinkBtn} onClick={cancelSplit} disabled={busy}>
+              <button type="button" className={splitStyles.splitLinkBtn} onClick={cancelSplit} disabled={busy}>
                 Cancelar divisão
               </button>
             )}
           </div>
-
-          {splitRows.map((row, i) => (
-            <div className={styles.splitRow} key={i}>
-              <Select
-                aria-label="Categoria"
-                value={row.categoryId}
-                onChange={(e) => updateSplitRow(i, 'categoryId', e.target.value)}
-                disabled={saving}
-                className={styles.splitCategorySelect}
-              >
-                <option value="" disabled>
-                  Categoria
-                </option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.path}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                aria-label="Valor"
-                type="number"
-                step="0.01"
-                value={row.amount}
-                onChange={(e) => updateSplitRow(i, 'amount', e.target.value)}
-                disabled={saving}
-                className={styles.splitAmountInput}
-              />
-              <button
-                type="button"
-                className={styles.splitRemoveBtn}
-                onClick={() => removeSplitRow(i)}
-                disabled={saving || splitRows.length <= 2}
-                aria-label="Remover categoria"
-                title="Remover categoria"
-              >
-                <Trash2 size={14} strokeWidth={2} />
-              </button>
-            </div>
-          ))}
-
-          <button type="button" className={styles.splitAddBtn} onClick={addSplitRow} disabled={saving}>
-            + Adicionar categoria
-          </button>
-
-          <p className={Math.abs(splitRemaining) > SPLIT_TOLERANCE ? styles.splitRemainingWarn : styles.splitRemainingOk}>
-            {Math.abs(splitRemaining) <= SPLIT_TOLERANCE
-              ? 'Valores batem com o total da transação.'
-              : splitRemaining > 0
-                ? `Falta distribuir R$ ${currency(splitRemaining)}.`
-                : `R$ ${currency(Math.abs(splitRemaining))} acima do valor da transação.`}
-          </p>
+          <SplitEditor rows={splitRows} onChange={setSplitRows} categories={categories} totalAmount={transaction.amount} disabled={saving} />
         </div>
       ) : (
         <>
@@ -300,7 +213,12 @@ export function TransactionEditModal({
           </Select>
           {/* Boleto/fatura que junta mais de uma categoria (aluguel+água+
               gás+internet+seguro, ex.) — pedido do Luiz, 14/09. */}
-          <button type="button" className={styles.splitStartBtn} onClick={startSplit} disabled={saving}>
+          <button
+            type="button"
+            className={`${splitStyles.splitStartBtn} ${styles.splitStartBtnSpacing}`}
+            onClick={startSplit}
+            disabled={saving}
+          >
             Dividir esta transação em categorias
           </button>
         </>
