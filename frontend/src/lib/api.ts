@@ -278,11 +278,20 @@ export interface WealthOverview {
   // nunca mistura ano passado — mesmo critério de "Recebido no ano" em
   // Projetos), separado Ação x FII x Fundo (`fundo` é lançamento manual,
   // pedido do Luiz pro VALORA — a Pluggy não manda dividendo desse tipo)
-  // pro gráfico empilhado em Patrimônio. `breakdown` = de onde veio a grana
-  // naquele mês (por ativo, maior primeiro) — pedido do Luiz (11/09):
-  // "quando eu passar o mouse em proventos, quero saber de onde veio a
-  // grana". Vazio quando nenhum ativo pagou nesse mês.
-  dividendsByMonth: { label: string; acao: number; fii: number; fundo: number; breakdown: { label: string; value: number }[] }[]
+  // pro gráfico empilhado em Patrimônio. `{tipo}Breakdown` = de onde veio a
+  // grana daquele mês DENTRO daquele tipo (por ativo, maior primeiro) —
+  // pedido do Luiz (11/09, refinado 14/09: hover agora é por cor/segmento,
+  // não por mês inteiro misturado). Vazio quando nenhum ativo daquele tipo
+  // pagou nesse mês.
+  dividendsByMonth: {
+    label: string
+    acao: number
+    fii: number
+    fundo: number
+    acaoBreakdown: { label: string; value: number }[]
+    fiiBreakdown: { label: string; value: number }[]
+    fundoBreakdown: { label: string; value: number }[]
+  }[]
   dividendsThisYear?: number
   movers: { category: string; changePct: number }[]
   wealthGoal: WealthGoal | null

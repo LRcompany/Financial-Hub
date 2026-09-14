@@ -1767,6 +1767,42 @@ Verificado ao vivo em `dev.db`, mobile (375px): "Conta Corrente" 0,0% e "DEBENTU
 
 **Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
 
+### Hover de "Proventos recebidos" agora é por cor, não por mês inteiro (14/09, mesmo dia)
+
+Luiz: *"quero passar o mouse nas cores da barra e mostrar apenas os itens que fazem parte da cor. No verde eu vejo tudo que é FII, no azul só Ações, no laranja só Fundo."* Antes o hover ficava no rótulo do mês (embaixo da barra) e misturava TUDO daquele mês num popup só, sem separar por tipo — dava pra ver "de onde veio a grana" mas não "de onde veio a grana daquela cor especificamente".
+
+- **Backend** (`GET /wealth-overview`): `breakdown` (um só, por mês) virou três — `acaoBreakdown`/`fiiBreakdown`/`fundoBreakdown` — cada um já filtrado pro tipo antes de agrupar por ativo. Mesma regra de nome de sempre (ticker pra Ação/FII, nome pra Fundo — a Pluggy manda CNPJ no campo ticker do Fundo).
+- **`DividendsByMonthChart`**: o `<HoverCard>` saiu do rótulo do mês e foi pra CADA segmento colorido da barra — cada um só mostra o breakdown do seu próprio tipo. Tecnicamente precisou de um elemento a mais por segmento (`.segmentWrap`, ver comentário no CSS): o `<span>` que o `HoverCard` desenha (`.trigger`) não tem altura própria, então aplicar a % de tamanho direto nele quebraria (percentual sem "contra o que resolver"); o wrap por fora resolve a % contra a barra (que tem altura definida) e o trigger/segmento internos só precisam de 100%/100%.
+
+Verificado ao vivo em `dev.db` (3 `DividendPayment` de teste inseridos com backup, um de cada tipo, mesmo mês — apagados depois): hover no laranja mostrou só "VALORA... R$200,00", no verde só "HGLG11 R$340,20", no azul só "PETR4 R$120,50" — nunca misturado. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
+### Consistência: "Primeiro Milhão" (não "Primeira") + coluna de proventos acumulados separada da de "mês" no Fundo (14/09, mesmo dia)
+
+Luiz reparou dois problemas visuais na mesma leva de mudanças de hoje:
+
+1. **"Primeira Milhão" → "Primeiro Milhão"** — erro de concordância (milhão é substantivo masculino), presente no card de Patrimônio e no atalho do Dashboard. Corrigido nos dois lugares — só o texto visível, nenhuma lógica muda.
+2. **"Proventos acumulados" tinha virado uma segunda linha dentro da célula "Proventos (mês)"** (ver changelog de mais cedo hoje) — Luiz: *"não faz sentido compartilhar o mesmo assunto pra mês... adicione em uma coluna a mais."* Virou coluna própria (`Proventos acumulados`), só pra Fundo, ao lado de "Proventos (mês)" — nunca mais dentro da mesma célula. Replicado no card mobile como uma linha própria também.
+
+Verificado ao vivo em `dev.db` (mesmos 3 `DividendPayment` de teste da seção anterior): tabela do Fundo mostrou "PROVENTOS (MÊS)" e "PROVENTOS ACUMULADOS" como colunas separadas (ambas R$200,00 nesse caso de teste, só 1 mês de dado — mas estruturalmente independentes); mobile replicou como duas linhas. `npx tsc -b` limpo.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
+### Investigado, NÃO corrigido ainda: "Aportado real" pode estar inflado por migração de corretora (14/09, mesmo dia)
+
+Luiz perguntou se o valor de "Aportado real" (tabela "Primeiro Milhão") está correto de fato. Investiguei com uma cópia local do `prod.db` (nunca toquei produção) comparando mês a mês o `investedAmount` total (a mesma base que gera essa coluna, em `wealth.ts`) — achado real, ainda **sem fix aplicado**:
+
+Em agosto/2026 (mês em que BTG migrou Ação/FII/Renda Fixa e Sofisa migrou o CDB pra sync automático via Pluggy — ver "Bug real: patrimônio inteiro escondendo dinheiro..." acima), o total investido saltou **+R$70.386,11** num mês só. Quebrando por corretora+tipo, quase TUDO desse salto é artefato da própria migração (o manual saindo e o automático entrando no mesmo mês), não aporte de verdade:
+- BTG FII, BTG Fundo: diferença manual→Pluggy de centavos (dado batia certo).
+- BTG Ação, BTG Renda Fixa, C6 Renda Fixa: diferença de ~R$2-3 mil cada (provável arredondamento/precisão diferente entre o que o Luiz digitava à mão e o que a Pluggy calcula).
+- **Sofisa Renda Fixa: manual tinha R$18.000, o automático revelou R$54.040,11 — R$36.040,11 de diferença.** Isso não é aporte de agosto: é o lançamento manual tendo subestimado o valor real investido o tempo todo (provavelmente só uma estimativa grosseira, ou não capturava todos os CDBs que a Sofisa realmente tinha), e a Pluggy mostrando o número certo pela primeira vez.
+- Resto (INCO novo lançamento manual, split de carteira cripto Phantom por rede) é menor e/ou legítimo.
+
+Ou seja: dos ~R$70k que aparecem como "aportado" em agosto, uns R$34-36k são só a Pluggy corrigindo um número que já estava errado há tempos — não dinheiro novo que entrou. Isso infla tanto o "Aportado real" do ano (R$54.032,28 total jan-set, calculado) quanto a comparação com a meta ("% da meta até agora").
+
+**Não apliquei fix ainda** porque não tem uma fórmula única e óbvia (diferente do bug do brokerId+type de mais cedo, que tinha resposta certa clara) — dá pra excluir o delta do mês de migração inteiro (arrisca esconder um aporte real feito no mesmo mês por coincidência), corrigir só o caso pontual da Sofisa, ou outra abordagem. Perguntei ao Luiz como prefere tratar.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

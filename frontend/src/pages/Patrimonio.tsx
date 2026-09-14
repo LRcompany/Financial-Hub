@@ -507,11 +507,23 @@ export function Patrimonio() {
                               <th>Investido</th>
                               <th>Valor atual</th>
                               <th>Rentab.</th>
-                              {/* Só Ação/FII recebem provento de verdade
-                                  (11/09) — mesmo princípio de "só mostra
-                                  coluna que faz sentido pra esse tipo",
-                                  igual já vale pra Conta Corrente/standalone. */}
+                              {/* Só Ação/FII/Fundo recebem provento de
+                                  verdade (11/09) — mesmo princípio de "só
+                                  mostra coluna que faz sentido pra esse
+                                  tipo", igual já vale pra Conta Corrente/
+                                  standalone. */}
                               {showDividends && <th>Proventos (mês)</th>}
+                              {/* Coluna PRÓPRIA pro acumulado (14/09) — antes
+                                  vivia dentro da célula de "Proventos (mês)",
+                                  mas são dois assuntos diferentes (o que
+                                  entrou ESTE mês vs. o total histórico desde
+                                  sempre); o Luiz achou confuso compartilhar
+                                  a mesma coluna ("ali não faz sentido
+                                  compartilhar o mesmo assunto pro mês"). Só
+                                  Fundo tem essa coluna — Ação/FII já mostram
+                                  o mesmo dado no hover do nome do ativo (ver
+                                  `assetHoverContent`), não precisam repetir. */}
+                              {group.type === 'Fundo' && <th>Proventos acumulados</th>}
                             </>
                           )}
                         </tr>
@@ -577,20 +589,6 @@ export function Patrimonio() {
                                         <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                       </div>
                                     )}
-                                    {/* Acumulado desde sempre — só pra Fundo
-                                        (14/09, pedido do Luiz pro VALORA: "eu
-                                        só vejo o que entrou no mês, quero ver
-                                        o montante que já recebi"). Ação/FII
-                                        já tem esse mesmo dado no hover do
-                                        nome do ativo (ver assetHoverContent);
-                                        aqui fica visível direto na coluna
-                                        porque foi pedido especificamente pro
-                                        Fundo, sem precisar passar o mouse. */}
-                                    {group.type === 'Fundo' && p.totalDividends != null && p.totalDividends > 0 && (
-                                      <div className={styles.cellNote}>
-                                        <Money>{`R$ ${currency(p.totalDividends)}`}</Money> acumulado
-                                      </div>
-                                    )}
                                     {/* A Pluggy não manda dividendo pra Fundo
                                         (pedido do Luiz, 11/09, pro VALORA) —
                                         botão de lançamento manual aparece só
@@ -609,6 +607,20 @@ export function Patrimonio() {
                                       </IconButton>
                                     )}
                                   </td>
+                                )}
+                                {/* Coluna separada (14/09) — acumulado desde
+                                    sempre é um assunto diferente do "entrou
+                                    ESTE mês" da coluna anterior; pedido do
+                                    Luiz pro VALORA ("eu só vejo o que entrou
+                                    no mês, quero ver o montante que já
+                                    recebi"), mas dividir em duas colunas em
+                                    vez de empilhar na mesma célula ("ali não
+                                    faz sentido compartilhar o mesmo assunto
+                                    pro mês"). Ação/FII não têm essa coluna —
+                                    o mesmo dado já aparece no hover do nome
+                                    do ativo (`assetHoverContent`). */}
+                                {group.type === 'Fundo' && (
+                                  <td>{p.totalDividends != null && p.totalDividends > 0 ? <Money>{`R$ ${currency(p.totalDividends)}`}</Money> : '—'}</td>
                                 )}
                               </>
                             )}
@@ -704,11 +716,6 @@ export function Patrimonio() {
                                       <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                     </div>
                                   )}
-                                  {group.type === 'Fundo' && p.totalDividends != null && p.totalDividends > 0 && (
-                                    <div className={styles.cellNote}>
-                                      <Money>{`R$ ${currency(p.totalDividends)}`}</Money> acumulado
-                                    </div>
-                                  )}
                                   {group.type === 'Fundo' && (
                                     <IconButton
                                       size="sm"
@@ -723,6 +730,16 @@ export function Patrimonio() {
                                 </span>
                               </div>
                             )}
+                            {/* Linha PRÓPRIA (14/09) — mesmo motivo da coluna
+                                separada na tabela desktop: acumulado desde
+                                sempre é assunto diferente de "entrou este
+                                mês", não deveria dividir a mesma linha. */}
+                            {group.type === 'Fundo' && (
+                              <div className={styles.positionCardRow}>
+                                <span className={styles.positionCardLabel}>Proventos acumulados</span>
+                                <span>{p.totalDividends != null && p.totalDividends > 0 ? <Money>{`R$ ${currency(p.totalDividends)}`}</Money> : '—'}</span>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -734,9 +751,9 @@ export function Patrimonio() {
           </>
         )}
 
-        {/* ---------- Primeira Milhão ---------- */}
+        {/* ---------- Primeiro Milhão ---------- */}
           <div className={`${cards.card} ${cards.fullWidth}`}>
-            <CardHeader icon={Flag} title="Primeira Milhão" />
+            <CardHeader icon={Flag} title="Primeiro Milhão" />
             <p className={styles.helperText}>
               Meta simples: quanto falta, e em quanto tempo eu chego lá se continuar do jeito que estou. O retorno usado
               na conta é a média real da minha carteira nos últimos meses — não um chute.

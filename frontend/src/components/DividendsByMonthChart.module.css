@@ -59,9 +59,38 @@
   overflow: hidden;
 }
 
-.segment {
+/* Wrap = quem de fato ocupa a fatia proporcional da barra (`--seg-size`,
+   direto filho de `.bar`) — trigger e segmento coloridos moram DENTRO dele,
+   só preenchendo 100%x100% do espaço que o wrap já reservou. Precisa ser
+   assim (14/09, hover virou por segmento/cor, não mais por mês inteiro):
+   um `<HoverCard>` teria que envolver o pedaço colorido pra virar a área de
+   hover, mas o `<span>` que ele renderiza (`.trigger`, HoverCard.module.css)
+   não tem altura própria — se o `--seg-size` (uma % vertical) fosse aplicado
+   direto nesse span, a % não teria contra o que resolver (altura do pai
+   auto) e a barra sumia. Com o wrap por fora resolvendo a % contra `.bar`
+   (que tem altura definida), o trigger e o segmento só precisam de
+   100%/100%, sem depender de percentual nenhum. */
+.segmentWrap {
   width: 100%;
   height: var(--seg-size);
+}
+
+.segmentTrigger {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Reseta o sublinhado tracejado do `.trigger` genérico (HoverCard é feito
+     pra texto com dica visual por baixo) — aqui o hover É a própria cor da
+     barra, não precisa de sublinhado nenhum. Import deste módulo vem DEPOIS
+     de HoverCard.tsx no componente, então em empate de especificidade essa
+     regra ganha — mesmo truque já usado em `TransactionEditModal`/
+     `SplitEditor` (`splitStartBtnSpacing`). */
+  border-bottom: none;
+}
+
+.segment {
+  width: 100%;
+  height: 100%;
 }
 
 .label {
@@ -102,7 +131,7 @@
     flex-direction: row;
     justify-content: flex-start;
   }
-  .segment {
+  .segmentWrap {
     width: var(--seg-size);
     height: 100%;
   }

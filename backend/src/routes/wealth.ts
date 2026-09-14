@@ -178,32 +178,54 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // fora. Terceira série ao lado de Ação/FII — DividendPayment não distingue
   // "veio da Pluggy" de "lançado à mão", então qualquer tipo com provento
   // registrado aparece aqui automaticamente.
-  const dividendsByMonth: { label: string; acao: number; fii: number; fundo: number; breakdown: { label: string; value: number }[] }[] = [];
+  // De onde veio a grana daquele mês, mas agora separado POR SÉRIE (Ação/
+  // FII/Fundo) — pedido do Luiz, 14/09: "quero passar o mouse nas cores da
+  // barra e mostrar apenas os itens que fazem parte da cor" (antes o hover
+  // misturava tudo do mês, independente de qual segmento colorido o mouse
+  // estava). Soma por ativo dentro do mesmo tipo, pro caso raro de a MESMA
+  // ação/FII aparecer em duas corretoras dentro do mesmo mês não duplicar
+  // linha no hover. Ticker só é um nome de verdade pra Ação/FII (PETR4,
+  // HGLG11) — mesma regra já usada em `displayName` no front
+  // (Patrimonio.tsx): pra Fundo a Pluggy manda o CNPJ no campo `ticker`
+  // (ex: "60.645.828/0001-29"), que não diz nada no hover — usa o nome
+  // nesse caso. Só entra quem realmente pagou algo (>0) — nunca lista
+  // posição zerada só pra "preencher" o hover.
+  function breakdownByAsset(payments: typeof dividendPaymentsThisYear) {
+    const map = new Map<string, number>();
+    for (const p of payments) {
+      if (p.amount <= 0) continue;
+      const key = (p.security.type === "Ação" || p.security.type === "FII") && p.security.ticker ? p.security.ticker : p.security.name;
+      map.set(key, (map.get(key) ?? 0) + p.amount);
+    }
+    return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+  }
+  const dividendsByMonth: {
+    label: string;
+    acao: number;
+    fii: number;
+    fundo: number;
+    acaoBreakdown: { label: string; value: number }[];
+    fiiBreakdown: { label: string; value: number }[];
+    fundoBreakdown: { label: string; value: number }[];
+  }[] = [];
   let dividendsThisYear = 0;
   for (let m = 1; m <= currentMonth; m++) {
     const monthPayments = dividendPaymentsThisYear.filter((p) => p.month === m);
-    const acao = monthPayments.filter((p) => p.security.type === "Ação").reduce((sum, p) => sum + p.amount, 0);
-    const fii = monthPayments.filter((p) => p.security.type === "FII").reduce((sum, p) => sum + p.amount, 0);
-    const fundo = monthPayments.filter((p) => p.security.type === "Fundo").reduce((sum, p) => sum + p.amount, 0);
-    // De onde veio a grana daquele mês (pedido do Luiz, 11/09: "quando eu
-    // passar o mouse em proventos, quero saber de onde veio a grana") — soma
-    // por ativo, pro caso raro de a MESMA ação/FII aparecer em duas
-    // corretoras dentro do mesmo mês não duplicar linha no hover. Ticker só
-    // é um nome de verdade pra Ação/FII (PETR4, HGLG11) — mesma regra já
-    // usada em `displayName` no front (Patrimonio.tsx): pra Fundo a Pluggy
-    // manda o CNPJ no campo `ticker` (ex: "60.645.828/0001-29"), que não diz
-    // nada no hover — usa o nome nesse caso. Só entra quem realmente pagou
-    // algo (>0) — nunca lista posição zerada só pra "preencher" o hover.
-    const breakdownMap = new Map<string, number>();
-    for (const p of monthPayments) {
-      if (p.amount <= 0) continue;
-      const key = (p.security.type === "Ação" || p.security.type === "FII") && p.security.ticker ? p.security.ticker : p.security.name;
-      breakdownMap.set(key, (breakdownMap.get(key) ?? 0) + p.amount);
-    }
-    const breakdown = [...breakdownMap.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-    dividendsByMonth.push({ label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }), acao, fii, fundo, breakdown });
+    const acaoPayments = monthPayments.filter((p) => p.security.type === "Ação");
+    const fiiPayments = monthPayments.filter((p) => p.security.type === "FII");
+    const fundoPayments = monthPayments.filter((p) => p.security.type === "Fundo");
+    const acao = acaoPayments.reduce((sum, p) => sum + p.amount, 0);
+    const fii = fiiPayments.reduce((sum, p) => sum + p.amount, 0);
+    const fundo = fundoPayments.reduce((sum, p) => sum + p.amount, 0);
+    dividendsByMonth.push({
+      label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }),
+      acao,
+      fii,
+      fundo,
+      acaoBreakdown: breakdownByAsset(acaoPayments),
+      fiiBreakdown: breakdownByAsset(fiiPayments),
+      fundoBreakdown: breakdownByAsset(fundoPayments),
+    });
     dividendsThisYear += acao + fii + fundo;
   }
 

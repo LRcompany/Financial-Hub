@@ -12,10 +12,15 @@ interface MonthDividends {
    * fundo VALORA, que a Pluggy não reporta dividendo). Mesma soma agregada
    * de Ação/FII, terceira cor empilhada. */
   fundo: number
-  /** De onde veio a grana naquele mês, maior primeiro (pedido do Luiz,
-   * 11/09: "quando eu passar o mouse em proventos, quero saber de onde veio
-   * a grana") — vazio quando nenhum ativo pagou nesse mês. */
-  breakdown: { label: string; value: number }[]
+  /** De onde veio a grana daquele mês, DENTRO de cada série — pedido do
+   * Luiz, 14/09: "quero passar o mouse nas cores da barra e mostrar apenas
+   * os itens que fazem parte da cor" (antes tinha um `breakdown` só, com
+   * tudo do mês misturado, sem separar por tipo). Cada hover mostra só o
+   * detalhe do segmento colorido sob o mouse — vazio quando aquele tipo não
+   * pagou nada nesse mês. */
+  acaoBreakdown: { label: string; value: number }[]
+  fiiBreakdown: { label: string; value: number }[]
+  fundoBreakdown: { label: string; value: number }[]
 }
 
 /** Barra empilhada Ação+FII+Fundo por mês (pedido do Luiz, 11/09: "gráfico
@@ -54,33 +59,49 @@ export function DividendsByMonthChart({ data }: { data: MonthDividends[] }) {
               <span className={styles.value}>{total > 0 ? <Money>{`R$ ${currency(total)}`}</Money> : ''}</span>
               <div className={styles.bar}>
                 {d.fundo > 0 && (
-                  <div
-                    className={styles.segment}
-                    style={{ '--seg-size': `${(d.fundo / maxValue) * 100}%`, background: 'var(--dividends-fundo)' } as CSSProperties}
-                  />
+                  <div className={styles.segmentWrap} style={{ '--seg-size': `${(d.fundo / maxValue) * 100}%` } as CSSProperties}>
+                    <HoverCard
+                      className={styles.segmentTrigger}
+                      content={
+                        d.fundoBreakdown.length > 0
+                          ? d.fundoBreakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
+                          : null
+                      }
+                    >
+                      <div className={styles.segment} style={{ background: 'var(--dividends-fundo)' }} />
+                    </HoverCard>
+                  </div>
                 )}
                 {d.fii > 0 && (
-                  <div
-                    className={styles.segment}
-                    style={{ '--seg-size': `${(d.fii / maxValue) * 100}%`, background: 'var(--dividends-fii)' } as CSSProperties}
-                  />
+                  <div className={styles.segmentWrap} style={{ '--seg-size': `${(d.fii / maxValue) * 100}%` } as CSSProperties}>
+                    <HoverCard
+                      className={styles.segmentTrigger}
+                      content={
+                        d.fiiBreakdown.length > 0
+                          ? d.fiiBreakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
+                          : null
+                      }
+                    >
+                      <div className={styles.segment} style={{ background: 'var(--dividends-fii)' }} />
+                    </HoverCard>
+                  </div>
                 )}
                 {d.acao > 0 && (
-                  <div
-                    className={styles.segment}
-                    style={{ '--seg-size': `${(d.acao / maxValue) * 100}%`, background: 'var(--accent)' } as CSSProperties}
-                  />
+                  <div className={styles.segmentWrap} style={{ '--seg-size': `${(d.acao / maxValue) * 100}%` } as CSSProperties}>
+                    <HoverCard
+                      className={styles.segmentTrigger}
+                      content={
+                        d.acaoBreakdown.length > 0
+                          ? d.acaoBreakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
+                          : null
+                      }
+                    >
+                      <div className={styles.segment} style={{ background: 'var(--accent)' }} />
+                    </HoverCard>
+                  </div>
                 )}
               </div>
-              <HoverCard
-                content={
-                  d.breakdown.length > 0
-                    ? d.breakdown.map((b) => <HoverRow key={b.label} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />)
-                    : null
-                }
-              >
-                <span className={styles.label}>{d.label}</span>
-              </HoverCard>
+              <span className={styles.label}>{d.label}</span>
             </div>
           )
         })}

@@ -549,7 +549,7 @@ export function Dashboard() {
               </div>
 
               <div className={`${styles.card} ${styles.fullWidth}`}>
-                <CardHeader icon={Flag} title="Primeira Milhão" href="/patrimonio" />
+                <CardHeader icon={Flag} title="Primeiro Milhão" href="/patrimonio" />
                 {!wealthGoal && (
                   <div className={styles.emptyState}>Configure sua meta na página de Patrimônio pra ver a projeção.</div>
                 )}
