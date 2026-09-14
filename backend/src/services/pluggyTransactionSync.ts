@@ -358,6 +358,16 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
     const { results: transactions } = (await getTransactions(account.id)) as { results: PluggyTransaction[] };
 
     for (const tx of transactions) {
+      // LOG TEMPORÁRIO (14/09) — pra descobrir o `operationType` real que a
+      // Pluggy manda pra um boleto pago (documentado só como possibilidade
+      // em comentário desde 07/09, nunca confirmado com dado real). Só loga
+      // DEBIT que não é Pix, então não expõe nada de entrada de dinheiro.
+      // Remover assim que a resposta aparecer no log de produção.
+      if (tx.type === "DEBIT" && tx.operationType !== "PIX") {
+        console.log(
+          `[debug-operationType] banco=${broker.name} operationType=${tx.operationType} descricao="${tx.description}" valor=${tx.amount} data=${tx.date}`
+        );
+      }
       if (tx.operationType !== "PIX" || tx.type !== "DEBIT") continue;
       if (!isPixToThirdParty(tx)) {
         pixIgnored++;
