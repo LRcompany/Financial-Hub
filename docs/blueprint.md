@@ -1732,7 +1732,19 @@ Luiz reparou (print da modal): o boleto de contas do mês, agora importado como 
 
 Verificado ao vivo em `dev.db`, ponta a ponta: abri "Compras sem categoria", cliquei "Dividir" no boleto real (R$4.659,15), dividi em Aluguel R$4.400 + Internet R$100 + Água R$98 + Gás R$25,50 + Seguro Residência R$35,65 (exatamente os valores que o Luiz descreveu) — "Salvar divisão", o boleto sumiu da lista (26→25 comerciantes), e "Moradia" no Orçamento subiu exatamente R$4.659,15. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
 
-**Pendente**: deploy em produção (sem migration).
+**Deployado em produção** (mesmo dia, sem migration): build + `pm2 restart`.
+
+### Linha de "acumulado no ano" no gráfico de proventos (14/09, mesmo dia)
+
+Luiz, depois de lançar uns rendimentos recentes do fundo VALORA à mão: *"adicionar no gráfico uma linha a mais mostrando esses rendimentos e o que já recebi até então"* — as barras empilhadas (Ação/FII/Fundo por mês) já existiam, faltava uma linha visual de quanto já tinha acumulado NO ANO, mês a mês, sem precisar somar de cabeça.
+
+- **`DividendsByMonthChart`**: linha de acumulado calculada no FRONT a partir do mesmo `data` que já vinha do backend (soma corrida de `acao+fii+fundo` mês a mês) — nenhuma rota nova. Escala PRÓPRIA (nunca a mesma das barras — o total acumulado do ano é bem maior que qualquer mês isolado sozinho, ficaria colado no topo o tempo todo numa escala compartilhada). SVG `viewBox="0 0 100 100"` com `preserveAspectRatio="none"` sobreposto (`position: absolute; inset: 0`) — alinha automaticamente com a área das barras porque `.chart` tem altura FIXA (190px) idêntica à altura literal de `.bar`, sem precisar medir nada via JS/ResizeObserver. Bolinhas de cada ponto são `<span>` posicionados por `%` (não círculos SVG dentro do viewBox esticado — ficariam OVAIS com o `preserveAspectRatio="none"`, já que o gráfico é bem mais largo que alto).
+- **Hover de cada mês ganhou uma linha nova**: "Acumulado no ano até aqui" — reaproveita o `HoverCard` que já existia ali (breakdown "de onde veio a grana"), nunca um tooltip novo pro mesmo gráfico.
+- **Mobile esconde a linha** (`@media max-width: 640px`, mesmo breakpoint do resto do app): a coluna vertical vira LINHA horizontal nesse tamanho (mesmo padrão do `VerticalBarChart`) — o eixo inteiro gira 90°, uma linha desenhada pro eixo vertical original não bate mais com nada geometricamente. O acumulado continua acessível no hover de cada mês e no "recebido no ano" já existente abaixo do gráfico — só a linha desenhada é que some.
+
+Verificado ao vivo em `dev.db` (inserido `DividendPayment` de teste via SQL — backup antes, apagado depois de confirmar): linha ascendente acompanhando as barras, dot final exatamente no topo (mês com o acumulado máximo), hover mostrando o acumulado certo, tema escuro herdando a cor (`--ink`) automaticamente sem CSS extra, mobile escondendo a linha e a legenda dela sem quebrar layout. `npx tsc -b` limpo.
+
+**Pendente**: deploy em produção.
 
 ## Decisões de navegação/IA
 
