@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { computeAverageMonthlyReturnPct, projectFirstMillion } from "../services/wealthProjection.js";
-import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
+import { fetchAllSnapshots, activeSnapshotsAsOf, automatedStartYmByBrokerType, yearMonth } from "../services/activePositions.js";
 
 export const wealthRouter = Router();
 
@@ -62,11 +62,28 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // valorização de mercado de dinheiro novo que entrou).
   const evolution: { label: string; value: number }[] = [];
   const monthlyTotals: { marketValue: number; investedAmount: number }[] = [];
-  // Ano-calendário de cada entrada de `evolution`/`monthlyTotals`, na mesma
-  // ordem/índice (o loop pula mês sem snapshot, então não dá pra recalcular
-  // isso de fora depois — precisa guardar junto). Usado logo abaixo pra somar
-  // só os meses do ano corrente (aportado real no ano).
+  // Ano-calendário E ym de cada entrada de `evolution`/`monthlyTotals`, na
+  // mesma ordem/índice (o loop pula mês sem snapshot, então não dá pra
+  // recalcular isso de fora depois — precisa guardar junto). `monthMetaYear`
+  // usado logo abaixo pra somar só os meses do ano corrente (aportado real
+  // no ano); `monthYms` usado pra achar mês de migração manual→automático
+  // (ver `investedByKey`/`automatedStartYm` abaixo).
   const monthMetaYear: number[] = [];
+  const monthYms: number[] = [];
+  // Soma de investedAmount por chave `brokerId:security.type`, um mês por
+  // índice (mesmo índice de `evolution`/`monthlyTotals`) — permite achar,
+  // mês a mês, quanto cada broker+tipo tinha investido, pra excluir da conta
+  // de "aporte" o mês exato em que um broker+tipo migra de manual pra
+  // automático (ver mais abaixo).
+  function investedByKey(snaps: typeof all) {
+    const map = new Map<string, number>();
+    for (const s of snaps) {
+      const key = `${s.brokerId}:${s.security.type}`;
+      map.set(key, (map.get(key) ?? 0) + s.investedAmount);
+    }
+    return map;
+  }
+  const investedByKeyByMonth: Map<string, number>[] = [];
   for (let i = 11; i >= 0; i--) {
     const ym = nowYm - i;
     const year = Math.floor((ym - 1) / 12);
@@ -82,29 +99,54 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
       investedAmount: snaps.reduce((sum, s) => sum + s.investedAmount, 0),
     });
     monthMetaYear.push(year);
+    monthYms.push(ym);
+    investedByKeyByMonth.push(investedByKey(snaps));
   }
   const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals);
 
-  // ---- investido por mês (histórico) — pro gráfico "Investido por mês" ----
+  // ---- investido por mês (histórico) — pro gráfico "Investido por mês" E
+  // pro "Aportado real" da "Primeiro Milhão" ----
   // Mesma ideia de `investedDelta` abaixo, mas mês a mês pra todo o período
   // visível (não só o mês atual x anterior). Precisa de 1 mês a mais de
   // baseline (nowYm-12) só pra conseguir calcular a variação do PRIMEIRO mês
   // visível também — senão o gráfico começaria faltando o primeiro ponto.
   const baselineSnaps = activeSnapshotsAsOf(all, nowYm - 12);
-  const baselineInvested = baselineSnaps.length > 0 ? baselineSnaps.reduce((sum, s) => sum + s.investedAmount, 0) : null;
+  const baselineInvestedByKey = baselineSnaps.length > 0 ? investedByKey(baselineSnaps) : null;
+  // Bug real (14/09, Luiz: "o valor que mostra em aportado real, realmente
+  // está correto?"): quando um broker+tipo migra de manual pra automático
+  // (Pluggy — ver `activeSnapshotsAsOf`), o `investedAmount` daquele tipo
+  // muda de fonte no MESMO mês — de "o que o Luiz digitou à mão" pra "o que
+  // a Pluggy calcula de verdade". Comparar esse mês com o anterior como se
+  // fosse um aporte normal conta a DIFERENÇA DE PRECISÃO entre as duas
+  // fontes como se fosse dinheiro novo — achado real: a migração da Sofisa
+  // em ago/2026 sozinha "criou" R$36 mil de "aporte" que não existiu (manual
+  // tinha só R$18.000 registrado, a Pluggy revelou R$54.040 de verdade — a
+  // diferença é o manual tendo subestimado o valor o tempo todo, não dinheiro
+  // que entrou naquele mês). Fix: no mês EXATO em que um broker+tipo começa a
+  // ter fonte automática (`automatedStartYm === ym` daquele mês), a
+  // contribuição desse broker+tipo pro delta do mês é ZERADA (nem soma nem
+  // subtrai) — os outros broker+tipo do mesmo mês continuam contando normal.
+  const automatedStartYm = automatedStartYmByBrokerType(all);
   // Guarda o ano-calendário junto de cada delta — sem baseline (12 meses
   // atrás sem snapshot nenhum), o primeiro mês de `monthlyTotals` fica de
   // fora do `investedByMonth` (não dá pra calcular delta sem "antes"), então
   // os índices dos dois arrays NÃO alinham 1:1 nesse caso — não dá pra
   // recuperar o ano depois só pelo índice, precisa vir junto aqui.
   const investedByMonthWithYear: { label: string; value: number; year: number }[] = [];
-  let prevInvested = baselineInvested;
+  let prevInvestedByKey = baselineInvestedByKey;
   for (let idx = 0; idx < monthlyTotals.length; idx++) {
-    const current = monthlyTotals[idx].investedAmount;
-    if (prevInvested !== null) {
-      investedByMonthWithYear.push({ label: evolution[idx].label, value: current - prevInvested, year: monthMetaYear[idx] });
+    const curByKey = investedByKeyByMonth[idx];
+    const curYm = monthYms[idx];
+    if (prevInvestedByKey !== null) {
+      const keys = new Set([...prevInvestedByKey.keys(), ...curByKey.keys()]);
+      let delta = 0;
+      for (const key of keys) {
+        if (automatedStartYm.get(key) === curYm) continue; // mês da migração — artefato, não aporte
+        delta += (curByKey.get(key) ?? 0) - (prevInvestedByKey.get(key) ?? 0);
+      }
+      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx] });
     }
-    prevInvested = current;
+    prevInvestedByKey = curByKey;
   }
   const investedByMonth = investedByMonthWithYear.map(({ label, value }) => ({ label, value }));
 
@@ -119,18 +161,29 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     .filter((e) => e.year === currentCalendarYear)
     .reduce((sum, e) => sum + e.value, 0);
 
-  // ---- aportes do mês: variação do total investido (não posição por posição) ----
+  // ---- aportes do mês: variação do total investido, por broker+tipo (não
+  // posição por posição, não total puro) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
   // muda de fonte (ex: histórico manual agregava "AÇÕES" numa linha só, a
-  // Pluggy reporta cada ação separada) — o total de investedAmount não
-  // depende de identidade, só precisa das somas de cada período.
-  function investedDelta(current: { investedAmount: number }[], prior: { investedAmount: number }[]) {
-    const totalCurrent = current.reduce((sum, s) => sum + s.investedAmount, 0);
-    const totalPrior = prior.reduce((sum, s) => sum + s.investedAmount, 0);
-    return totalCurrent - totalPrior;
+  // Pluggy reporta cada ação separada). Comparar só o TOTAL puro (como era
+  // antes, 14/09) tem o mesmo problema do "Aportado real" acima: no mês em
+  // que um broker+tipo migra de manual pra automático, a diferença de
+  // precisão entre as duas fontes conta como se fosse aporte. Mesma exclusão
+  // por broker+tipo aplicada aqui, pra "Investido este mês" (Dashboard) nunca
+  // dizer algo diferente do "Aportado real" (Patrimônio) sobre o mesmo mês.
+  function investedDelta(curSnaps: typeof all, curYm: number, priorSnaps: typeof all) {
+    const curByKey = investedByKey(curSnaps);
+    const priorByKey = investedByKey(priorSnaps);
+    const keys = new Set([...curByKey.keys(), ...priorByKey.keys()]);
+    let delta = 0;
+    for (const key of keys) {
+      if (automatedStartYm.get(key) === curYm) continue;
+      delta += (curByKey.get(key) ?? 0) - (priorByKey.get(key) ?? 0);
+    }
+    return delta;
   }
-  const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
-  const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
+  const investedThisMonth = investedDelta(latestSnaps, nowYm, previousSnaps);
+  const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, nowYm - 1, beforePreviousSnaps) : null;
 
   // ---- proventos: soma de DividendPayment do período (11/09: Ação/FII vêm
   // de verdade da Pluggy via GET /investments/{id}/transactions; Fundo é

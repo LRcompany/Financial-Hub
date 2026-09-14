@@ -1803,6 +1803,17 @@ Ou seja: dos ~R$70k que aparecem como "aportado" em agosto, uns R$34-36k são s�
 
 **Não apliquei fix ainda** porque não tem uma fórmula única e óbvia (diferente do bug do brokerId+type de mais cedo, que tinha resposta certa clara) — dá pra excluir o delta do mês de migração inteiro (arrisca esconder um aporte real feito no mesmo mês por coincidência), corrigir só o caso pontual da Sofisa, ou outra abordagem. Perguntei ao Luiz como prefere tratar.
 
+### Fix aplicado: "Aportado real" não conta mais migração de corretora como aporte (14/09, mesmo dia)
+
+Depois de investigar (ver seção anterior "Investigado, NÃO corrigido ainda") e perguntar ao Luiz como tratar, ele escolheu: **excluir o mês da migração inteiro** (por broker+tipo, não o mês inteiro pra todos — só o broker+tipo que de fato migrou naquele mês fica de fora do delta).
+
+- **`automatedStartYmByBrokerType`** virou função exportada própria em `activePositions.ts` (antes vivia só dentro de `activeSnapshotsAsOf`) — mesma conta ("primeiro ym em que apareceu snapshot `pluggy:*`/`onchain:*` pra esse broker+tipo"), reusada agora em `wealth.ts` também, sem duplicar.
+- **`wealth.ts`**: tanto `investedByMonthWithYear` (alimenta "Aportado real" da tabela "Primeiro Milhão" E "recebido no ano") quanto `investedThisMonth`/`investedLastMonth` (headline "Investido este mês" do Dashboard) agora comparam o `investedAmount` por chave `brokerId:security.type`, e ZERAM a contribuição de uma chave especificamente no mês em que ela migra (`automatedStartYm.get(key) === curYm`) — as outras chaves do mesmo mês continuam contando normal. Antes eram dois lugares diferentes fazendo a MESMA conta ingênua (total puro, sem olhar chave) — unificados na mesma lógica, pros dois números (mensal e anual) sempre concordarem sobre o mesmo mês.
+
+Verificado com uma cópia local do `prod.db` (nunca toquei produção): antes do fix, agosto/2026 aparecia com +R$70.386,11 de "aporte" (quase tudo artefato da migração simultânea de BTG+Sofisa+C6+Phantom pra Pluggy); depois do fix, agosto vira **+R$29.072,08** (exatamente o lançamento manual novo da INCO, a ÚNICA mudança real naquele mês — todo o resto foi corretamente zerado). `realContributionThisYear` (jan-set/2026) caiu de R$54.032,28 (inflado) pra **R$12.718,24** (real). `investedThisMonth`/`investedLastMonth` batem exatamente com os mesmos números da série mensal agora. `tsc --noEmit` limpo.
+
+**Deployado em produção** (mesmo dia, sem migration de schema — só lógica).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
