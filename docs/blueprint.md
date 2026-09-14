@@ -1732,6 +1732,17 @@ Luiz reparou (print da modal): o boleto de contas do mês, agora importado como 
 
 Verificado ao vivo em `dev.db`, ponta a ponta: abri "Compras sem categoria", cliquei "Dividir" no boleto real (R$4.659,15), dividi em Aluguel R$4.400 + Internet R$100 + Água R$98 + Gás R$25,50 + Seguro Residência R$35,65 (exatamente os valores que o Luiz descreveu) — "Salvar divisão", o boleto sumiu da lista (26→25 comerciantes), e "Moradia" no Orçamento subiu exatamente R$4.659,15. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
 
+**Deployado em produção** (mesmo dia, sem migration): build + `pm2 restart`.
+
+### Linha de acumulado revertida + proventos acumulados do Fundo virou coluna de verdade (14/09, mesmo dia)
+
+Luiz, depois de ver a linha de acumulado que eu tinha adicionado no gráfico "Proventos recebidos": *"remova essa linha... acho que não faz sentido. Você não adicionou a coluna que pedi no box Fundo... eu quero ver o montante que já recebi de proventos deles. Hoje eu só vejo o que entrou no mês. Isso é aplicado apenas no fundo Valora."*
+
+- **Revertida a linha de acumulado** (`git revert`, commit da leva anterior) — `DividendsByMonthChart` voltou a ser só as barras empilhadas Ação/FII/Fundo, sem a linha nem a legenda dela. Achado real de processo: eu tinha interpretado "o que já recebi até então" como um segundo dado no GRÁFICO (evolução do acumulado no ano), mas o pedido de verdade era mais simples — um número acumulado visível na tabela de posições, escopado só ao Fundo.
+- **"Proventos (mês)" no Fundo ganhou uma segunda linha: "R$X acumulado"** — o dado (`totalDividends`, soma de TODO `DividendPayment` daquela posição desde sempre) já existia desde 11/09, só que enterrado no hover do nome do ativo (`assetHoverContent`) — o Luiz nunca via sem passar o mouse. Agora aparece direto na célula "Proventos (mês)", como uma segunda linha (mesmo `.cellNote` já usado pro `MonthDelta` logo acima) — só quando `group.type === 'Fundo'`, exatamente o escopo pedido ("isso é aplicado apenas no fundo Valora"); Ação/FII continuam só com o hover (não foi pedido mudar lá). Replicado nas duas versões da tabela (desktop + card mobile).
+
+Verificado ao vivo em `dev.db` (3 `DividendPayment` de teste pro VALORA real — R$320,50+R$340,20+R$355,00 — inseridos via SQL com backup antes, apagados depois): gráfico voltou a mostrar só as barras sem linha nenhuma; a linha "Proventos (mês)" do VALORA mostrou "R$355,00 · ↑4,4% vs. mês anterior · R$1.015,70 acumulado" — soma batendo exata. `npx tsc -b` limpo.
+
 **Pendente**: deploy em produção (sem migration).
 
 ## Decisões de navegação/IA

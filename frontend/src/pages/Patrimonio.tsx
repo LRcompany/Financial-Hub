@@ -577,6 +577,20 @@ export function Patrimonio() {
                                         <MonthDelta current={p.dividends} previous={p.previousDividends} />
                                       </div>
                                     )}
+                                    {/* Acumulado desde sempre — só pra Fundo
+                                        (14/09, pedido do Luiz pro VALORA: "eu
+                                        só vejo o que entrou no mês, quero ver
+                                        o montante que já recebi"). Ação/FII
+                                        já tem esse mesmo dado no hover do
+                                        nome do ativo (ver assetHoverContent);
+                                        aqui fica visível direto na coluna
+                                        porque foi pedido especificamente pro
+                                        Fundo, sem precisar passar o mouse. */}
+                                    {group.type === 'Fundo' && p.totalDividends != null && p.totalDividends > 0 && (
+                                      <div className={styles.cellNote}>
+                                        <Money>{`R$ ${currency(p.totalDividends)}`}</Money> acumulado
+                                      </div>
+                                    )}
                                     {/* A Pluggy não manda dividendo pra Fundo
                                         (pedido do Luiz, 11/09, pro VALORA) —
                                         botão de lançamento manual aparece só
@@ -688,6 +702,11 @@ export function Patrimonio() {
                                   {p.dividends != null && p.previousDividends != null && p.previousDividends > 0 && (
                                     <div className={styles.cellNote}>
                                       <MonthDelta current={p.dividends} previous={p.previousDividends} />
+                                    </div>
+                                  )}
+                                  {group.type === 'Fundo' && p.totalDividends != null && p.totalDividends > 0 && (
+                                    <div className={styles.cellNote}>
+                                      <Money>{`R$ ${currency(p.totalDividends)}`}</Money> acumulado
                                     </div>
                                   )}
                                   {group.type === 'Fundo' && (
