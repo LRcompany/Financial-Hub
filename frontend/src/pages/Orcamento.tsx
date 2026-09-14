@@ -754,7 +754,13 @@ export function Orcamento() {
                         {formatDayLabel(t.date.slice(0, 10))}
                         {t.broker && ` · ${t.broker.name}`}
                         {' · '}
-                        {t.isTransfer ? 'Transferência' : t.type === 'income' ? 'Receita de projeto' : t.categoryPath || 'Sem categoria'}
+                        {t.isTransfer
+                          ? 'Transferência'
+                          : t.type === 'income'
+                            ? 'Receita de projeto'
+                            : t.splits.length > 0
+                              ? `Dividida em ${t.splits.length} categorias`
+                              : t.categoryPath || 'Sem categoria'}
                         {/* Nota livre (08/09) — só leitura aqui, edição é no clique
                             da linha (modal). */}
                         {t.note && ` · "${t.note}"`}

@@ -43,10 +43,18 @@ export interface Transaction {
   // (pedido do Luiz, 05/09: sempre mostrar a categoria-mãe junto).
   categoryPath: string | null
   broker: { id: string; name: string } | null
-  // "manual" | "pluggy" | "ofx_import" — só "manual" pode ser apagada pelo
-  // Luiz (14/09): uma transação que veio do banco precisa continuar batendo
-  // com a fatura/extrato real, nunca pode só sumir da tela.
+  // "manual" | "pluggy" | "ofx_import" — usado junto com `externalId` pra
+  // decidir se dá pra apagar (14/09, ver comentário em `externalId`).
   source: string
+  // Some quando a reconciliação (ver pluggyTransactionSync.ts) confirma um
+  // lançamento manual contra a transação real do banco — nesse momento o
+  // registro passa a ter `externalId` de verdade MAS continua com
+  // `source: "manual"` de propósito (categoria escolhida à mão nunca é
+  // sobrescrita). Por isso "pode apagar" nunca é só `source === "manual"`:
+  // precisa ser `source === "manual" && externalId == null` — um manual já
+  // CONFIRMADO pelo banco não pode mais ser apagado, senão o app mostraria
+  // menos dinheiro gasto do que realmente saiu da conta.
+  externalId: string | null
   // true = lançado manualmente adiantado, ainda esperando o sync da Pluggy
   // confirmar contra a fatura real (ver pluggyTransactionSync.ts).
   awaitingPluggyMatch: boolean
@@ -57,6 +65,19 @@ export interface Transaction {
   // Anotação livre do Luiz pra quando a Pluggy manda nome genérico (ex:
   // "MASTERCARD" em vez do comerciante real) — puramente documental (08/09).
   note: string | null
+  // Boleto/fatura real que cobre mais de uma categoria — aluguel+água+gás+
+  // internet+seguro cobrados juntos, por exemplo (14/09). Vazio pra
+  // transação normal; quando tem 1+ item, a `category`/`categoryPath` da
+  // Transaction em si deixa de valer pra exibição — mostra "Dividida em N
+  // categorias" e a soma dos `splits[].amount` sempre bate com `amount`.
+  splits: TransactionSplit[]
+}
+
+export interface TransactionSplit {
+  id: string
+  categoryId: string
+  categoryPath: string | null
+  amount: number
 }
 
 export interface UncategorizedTransactionGroup {
@@ -641,6 +662,13 @@ export const api = {
   updateTransactionNote: (id: string, note: string | null) =>
     request<{ id: string; note: string | null }>(`/transactions/${id}/note`, { method: 'PUT', body: JSON.stringify({ note }) }),
   deleteTransaction: (id: string) => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
+  // Divide um boleto/fatura real em N categorias (14/09) — substitui
+  // qualquer split anterior dessa transação, nunca incrementa. `putJson`
+  // (não `request`) pra surgir a mensagem real de validação do backend
+  // (ex: "a soma das categorias precisa bater com o valor da transação").
+  splitTransaction: (id: string, splits: { categoryId: string; amount: number }[]) =>
+    putJson<void>(`/transactions/${id}/split`, { splits }),
+  clearTransactionSplit: (id: string) => request<void>(`/transactions/${id}/split`, { method: 'DELETE' }),
   transactionLeafCategories: () => request<LeafCategoryOption[]>('/transactions/leaf-categories'),
   createTransaction: (input: { date: string; type: 'income' | 'expense'; description: string; amount: number; categoryId?: string; brokerId?: string }) =>
     postJson<Transaction>('/transactions', input),

@@ -119,3 +119,132 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* ---------- dividir em categorias (14/09) ---------- */
+
+/* Link discreto abaixo do <Select> normal — convite pra dividir, não uma
+   ação primária (a maioria das transações NUNCA precisa disso). */
+.splitStartBtn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: -4px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.splitStartBtn:hover:not(:disabled) {
+  color: var(--accent-hover);
+}
+
+.splitBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.splitHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.splitLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.splitLinkBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.splitLinkBtn:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.splitRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.splitCategorySelect {
+  flex: 1;
+  min-width: 0;
+}
+
+.splitAmountInput {
+  width: 110px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.splitRemoveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.splitRemoveBtn:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.splitRemoveBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.splitAddBtn {
+  align-self: flex-start;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.splitAddBtn:hover:not(:disabled) {
+  background: var(--fill-muted);
+  border-color: var(--ink-faint);
+}
+
+/* Frase inteira de validação (não um valor isolado) — pode usar a cor
+   semântica direto, mesma regra já travada pro banner "Ultrapassou..." de
+   CategoryBreakdownModal. */
+.splitRemainingOk {
+  font-size: 12px;
+  color: var(--success);
+  margin: 0;
+}
+
+.splitRemainingWarn {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 0;
+}

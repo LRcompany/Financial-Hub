@@ -69,6 +69,14 @@ model Transaction {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
 
+  // Boleto/fatura real que na verdade cobre MAIS de uma categoria (ex:
+  // aluguel+água+gás+internet+seguro cobrados juntos num débito só do
+  // banco, 14/09) — ver TransactionSplit abaixo. Quando existe pelo menos
+  // 1 split, `categoryId` acima deixa de valer pro cálculo de orçamento
+  // (cada split soma na SUA categoria); a Transaction em si continua
+  // com `amount` intacto, sempre batendo com o extrato/fatura real.
+  splits TransactionSplit[]
+
   recurrenceId String?
   recurrence   Recurrence? @relation(fields: [recurrenceId], references: [id])
 
@@ -90,6 +98,29 @@ model Transaction {
   createdAt DateTime @default(now())
 
   @@index([date])
+  @@index([categoryId])
+}
+
+// Divide uma Transaction real (boleto/fatura que junta mais de uma
+// categoria — aluguel+água+gás+internet+seguro cobrados num débito só do
+// banco, por exemplo) em N pedaços, cada um com sua própria categoria e
+// valor. A soma dos splits sempre bate com `Transaction.amount` (validado
+// na rota, nunca imposto pelo schema). A Transaction em si nunca muda de
+// valor — continua reconciliando com o extrato/fatura real; só o cálculo
+// de "gasto por categoria" (budget.ts) passa a somar cada split na
+// categoria dele em vez do total inteiro na categoria única da Transaction
+// (14/09, pedido do Luiz: "o boleto do aluguel vem com água, gás, internet
+// e seguro juntos, como resolver isso?").
+model TransactionSplit {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id])
+  amount        Float
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
   @@index([categoryId])
 }
 
@@ -163,6 +194,7 @@ model Category {
   budgetTargets  BudgetTarget[]
   categorizationRules CategorizationRule[]
   upcomingInstallments UpcomingInstallment[]
+  transactionSplits TransactionSplit[]
 
   @@unique([name, parentId])
 }

@@ -409,7 +409,8 @@ export function Dashboard() {
                       <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
                     </div>
                     <div className={styles.listSub}>
-                      {formatDayLabel(t.date)} · {t.categoryPath || 'Sem categoria'}
+                      {formatDayLabel(t.date)} ·{' '}
+                      {t.splits.length > 0 ? `Dividida em ${t.splits.length} categorias` : t.categoryPath || 'Sem categoria'}
                       {t.broker && ` · ${t.broker.name}`}
                       {/* Nota livre (08/09) — edição via modal, clique na
                           linha (mesma modal de Orçamento, 11/09). */}

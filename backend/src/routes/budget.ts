@@ -56,7 +56,26 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     return map;
   }
 
-  const [targets, dailyGoals, projectedThisMonth, projectedPrevMonth] = await Promise.all([
+  // Transação dividida em N categorias (14/09 — ver TransactionSplit no
+  // schema, ex: boleto de aluguel+água+gás+internet+seguro cobrados
+  // juntos): cada split conta na SUA categoria, não na `categoryId` (às
+  // vezes nem existe mais/nunca existiu) da Transaction inteira. A
+  // Transaction em si é excluída do `spentAgg` normal (ver `splits: {
+  // none: {} }` abaixo) — sem isso o valor total contaria 2x, uma vez
+  // inteiro na categoria antiga e de novo fatiado nas categorias novas.
+  async function splitSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
+    const splits = await prisma.transactionSplit.findMany({
+      where: { transaction: { type: "expense", isTransfer: false, date: { gte: start, lt: end } } },
+      select: { categoryId: true, amount: true },
+    });
+    const map = new Map<string, number>();
+    for (const s of splits) {
+      map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + s.amount);
+    }
+    return map;
+  }
+
+  const [targets, dailyGoals, projectedThisMonth, projectedPrevMonth, splitThisMonth, splitPrevMonth] = await Promise.all([
     // Só categoria de despesa — meta de receita (Salário, projetos) é
     // "quanto espero receber", não "quanto posso gastar", não faz sentido
     // misturar na mesma lista de progresso de gasto por categoria. Também
@@ -71,6 +90,8 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
     projectedSpendByCategory(monthStart, monthEnd),
     projectedSpendByCategory(prevMonthStart, prevMonthEnd),
+    splitSpendByCategory(monthStart, monthEnd),
+    splitSpendByCategory(prevMonthStart, prevMonthEnd),
   ]);
 
   const categories = await Promise.all(
@@ -82,6 +103,10 @@ budgetRouter.get("/budget-summary", async (req, res) => {
             type: "expense",
             isTransfer: false,
             date: { gte: monthStart, lt: monthEnd },
+            // Transação dividida (ver TransactionSplit) sai daqui — o valor
+            // dela conta via `splitThisMonth` abaixo, fatiado por categoria,
+            // nunca inteiro na `categoryId` antiga/genérica ao mesmo tempo.
+            splits: { none: {} },
           },
           _sum: { amount: true },
         }),
@@ -91,6 +116,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
             type: "expense",
             isTransfer: false,
             date: { gte: prevMonthStart, lt: prevMonthEnd },
+            splits: { none: {} },
           },
           _sum: { amount: true },
         }),
@@ -105,6 +131,11 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       // "projetado" — não é um valor à parte, já está dentro do total).
       const spentProjected = projectedThisMonth.get(target.categoryId) ?? 0;
       const previousSpentProjected = projectedPrevMonth.get(target.categoryId) ?? 0;
+      // Fatia dessa categoria vinda de transação dividida (ver
+      // TransactionSplit) — soma junto do resto, mesmo princípio de
+      // spentProjected acima (já dentro do total, não é um valor à parte).
+      const spentSplit = splitThisMonth.get(target.categoryId) ?? 0;
+      const previousSpentSplit = splitPrevMonth.get(target.categoryId) ?? 0;
       return {
         categoryId: target.categoryId,
         name: target.category.name,
@@ -112,9 +143,9 @@ budgetRouter.get("/budget-summary", async (req, res) => {
         parentId: (parent?.parent?.id ?? parent?.id) ?? null,
         parentName,
         planned: target.plannedAmount,
-        spent: (spentAgg._sum.amount ?? 0) + spentProjected,
+        spent: (spentAgg._sum.amount ?? 0) + spentProjected + spentSplit,
         spentProjected,
-        previousSpent: (previousSpentAgg._sum.amount ?? 0) + previousSpentProjected,
+        previousSpent: (previousSpentAgg._sum.amount ?? 0) + previousSpentProjected + previousSpentSplit,
       };
     })
   );
@@ -327,11 +358,22 @@ budgetRouter.get("/budget-summary/category-breakdown", async (req, res) => {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [transactions, installments, postedKeys, allInstallmentsForPositions] = await Promise.all([
+  const [transactions, splits, installments, postedKeys, allInstallmentsForPositions] = await Promise.all([
     prisma.transaction.findMany({
-      where: { categoryId: { in: ids }, type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
+      // `splits: { none: {} }` — transação dividida (ver TransactionSplit)
+      // entra pela lista de `splits` abaixo, fatiada por categoria, nunca
+      // pelo valor inteiro aqui (senão contaria 2x na modal).
+      where: { categoryId: { in: ids }, type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd }, splits: { none: {} } },
       orderBy: { date: "desc" },
       include: { category: { include: { parent: { include: { parent: true } } } } },
+    }),
+    // Fatia de transação dividida que caiu numa das categorias pedidas —
+    // mostra como uma linha própria (descrição da Transaction original +
+    // só a fatia daquele valor), não a Transaction inteira.
+    prisma.transactionSplit.findMany({
+      where: { categoryId: { in: ids }, transaction: { type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } } },
+      orderBy: { createdAt: "desc" },
+      include: { transaction: true, category: { include: { parent: { include: { parent: true } } } } },
     }),
     prisma.upcomingInstallment.findMany({
       where: { categoryId: { in: ids }, dueDate: { gte: monthStart, lt: monthEnd } },
@@ -351,17 +393,35 @@ budgetRouter.get("/budget-summary/category-breakdown", async (req, res) => {
   ]);
   const positions = buildInstallmentPositions(allInstallmentsForPositions);
 
+  // Fatia de transação dividida entra na mesma lista de `transactions` (é
+  // uma despesa real igual às outras, só que representa só uma PARTE do
+  // valor da Transaction original) — nunca teve/tem parcela própria, por
+  // isso installmentNumber/totalInstallments sempre null aqui.
+  const splitRows = splits.map((s) => ({
+    id: s.id,
+    date: s.transaction.date,
+    description: s.transaction.note || s.transaction.description,
+    rawDescription: s.transaction.note ? s.transaction.description : null,
+    amount: s.amount,
+    category: categoryPath(s.category),
+    installmentNumber: null as number | null,
+    totalInstallments: null as number | null,
+  }));
+
   res.json({
-    transactions: transactions.map((t) => ({
-      id: t.id,
-      date: t.date,
-      description: t.note || t.description,
-      rawDescription: t.note ? t.description : null,
-      amount: t.amount,
-      category: categoryPath(t.category),
-      installmentNumber: t.installmentNumber,
-      totalInstallments: t.totalInstallments,
-    })),
+    transactions: [
+      ...transactions.map((t) => ({
+        id: t.id,
+        date: t.date,
+        description: t.note || t.description,
+        rawDescription: t.note ? t.description : null,
+        amount: t.amount,
+        category: categoryPath(t.category),
+        installmentNumber: t.installmentNumber,
+        totalInstallments: t.totalInstallments,
+      })),
+      ...splitRows,
+    ].sort((a, b) => b.date.getTime() - a.date.getTime()),
     projected: installments
       .filter((i) => !postedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`))
       .map((i) => {

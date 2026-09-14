@@ -26,14 +26,26 @@ transactionsRouter.get("/transactions", async (req, res) => {
 
   const transactions = await prisma.transaction.findMany({
     where,
-    include: { category: { include: { parent: { include: { parent: true } } } }, broker: true },
+    include: {
+      category: { include: { parent: { include: { parent: true } } } },
+      broker: true,
+      // Boleto/fatura dividido em mais de uma categoria (14/09) — ver
+      // TransactionSplit no schema. Vazio (`[]`) pra transação normal.
+      splits: { include: { category: { include: { parent: { include: { parent: true } } } } }, orderBy: { createdAt: "asc" } },
+    },
     orderBy: { date: "desc" },
   });
 
   // categoryPath junto do objeto category original (mesmo formato de sempre,
   // pra não quebrar nada que já lê `category.name`/`.kind`) — pedido do Luiz
   // (05/09): mostrar a categoria-mãe junto sempre que mostrar uma categoria.
-  res.json(transactions.map((t) => ({ ...t, categoryPath: categoryPath(t.category) })));
+  res.json(
+    transactions.map((t) => ({
+      ...t,
+      categoryPath: categoryPath(t.category),
+      splits: t.splits.map((s) => ({ id: s.id, categoryId: s.categoryId, categoryPath: categoryPath(s.category), amount: s.amount })),
+    }))
+  );
 });
 
 // GET /api/transactions/uncategorized-groups — transação real (Transaction,
@@ -141,6 +153,72 @@ transactionsRouter.put("/transactions/group", async (req, res) => {
   res.json({ updated: result.count });
 });
 
+// Tolerância de arredondamento na soma dos splits — ponto flutuante (ex:
+// 0.1 + 0.2 !== 0.3) nunca deve travar um split que bate "na prática".
+const SPLIT_AMOUNT_TOLERANCE = 0.01;
+
+// PUT /api/transactions/:id/split — body { splits: [{ categoryId, amount }] }.
+// Divide um boleto/fatura real (aluguel+água+gás+internet+seguro cobrados
+// juntos, por exemplo) em N categorias (14/09, pedido do Luiz). Substitui
+// QUALQUER split anterior dessa transação — não incrementa. A soma dos
+// valores tem que bater com `Transaction.amount` (o valor real do banco
+// nunca muda, só é redistribuído); cada `categoryId` precisa ser uma
+// categoria-folha de despesa de verdade, mesma regra de `/transactions/group`.
+transactionsRouter.put("/transactions/:id/split", async (req, res) => {
+  const { id } = req.params;
+  const { splits } = req.body ?? {};
+
+  if (!Array.isArray(splits) || splits.length < 2) {
+    return res.status(400).json({ error: "splits precisa ter pelo menos 2 categorias — pra 1 categoria só, use a edição normal." });
+  }
+  for (const s of splits) {
+    if (!s || typeof s.categoryId !== "string" || typeof s.amount !== "number" || s.amount <= 0) {
+      return res.status(400).json({ error: "Cada item precisa de categoryId e amount (número positivo)." });
+    }
+  }
+
+  const transaction = await prisma.transaction.findUnique({ where: { id } });
+  if (!transaction) return res.status(404).json({ error: "Transação não encontrada." });
+  if (transaction.type !== "expense" || transaction.isTransfer) {
+    return res.status(400).json({ error: "Só dá pra dividir uma despesa real — transferência/receita não tem categoria." });
+  }
+
+  const sum = splits.reduce((s: number, item: { amount: number }) => s + item.amount, 0);
+  if (Math.abs(sum - transaction.amount) > SPLIT_AMOUNT_TOLERANCE) {
+    return res.status(400).json({
+      error: `A soma das categorias (R$ ${sum.toFixed(2)}) precisa bater com o valor da transação (R$ ${transaction.amount.toFixed(2)}).`,
+    });
+  }
+
+  const categoryIds: string[] = [...new Set(splits.map((s: { categoryId: string }) => s.categoryId))];
+  const categories = await prisma.category.findMany({ where: { id: { in: categoryIds } }, include: { children: true } });
+  if (categories.length !== categoryIds.length) {
+    return res.status(404).json({ error: "Categoria não encontrada." });
+  }
+  const nonLeaf = categories.find((c) => c.children.length > 0);
+  if (nonLeaf) {
+    return res.status(400).json({ error: `"${nonLeaf.name}" é uma categoria-mãe — escolha uma subcategoria (folha).` });
+  }
+
+  await prisma.$transaction([
+    prisma.transactionSplit.deleteMany({ where: { transactionId: id } }),
+    prisma.transactionSplit.createMany({
+      data: splits.map((s: { categoryId: string; amount: number }) => ({ transactionId: id, categoryId: s.categoryId, amount: s.amount })),
+    }),
+  ]);
+
+  res.status(204).end();
+});
+
+// DELETE /api/transactions/:id/split — desfaz a divisão (volta pra categoria
+// única normal). A `categoryId` da própria Transaction não muda sozinha —
+// o Luiz escolhe de novo pela edição normal se quiser.
+transactionsRouter.delete("/transactions/:id/split", async (req, res) => {
+  const { id } = req.params;
+  await prisma.transactionSplit.deleteMany({ where: { transactionId: id } });
+  res.status(204).end();
+});
+
 // GET /api/transactions/leaf-categories — categoria-folha de despesa pro
 // dropdown do lançamento manual (mesma lista de /uncategorized-groups, só sem
 // precisar puxar transação nenhuma pra pedir isso).
@@ -196,17 +274,22 @@ transactionsRouter.post("/transactions", async (req, res) => {
   res.status(201).json(transaction);
 });
 
-// DELETE /api/transactions/:id — só apaga lançamento MANUAL (pedido do Luiz,
-// 14/09: "quando vier do banco, não tem como deletar"). Uma transação
-// `source: "pluggy"`/`"ofx_import"` precisa continuar batendo com a
-// fatura/extrato real pra sempre — nunca pode só sumir da tela; se ela tiver
-// sido lançada errado, o jeito é corrigir a categoria/nota, não apagar.
+// DELETE /api/transactions/:id — só apaga lançamento MANUAL e AINDA NÃO
+// CONFIRMADO pelo banco (pedido do Luiz, 14/09: "quando vier do banco, não
+// tem como deletar"). Uma transação `source: "pluggy"`/`"ofx_import"`
+// precisa continuar batendo com a fatura/extrato real pra sempre — nunca
+// pode só sumir da tela. `externalId` preenchido MESMO com `source:
+// "manual"` = a reconciliação (pluggyTransactionSync.ts, findAwaitingMatch)
+// já casou esse lançamento com a transação real do banco — nesse ponto é
+// dinheiro confirmado, não é mais um placeholder (achado 14/09: `source`
+// sozinho não muda na reconciliação de propósito, pra nunca sobrescrever a
+// categoria que o Luiz escolheu à mão).
 transactionsRouter.delete("/transactions/:id", async (req, res) => {
   const { id } = req.params;
-  const transaction = await prisma.transaction.findUnique({ where: { id }, select: { source: true } });
+  const transaction = await prisma.transaction.findUnique({ where: { id }, select: { source: true, externalId: true } });
   if (!transaction) return res.status(404).json({ error: "Transação não encontrada." });
-  if (transaction.source !== "manual") {
-    return res.status(400).json({ error: "Só é possível apagar um lançamento manual — essa transação veio do banco." });
+  if (transaction.source !== "manual" || transaction.externalId != null) {
+    return res.status(400).json({ error: "Só é possível apagar um lançamento manual ainda não confirmado pelo banco." });
   }
   await prisma.transaction.delete({ where: { id } });
   res.status(204).end();

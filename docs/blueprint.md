@@ -1663,6 +1663,35 @@ Verificado ao vivo em `dev.db`: criei uma transação manual de teste, filtrei "
 
 **Pendente**: deploy de produção (frontend + backend, sem migration — `source` já existe no schema desde antes).
 
+### Bug achado no que acabou de subir: apagar não podia valer pra manual já reconciliado (14/09, mesmo dia)
+
+Investigando a pergunta seguinte do Luiz (ver seção abaixo, "boleto do aluguel não vem da 99"), achei um dado real que expôs um furo no "Excluir" que tinha acabado de implementar: `CAMARGO ALUGUEL DE IMOVEIS LTDA` (R$84,00, produção) tem `source: "manual"` **E** `externalId` preenchido ao mesmo tempo — a reconciliação (`pluggyTransactionSync.ts`, `findAwaitingMatch`) casa um lançamento manual adiantado com a transação real do banco e atualiza `externalId`/`awaitingPluggyMatch`, mas **de propósito nunca muda `source`** (pra nunca sobrescrever a categoria que o Luiz escolheu à mão). Resultado: meu gate `source === "manual"` sozinho deixaria apagar uma transação que JÁ é dinheiro confirmado que saiu do banco de verdade — exatamente o cenário que a regra "não dá pra apagar o que veio do banco" deveria proteger.
+
+**Fix**: `canDelete` (front) e a checagem do `DELETE /api/transactions/:id` (back) agora exigem `source === "manual" && externalId == null` — só um manual AINDA não confirmado pelo banco pode sumir. Documentado em `Transaction.externalId` (novo campo exposto no tipo do front) e no design-system como regra técnica: nunca decidir "isso é editável/apagável" olhando só `source`, sempre junto com `externalId`.
+
+### Por que o boleto do aluguel não sincroniza da 99 (14/09, mesmo dia)
+
+Luiz percebeu (investigando o caso acima) que o boleto de aluguel nunca aparece automaticamente vindo da 99, e perguntou o porquê. Investigado com dado real de produção: existem 5 lançamentos MANUAIS de 07-08/09 tentando cobrir isso — "Aluguel" R$4.500,00, "Água" R$98,00, "Gas" R$25,50, "Seguro Casa" R$35,65 — nenhum com `externalId` (nunca reconciliaram).
+
+Causa raiz, achada no código (`pluggyTransactionSync.ts`): o sync automático de conta BANK (99, conta corrente do BTG etc.) só importa Pix (`tx.operationType !== "PIX" → continue`, adicionado 07/09 quando o pedido do Luiz foi especificamente "trazer o Pix de todos os bancos"). Um boleto pago não é Pix — é um `operationType` diferente que a Pluggy manda (provavelmente `"BOLETO"` ou parecido, mas isso nunca foi confirmado com dado real, só documentado como possibilidade num comentário desde 07/09: "Pix, TED, boleto..."). Ou seja: **não é bug, é escopo — só Pix foi implementado até aqui**, e um boleto de verdade (o método real que o Luiz usa pra pagar aluguel) nunca vai aparecer sozinho até o sync ganhar suporte a ele.
+
+Consequência prática enquanto isso não existe: um lançamento manual pra esse boleto NUNCA reconcilia (o valor real do banco é um único débito somando tudo, os 5 manuais separados nunca batem exatamente com nada que a Pluggy manda) — fica "pendente" pra sempre, e se um dia o sync de boleto for implementado, o valor real vai criar uma 6ª linha duplicada em vez de confirmar as 5 manuais.
+
+**Não implementado ainda** — precisa confirmar com dado real (via sync manual pelo Luiz em Configurações) qual `operationType` a Pluggy realmente manda pra um boleto antes de estender o filtro, pra não arriscar capturar transferência interna entre contas próprias por engano (mesmo cuidado que já existe documentado pro Pix). Fica registrado aqui como próximo passo natural depois que o "dividir transação" (abaixo) já resolve a MODELAGEM do problema (uma transação, várias categorias) — falta só o boleto virar UMA Transaction real pra dividir.
+
+### Dividir transação em várias categorias (14/09, mesmo dia)
+
+Luiz: *"logo o boleto pago pode ter mais de uma categoria dentro dele"* — o caso real: o boleto do aluguel cobra junto aluguel+água+gás+internet+seguro residência, um débito só do banco, mas cada pedaço é uma categoria de orçamento diferente.
+
+**Modelagem**: nova tabela `TransactionSplit` (transactionId, categoryId, amount) — uma `Transaction` pode ter N splits. A soma dos splits sempre bate com `Transaction.amount` (validado na rota, nunca no schema) — o valor real do banco NUNCA muda, só é redistribuído entre categorias. Quando uma transação tem split, ela sai do cálculo normal de "gasto por categoria" (`spentAgg` com `splits: { none: {} }`) e cada split soma na SUA categoria via um mapa agregado à parte (`splitSpendByCategory`, mesmo padrão já usado pra `projectedSpendByCategory`) — sem isso o valor contaria 2x.
+
+- **Backend**: `PUT /api/transactions/:id/split` (substitui qualquer split anterior — nunca incrementa; exige 2+ categorias-folha de despesa reais, soma batendo com o valor da transação com tolerância de 1 centavo) e `DELETE /api/transactions/:id/split` (desfaz, volta pra categoria única). `GET /transactions` e `GET /budget-summary/category-breakdown` ("o que está incluso") atualizados pra nunca contar a transação inteira E os splits ao mesmo tempo — a modal de detalhamento mostra cada split como sua própria linha (descrição da transação original + só a fatia daquele valor).
+- **Frontend**: `TransactionEditModal` ganha "Dividir esta transação em categorias" (link discreto abaixo do `<Select>` normal) — abre um editor com N linhas categoria+valor (a primeira já vem com o valor cheio, pra só precisar "tirar" o pedaço das outras), "+ Adicionar categoria", validação ao vivo ("Valores batem com o total da transação" / "Falta distribuir R$X" / "R$X acima do valor"), e "Desfazer divisão" quando já tem split salvo. Linha da lista de transações mostra "Dividida em N categorias" no lugar da categoria única quando aplicável (Orçamento e Dashboard).
+
+Verificado ao vivo em `dev.db`: dividi "ENERGISA PARAIBA" (R$296,89, antes "Sem categoria") em Moradia > Luz (R$200) + Moradia > Internet (R$96,89) — accordion "Despesas essenciais > Moradia" foi de R$0 pra R$296,89 exatamente, a folha "Internet" mostrou R$96,89/R$100,00 certinho, e o modal "o que está incluso" da categoria Internet mostrou só a fatia de R$96,89 (não os R$296,89 inteiros). "Desfazer divisão" reverteu pra "Sem categoria" limpo. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos, migration `add_transaction_split` aplicada local sem perda de dado (594 transações intactas).
+
+**Pendente**: migration + deploy em produção (backup do `prod.db` antes, confirmar contagem de linhas depois).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
