@@ -283,6 +283,7 @@ export function Dashboard() {
                   gradientId="dailySpendGradient"
                   className={styles.evolutionChart}
                   markedIndex={markedDayIndex}
+                  breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
                 />
                 <div className={styles.chartMeta}>
                   <span>neste mês</span>

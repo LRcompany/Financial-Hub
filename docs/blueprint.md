@@ -1840,6 +1840,17 @@ Verifiquei ao vivo (mouse) em `dev.db`: o hover JÁ EXISTE e já mostra data + v
 
 **Deployado em produção** (mesmo dia, sem migration): build + rsync.
 
+### Hover de "gasto diário" ganha a lista de compras do dia (15/09)
+
+Logo depois do fix de toque no hover, Luiz: *"só existe o valor total, mas não mostra o que foi gasto... eu quero essa lista."* Pedido certeiro — o tooltip mostrava "08 de set. — R$5.496,68", mas nunca de ONDE vinha esse valor.
+
+- **Backend** (`budget.ts`): nova `breakdownOnDay(day)` — agrupa as transações reais do dia por compra (`purchaseBase`, a mesma função que já tira o sufixo " xN" de parcela pra "bike x3"/"bike x4" contarem como uma coisa só) e junta a parcela futura comprometida daquele dia (`projectedInstallmentsDaily`, o mesmo dado que já soma no total via `projectedOnDay`) marcada com `projected: true`. Maior valor primeiro. `daysThisMonth` ganhou o campo `breakdown` nessa forma.
+- **`SmoothLineChart`**: nova prop opcional `breakdowns` (array paralelo a `values`, um array de itens por ponto) — só usada pelos dois gráficos de gasto diário (Dashboard e Orçamento, mesmo componente); todo resto que usa `SmoothLineChart` (evolução de patrimônio, proventos/investido por mês) não passa essa prop e continua com o tooltip de sempre, só o valor. Quando existe lista, o tooltip muda de "valor único flutuando" (glass) pra "lista de linhas sobre conteúdo denso" (opaco, `--surface`) — mesma regra já documentada pro `HoverCard`, agora também formalizada pra esse tooltip quando ele carrega uma lista. Item projetado ganha a mesma `<ProjectedTag/>` cinza usada em todo o resto do app.
+
+Verificado ao vivo em `dev.db`: hover no dia 08/09 (Dashboard) mostrou "Boleto — contas do mês... R$4.659,15", "D M RODRIGUES PSICOLOGI... R$600,00", "tramontina R$237,53 PROJETADO" — batendo exatamente com o total de R$5.496,68. Hover no dia 06/09 (Orçamento) mostrou 7 itens (mercado, ticket sports, aluguel, açaí, Shopee...), a lista rola dentro do tooltip quando passa de ~160px (mesmo padrão do `HoverCard.popup`). `npx tsc -b` (front) + `tsc --noEmit` (back) limpos.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

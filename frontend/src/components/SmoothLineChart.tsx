@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Money } from './Money'
+import { ProjectedTag } from './Badge'
 import styles from './SmoothLineChart.module.css'
 
 const GRADIENT_STOPS = [
@@ -72,6 +73,14 @@ interface SmoothLineChartProps {
    * o último dia que a Pluggy realmente confirmou (04/09, pedido do Luiz —
    * "mostra que a gente se encontra ali"). Sem isso, nenhuma marcação extra. */
   markedIndex?: number
+  /** Detalhe de CADA ponto (mesmo índice de `values`) — "gasto diário"
+   * (pedido do Luiz, 15/09: "só existe o valor total, mas não mostra o que
+   * foi gasto... eu quero essa lista") mostra aqui as compras daquele dia,
+   * maior primeiro. Omitir (ou dia sem nada) mantém o tooltip só com o valor
+   * total, como sempre foi — nenhum outro uso de `SmoothLineChart` precisa
+   * disso (patrimônio, proventos, investido por mês não têm "itens" por
+   * ponto). */
+  breakdowns?: { label: string; value: number; projected?: boolean }[][]
 }
 
 export function SmoothLineChart({
@@ -83,6 +92,7 @@ export function SmoothLineChart({
   className,
   valuePrefix = 'R$ ',
   markedIndex,
+  breakdowns,
 }: SmoothLineChartProps) {
   const width = 600
   const padY = 10
@@ -222,20 +232,45 @@ export function SmoothLineChart({
         />
       )}
 
-      {hover && hoverIndex !== null && (
-        <div
-          className={styles.tooltip}
-          style={{ left: `${(hover[0] / width) * 100}%`, top: `${(hover[1] / height) * 100}%` }}
-        >
-          <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
-          <div className={styles.tooltipValue}>
-            <Money>
-              {valuePrefix}
-              {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Money>
+      {hover && hoverIndex !== null && (() => {
+        const items = breakdowns?.[hoverIndex]
+        return (
+          <div
+            className={`${styles.tooltip} ${items && items.length > 0 ? styles.tooltipDense : ''}`}
+            style={{ left: `${(hover[0] / width) * 100}%`, top: `${(hover[1] / height) * 100}%` }}
+          >
+            <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
+            <div className={styles.tooltipValue}>
+              <Money>
+                {valuePrefix}
+                {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Money>
+            </div>
+            {/* Lista de onde veio o gasto daquele dia (15/09, pedido do Luiz:
+                "só existe o valor total, mas não mostra o que foi gasto...
+                eu quero essa lista") — só existe quando o chamador passa
+                `breakdowns`; sem isso o tooltip continua só com o valor
+                total, como sempre foi (nenhum outro gráfico de linha do app
+                tem "itens" por ponto). */}
+            {items && items.length > 0 && (
+              <div className={styles.tooltipBreakdown}>
+                {items.map((item, i) => (
+                  <div key={i} className={styles.tooltipBreakdownRow}>
+                    <span className={styles.tooltipBreakdownLabel}>{item.label}</span>
+                    <span className={styles.tooltipBreakdownValue}>
+                      <Money>
+                        {valuePrefix}
+                        {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Money>
+                      {item.projected && <ProjectedTag />}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
       </div>
 
       {/* Datas pequenas sempre visíveis no rodapé, alinhadas com as mesmas

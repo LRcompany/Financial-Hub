@@ -267,9 +267,50 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     return real + projectedOnDay(day);
   }
 
-  const daysThisMonth: { date: string; amount: number; projected: number; goal: number | null }[] = [];
+  // De onde veio o gasto daquele dia (pedido do Luiz, 15/09: "só existe o
+  // valor total, mas não mostra o que foi gasto... eu quero essa lista") —
+  // agrupado por compra (`purchaseBase`, mesma regra já usada pra deduplicar
+  // parcela projetada x transação real: tira o sufixo " xN" pra "bike x3" e
+  // "bike x4" contarem como a mesma compra) em vez de listar cada linha de
+  // transação solta. Parcela futura comprometida (ainda sem confirmação da
+  // Pluggy) entra junto, marcada `projected: true` — mesmo dado que já
+  // soma no total via `projectedOnDay`, só que agora com o rótulo. Maior
+  // primeiro, pra dia com muita compra pequena não esconder a que pesou.
+  function breakdownOnDay(day: Date): { label: string; value: number; projected: boolean }[] {
+    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+    const real = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd);
+    const projected = projectedInstallmentsDaily.filter((i) => i.dueDate >= day && i.dueDate < dayEnd);
+    const map = new Map<string, { value: number; projected: boolean }>();
+    for (const t of real) {
+      const key = purchaseBase(t.description);
+      const cur = map.get(key);
+      map.set(key, { value: (cur?.value ?? 0) + t.amount, projected: false });
+    }
+    for (const i of projected) {
+      const key = purchaseBase(i.description);
+      const cur = map.get(key);
+      map.set(key, { value: (cur?.value ?? 0) + i.amount, projected: cur ? cur.projected : true });
+    }
+    return [...map.entries()]
+      .map(([label, v]) => ({ label, value: v.value, projected: v.projected }))
+      .sort((a, b) => b.value - a.value);
+  }
+
+  const daysThisMonth: {
+    date: string;
+    amount: number;
+    projected: number;
+    goal: number | null;
+    breakdown: { label: string; value: number; projected: boolean }[];
+  }[] = [];
   for (let day = new Date(realMonthStart); day <= todayStart; day.setDate(day.getDate() + 1)) {
-    daysThisMonth.push({ date: day.toISOString().slice(0, 10), amount: sumOnDay(day), projected: projectedOnDay(day), goal: goalAt(dailyGoals, day) });
+    daysThisMonth.push({
+      date: day.toISOString().slice(0, 10),
+      amount: sumOnDay(day),
+      projected: projectedOnDay(day),
+      goal: goalAt(dailyGoals, day),
+      breakdown: breakdownOnDay(day),
+    });
   }
   // Comparação "vs. mês anterior" mês-a-mês-corrido: mesmo NÚMERO de dias
   // (dia 1 ao dia 1, dia 2 ao dia 2...), não o mês anterior inteiro — senão

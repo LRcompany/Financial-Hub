@@ -400,6 +400,7 @@ export function Orcamento() {
               gradientId="orcamentoDailyGradient"
               className={cards.evolutionChart}
               markedIndex={markedDayIndex}
+              breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
             />
           </div>
           {/* Dia com parcela futura comprometida (ainda não confirmada pela

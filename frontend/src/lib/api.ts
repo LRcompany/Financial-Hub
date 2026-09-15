@@ -154,7 +154,18 @@ export interface BudgetSummary {
   // 08/09) — antes era um rolling de 14 dias, que no início do mês
   // misturava dias do mês anterior. Poucos pontos no início do mês é
   // esperado (dia 2 do mês = só 2 pontos), não é bug.
-  daysThisMonth: { date: string; amount: number; projected: number; goal: number | null }[]
+  // `breakdown` = de onde veio o gasto daquele dia, maior primeiro (pedido
+  // do Luiz, 15/09: "só existe o valor total, mas não mostra o que foi
+  // gasto... eu quero essa lista") — agrupado por compra, `projected: true`
+  // quando é parcela futura ainda não confirmada pela Pluggy (mesmo dado que
+  // já soma no `amount`, só que detalhado).
+  daysThisMonth: {
+    date: string
+    amount: number
+    projected: number
+    goal: number | null
+    breakdown: { label: string; value: number; projected: boolean }[]
+  }[]
   totalPlanned: number
   totalSpent: number
   totalProjected: number
