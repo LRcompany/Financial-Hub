@@ -1828,6 +1828,18 @@ Verificado ao vivo em `dev.db`, testado em três larguras de janela: 1280px+ (ne
 
 **Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
 
+### Hover de "Meta diária de gasto" já existia — toque simples no celular não mostrava nada (15/09)
+
+Luiz: *"no gráfico meta diária de gasto, quando eu passar o mouse no dia, eu quero ver ali o que gastei. Isso nos dois gráficos."* Os "dois gráficos" são "Meta diária de gasto" (Dashboard) e "Gasto diário" (Orçamento) — os dois usam o mesmo `SmoothLineChart` compartilhado, então é literalmente o mesmo componente duas vezes.
+
+Verifiquei ao vivo (mouse) em `dev.db`: o hover JÁ EXISTE e já mostra data + valor gasto naquele dia, nos dois gráficos — o componente já tinha esse tooltip desde 07/09 (`labels`/`values` no hover, ver seção "Gráficos" do design-system). Achado real: `onMouseMove` funciona, mas o toque no celular só tinha `onTouchMove`/`onTouchEnd` — um toque PARADO (sem arrastar o dedo) nunca disparava `touchmove`, então no celular (onde o Luiz provavelmente estava testando, a julgar pelos prints anteriores desta conversa) o hover parecia simplesmente não existir.
+
+**Fix**: `onTouchStart` adicionado ao lado de `onTouchMove` — um toque simples já mostra o tooltip na hora, arrastar continua atualizando o ponto normalmente. Mudança no componente único (`SmoothLineChart.tsx`), então vale automaticamente pra TODO gráfico de linha do app (evolução de patrimônio, proventos por mês, investido por mês, não só os dois de gasto diário).
+
+`npx tsc -b` limpo. Verificado com mouse nos dois gráficos (Dashboard e Orçamento) — tooltip mostrando "11 de set. R$ 790,63" etc. corretamente.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

@@ -149,6 +149,14 @@ export function SmoothLineChart({
         style={{ height }}
         onMouseMove={(e) => updateHoverFromClientX(e.clientX)}
         onMouseLeave={() => setHoverIndex(null)}
+        /* `onTouchStart` além de `onTouchMove` (15/09, pedido do Luiz —
+           "meta diária de gasto... quando eu passar o mouse no dia, eu
+           quero ver o que gastei"): sem isso, um toque PARADO (sem
+           arrastar) no celular não mostrava nada — só reagia se o dedo se
+           movesse depois de já estar na tela, o que não é um gesto óbvio
+           pra "ver o valor de um ponto". Um toque simples agora já mostra
+           o tooltip na hora; arrastar continua atualizando o ponto normal. */
+        onTouchStart={(e) => updateHoverFromClientX(e.touches[0].clientX)}
         onTouchMove={(e) => updateHoverFromClientX(e.touches[0].clientX)}
         onTouchEnd={() => setHoverIndex(null)}
       >
