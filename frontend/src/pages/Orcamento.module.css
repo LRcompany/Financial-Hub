@@ -142,6 +142,55 @@
   margin: 0 0 var(--space-4);
 }
 
+/* Linha do rótulo do gráfico + o seletor de visualização (15/09, "gasto
+   diário" ganhou uma segunda forma de ver o mesmo dado — calendário) — o
+   `<h4>` some com sua própria margem (zerada via style inline) e essa linha
+   assume o `--space-4` de baixo, pra não dobrar o espaçamento. */
+.chartLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Par de botões "gráfico"/"calendário" — mesma linguagem de seleção real
+   (--accent-soft) já usada em aba ativa/chip marcado em todo o app, nunca
+   um `--fill-muted` (esse é reservado pra "expandido/aberto", não seleção
+   de verdade — ver design-system.md). */
+.dailyViewToggle {
+  display: inline-flex;
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dailyViewToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: none;
+  border-radius: var(--r-full);
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.dailyViewToggleBtn:hover {
+  color: var(--ink-soft);
+}
+
+.dailyViewToggleBtnActive,
+.dailyViewToggleBtnActive:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .upcomingDisclaimer {
   font-size: 11px;
   color: var(--ink-faint);

@@ -1859,6 +1859,17 @@ Verificado ao vivo: nome "D M RODRIGUES PSICOLOGIA LTDA" que antes truncava bem 
 
 **Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
 
+### "Gasto diário" ganha segunda forma de ver: calendário (15/09)
+
+Luiz: *"quero ver um calendário, e nele quero olhar quais foram os dias que fiquei abaixo da meta diária e quais dias fiquei fora da meta. Quero ver isso visualmente... pode ser no mesmo box, duas formas de visualizar."* Feature nova, só em Orçamento (não pedida no Dashboard).
+
+- **`DailySpendCalendar`** (componente novo): grade de calendário do mês-calendário atual (mesmo período de `daysThisMonth` — nunca o mês navegado em Orçamento, igual ao gráfico de linha ao lado), célula por dia colorida: verde (`--success-soft`/`--success`) = abaixo da meta, vermelho (`--danger-soft`/`--danger`) = acima da meta, cinza (`--fill-muted`) = sem meta em vigor naquele dia, sem cor nenhuma = dia futuro (nunca inventa status pra dia que ainda não aconteceu). Mesma regra de "estourou" já corrigida em 14/09 em todo o app: `amount > goal`, nunca `goal > 0 && amount > goal`. Hover em cada dia reusa `HoverCard` (o único jeito de hover-detalhe do projeto) mostrando gasto, meta e a mesma lista de "de onde veio o gasto" (`breakdown`) que o tooltip do gráfico de linha já tinha — MESMO dado dos dois jeitos de ver, só muda a pergunta (linha = "qual foi o valor exato", calendário = "quais dias estouraram").
+- **Toggle gráfico/calendário**: par de botões (ícone `LineChart`/`CalendarDays`) ao lado do rótulo "Neste mês" — ativo em `--accent-soft`/`--accent`, mesma linguagem de seleção real já usada em aba/chip marcado em todo o app (nunca `--fill-muted`, reservado pra "expandido", não seleção). Troca é só `useState` local — nenhuma chamada nova ao backend, os dois jeitos de ver leem o MESMO `budget.daysThisMonth` que já veio na resposta.
+
+Verificado ao vivo em `dev.db`, desktop e mobile: setembro/2026 mostrou dias 1/3/4/5/6/8/10/11/12/13 em vermelho, 2/7/9/14/15 em verde, 16-30 sem cor (futuro) — bateu exatamente com "5 de 15 dias abaixo da meta esse mês" já mostrado embaixo do gráfico. Hover no dia 8 mostrou a mesma lista (Boleto R$4.659,15, D M Rodrigues R$600,00, tramontina R$237,53) já vista no gráfico de linha pro mesmo dia. `npx tsc -b` limpo, sem erro de console.
+
+**Deployado em produção** (mesmo dia, sem migration — sem mudança nenhuma de backend, só frontend).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

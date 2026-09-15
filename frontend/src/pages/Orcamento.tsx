@@ -1,6 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Target, PieChart, CreditCard as CreditCardIcon, CalendarClock, Copy, ListChecks, AlertCircle, Settings as SettingsIcon, Plus, Minus, TrendingUp } from 'lucide-react'
+import {
+  Target,
+  PieChart,
+  CreditCard as CreditCardIcon,
+  CalendarClock,
+  CalendarDays,
+  LineChart as LineChartIcon,
+  Copy,
+  ListChecks,
+  AlertCircle,
+  Settings as SettingsIcon,
+  Plus,
+  Minus,
+  TrendingUp,
+} from 'lucide-react'
 import {
   api,
   type BudgetSummary,
@@ -11,6 +25,7 @@ import {
   type LeafCategoryOption,
 } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
+import { DailySpendCalendar } from '../components/DailySpendCalendar'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
@@ -97,6 +112,13 @@ export function Orcamento() {
   // carregado, não de um cadastro de corretoras à parte — só aparece banco
   // que realmente tem transação nesse mês.
   const [bankFilter, setBankFilter] = useState('')
+
+  // "Gasto diário" tem duas visualizações do MESMO dado (`daysThisMonth`) —
+  // gráfico de linha (como sempre foi) ou calendário (pedido do Luiz,
+  // 15/09: "quero ver quais dias fiquei abaixo da meta e quais fiquei fora,
+  // visualmente... pode ser no mesmo box"). Nunca precisa recarregar nada ao
+  // trocar, é só outra forma de olhar o array que já veio do backend.
+  const [dailyView, setDailyView] = useState<'chart' | 'calendar'>('chart')
 
   function loadTransactions() {
     api.transactions({ month, year }).then(setTransactions).catch(() => {})
@@ -392,16 +414,49 @@ export function Orcamento() {
             <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
           </div>
           <div style={{ marginTop: 'var(--space-5)' }}>
-            <h4 className={styles.chartLabel}>Neste mês</h4>
-            <SmoothLineChart
-              values={budget.daysThisMonth.map((d) => d.amount)}
-              labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
-              threshold={budget.dailyGoal ?? undefined}
-              gradientId="orcamentoDailyGradient"
-              className={cards.evolutionChart}
-              markedIndex={markedDayIndex}
-              breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
-            />
+            <div className={styles.chartLabelRow}>
+              <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                Neste mês
+              </h4>
+              {/* Duas formas de ver o MESMO `daysThisMonth" (15/09, pedido do
+                  Luiz: "quero ver quais dias fiquei abaixo da meta e quais
+                  fiquei fora, visualmente... pode ser no mesmo box, duas
+                  formas de visualizar"). Troca é só de estado local, sem
+                  recarregar nada — o array já veio do backend inteiro. */}
+              <div className={styles.dailyViewToggle}>
+                <button
+                  type="button"
+                  className={`${styles.dailyViewToggleBtn} ${dailyView === 'chart' ? styles.dailyViewToggleBtnActive : ''}`}
+                  onClick={() => setDailyView('chart')}
+                  aria-label="Ver como gráfico"
+                  aria-pressed={dailyView === 'chart'}
+                >
+                  <LineChartIcon size={14} strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.dailyViewToggleBtn} ${dailyView === 'calendar' ? styles.dailyViewToggleBtnActive : ''}`}
+                  onClick={() => setDailyView('calendar')}
+                  aria-label="Ver como calendário"
+                  aria-pressed={dailyView === 'calendar'}
+                >
+                  <CalendarDays size={14} strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+            {dailyView === 'chart' ? (
+              <SmoothLineChart
+                values={budget.daysThisMonth.map((d) => d.amount)}
+                labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
+                threshold={budget.dailyGoal ?? undefined}
+                gradientId="orcamentoDailyGradient"
+                className={cards.evolutionChart}
+                markedIndex={markedDayIndex}
+                breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
+              />
+            ) : (
+              <DailySpendCalendar days={budget.daysThisMonth} />
+            )}
           </div>
           {/* Dia com parcela futura comprometida (ainda não confirmada pela
               Pluggy) já entra na barra do dia certo — marca aqui pra não
