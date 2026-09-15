@@ -343,6 +343,18 @@ export function Dashboard() {
                     </span>
                   </div>
                 )}
+                {/* "Quanto economizei" (15/09, mesmo raciocínio de Orçamento —
+                    "vou saber o quanto estou economizando nos meses"). */}
+                {budget.dailyGoalSavedThisMonth > 0 && (
+                  <div className={styles.chartMeta}>
+                    <span>
+                      economizou <Money>R$ {currency(budget.dailyGoalSavedThisMonth)}</Money> esse mês
+                    </span>
+                    {budget.dailyGoalSavedLastMonth > 0 && (
+                      <MonthDelta current={budget.dailyGoalSavedThisMonth} previous={budget.dailyGoalSavedLastMonth} higherIsBetter />
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

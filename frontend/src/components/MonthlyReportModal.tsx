@@ -4,6 +4,8 @@ import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, typ
 import { currency } from '../lib/format'
 import { Money } from './Money'
 import { ClientPieChart } from './ClientPieChart'
+import { RankedBarList } from './RankedBarList'
+import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
@@ -90,7 +92,6 @@ export function MonthlyReportModal({
 
   const byParent = budget ? spentByParent(budget.categories) : []
   const pieData = byParent.filter((p) => p.value > 0)
-  const topCategory = pieData[0] ?? null
   // Categoria que mais CRESCEU vs mês anterior (maior delta positivo) —
   // diferente de "quem mais gastou" (uma categoria pode ser sempre a maior
   // sem ter crescido nada esse mês).
@@ -174,16 +175,46 @@ export function MonthlyReportModal({
                 <span>Não essencial: <Money>R$ {currency(nonEssentialSpent)}</Money></span>
               </div>
 
+              {/* "Economia da meta diária" (15/09, pedido do Luiz: "vou saber
+                  o quanto estou economizando nos meses... esses valores com
+                  certeza têm que aparecer no meu relatório mensal") — do
+                  PERÍODO do relatório (`daysWithGoal`/`dailyGoalSaved`),
+                  nunca "agora" (esses campos, sem sufixo "ThisMonth", são
+                  escopados pelo mês/ano da query — ver comentário em
+                  api.ts). Comparação com o mês anterior só quando ele
+                  também teve economia de verdade, mesmo padrão do resto do
+                  relatório. */}
+              {budget!.daysWithGoal > 0 && (
+                <p className={styles.highlight}>
+                  Economia da meta diária:{' '}
+                  <strong>
+                    {budget!.daysUnderGoal} de {budget!.daysWithGoal} dia{budget!.daysWithGoal === 1 ? '' : 's'} abaixo da meta
+                  </strong>
+                  {budget!.dailyGoalSaved > 0 && (
+                    <>
+                      {' '}
+                      — <Money>R$ {currency(budget!.dailyGoalSaved)}</Money> economizados
+                      {budget!.previousDailyGoalSaved > 0 && (
+                        <MonthDelta current={budget!.dailyGoalSaved} previous={budget!.previousDailyGoalSaved} higherIsBetter />
+                      )}
+                    </>
+                  )}
+                </p>
+              )}
+
               {pieData.length > 0 ? (
                 <>
                   <div className={styles.chartWrap}>
                     <ClientPieChart data={pieData} />
                   </div>
-                  {topCategory && (
-                    <p className={styles.highlight}>
-                      Categoria que mais gastou: <strong>{topCategory.label}</strong> (<Money>R$ {currency(topCategory.value)}</Money>)
-                    </p>
-                  )}
+                  {/* Lista rankeada de TODAS as categorias (15/09, pedido do
+                      Luiz: "cadê o gráfico das categorias em orçamento? onde
+                      eu gastei mais?") — antes só tinha a frase da categoria
+                      #1 isolada; agora dá pra comparar todas, maior primeiro,
+                      mesmo componente já usado noutros rankings do app. */}
+                  <div className={styles.chartWrap}>
+                    <RankedBarList data={pieData} />
+                  </div>
                   {fastestGrowingCategory && (
                     <p className={styles.highlight}>
                       Categoria que mais cresceu: <strong>{fastestGrowingCategory.label}</strong> (
@@ -201,8 +232,12 @@ export function MonthlyReportModal({
               {overBudgetCategories.length > 0 && (
                 <p className={styles.highlight}>
                   Estourou o planejado em:{' '}
+                  {/* `key={c.categoryId}`, não `c.name` (achado real, 15/09:
+                      duas categorias-folha com o mesmo nome — ex:
+                      "Equipamentos" em dois grupos-pai diferentes — geravam
+                      key duplicada, erro no console do React). */}
                   {overBudgetCategories.map((c, i) => (
-                    <span key={c.name}>
+                    <span key={c.categoryId}>
                       {i > 0 && ', '}
                       {c.name} (<Money>+R$ {currency(c.spent - c.planned)}</Money>)
                     </span>
@@ -246,6 +281,23 @@ export function MonthlyReportModal({
                     </div>
                   </div>
 
+                  {/* Curva de evolução (15/09, pedido do Luiz: "ele ainda
+                      está muito pobre visualmente. Sem gráficos") — antes só
+                      tinha o número de "Patrimônio total", sem noção de
+                      tendência nenhuma. Mesmo `SmoothLineChart` da tela de
+                      Patrimônio, sem `threshold` (não faz sentido meta pra
+                      patrimônio). */}
+                  {wealth!.evolution.length >= 2 && (
+                    <div className={styles.chartWrap}>
+                      <SmoothLineChart
+                        values={wealth!.evolution.map((e) => e.value)}
+                        labels={wealth!.evolution.map((e) => e.label)}
+                        gradientId="reportWealthEvolution"
+                        height={70}
+                      />
+                    </div>
+                  )}
+
                   {allocationData.length > 0 && (
                     <div className={styles.chartWrap}>
                       <ClientPieChart data={allocationData} />
@@ -270,7 +322,10 @@ export function MonthlyReportModal({
             {/* ---------- Projetos ---------- */}
             <section className={styles.block}>
               <h4 className={styles.blockTitle}>Projetos</h4>
-              {projects!.receivedThisMonth > 0 || projects!.bestProjectThisMonth || projects!.outstanding > 0 ? (
+              {projects!.receivedThisMonth > 0 ||
+              projects!.bestProjectThisMonth ||
+              projects!.outstanding > 0 ||
+              projects!.deliveredThisMonth.length > 0 ? (
                 <>
                   <div className={styles.statGrid}>
                     <div className={styles.stat}>
@@ -290,6 +345,31 @@ export function MonthlyReportModal({
                       Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (
                       <Money>R$ {currency(projects!.bestProjectThisMonth.received)}</Money>)
                     </p>
+                  )}
+                  {/* "Projetos entregues" (15/09, pedido do Luiz: "cadê os
+                      projetos entregues?") — entrega não é um campo manual,
+                      é derivada de quando o total recebido bateu o valor do
+                      contrato (confirmado com o Luiz: "a entrega está
+                      relacionada ao pagamento total do projeto"). Vazio nos
+                      meses sem nenhum projeto fechado — nada aparece, sem
+                      "nenhum projeto entregue" genérico pra não poluir um
+                      relatório que já tem outros números. */}
+                  {projects!.deliveredThisMonth.length > 0 && (
+                    <>
+                      <h5 className={styles.subBlockTitle}>Projetos entregues</h5>
+                      <ul className={styles.deliveredList}>
+                        {projects!.deliveredThisMonth.map((p) => (
+                          <li key={p.id} className={styles.deliveredRow}>
+                            <span>
+                              <strong>{p.name}</strong> · {p.client}
+                            </span>
+                            <span>
+                              <Money>R$ {currency(p.contractValue)}</Money>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </>
               ) : (

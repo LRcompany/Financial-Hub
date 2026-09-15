@@ -150,6 +150,20 @@ export interface BudgetSummary {
   // é o denominador (dia sem meta cadastrada não entra em nenhum dos dois).
   daysUnderGoalThisMonth: number
   daysWithGoalThisMonth: number
+  // "Quanto economizei" (15/09, pedido do Luiz: "vou saber o quanto estou
+  // economizando nos meses") — soma de `meta - gasto` em todo dia abaixo,
+  // SEMPRE o mês-calendário atual de verdade (mesmo critério de
+  // daysUnderGoalThisMonth acima). `dailyGoalSavedLastMonth` é a mesma
+  // conta na janela alinhada do mês anterior, só pra comparação (MonthDelta).
+  dailyGoalSavedThisMonth: number
+  dailyGoalSavedLastMonth: number
+  // Mesma "economia da meta diária", mas pro PERÍODO do relatório (mês/ano
+  // da query — pode ser um mês fechado no passado, diferente dos campos
+  // acima que são sempre "agora"). Usado só pelo relatório mensal.
+  daysWithGoal: number
+  daysUnderGoal: number
+  dailyGoalSaved: number
+  previousDailyGoalSaved: number
   // Mês-calendário ATUAL de verdade, do dia 1 até hoje (pedido do Luiz,
   // 08/09) — antes era um rolling de 14 dias, que no início do mês
   // misturava dias do mês anterior. Poucos pontos no início do mês é
@@ -345,6 +359,13 @@ export interface ProjectsSummary {
     received: number
   }[]
   bestProjectThisMonth: { name: string; received: number } | null
+  // Projetos que bateram 100% recebido dentro do mês pedido (15/09, pedido
+  // do Luiz no relatório mensal: "cadê os projetos entregues?") — não existe
+  // marcação manual de entrega, é derivado: entrega = data do recebimento
+  // que fechou o contrato (confirmado com o Luiz: "a entrega está
+  // relacionada ao pagamento total do projeto"). Vazio quando nenhum
+  // projeto fechou o contrato nesse mês específico.
+  deliveredThisMonth: { id: string; name: string; client: string; contractValue: number; deliveryDate: string }[]
 }
 
 export interface Client {

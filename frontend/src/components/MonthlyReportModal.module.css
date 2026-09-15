@@ -129,6 +129,37 @@
   font-weight: 600;
 }
 
+/* "Projetos entregues" (15/09) — mesma hierarquia visual de `.blockTitle`
+   (rótulo pequeno, maiúsculo), um nível abaixo (não uppercase, não tão
+   destacado) por ser um sub-título DENTRO do bloco "Projetos", não um bloco
+   novo. */
+.subBlockTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.deliveredList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.deliveredRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.deliveredRow:first-child {
+  border-top: none;
+}
+
 /* ---------- impressão / "baixar PDF" via window.print() ----------
    Esconder/reposicionar overlay+sheet é genérico, já vem do ModalShell
    (`printable`) — aqui só o que é específico DESSE conteúdo. */

@@ -475,6 +475,20 @@ export function Orcamento() {
               </span>
             </div>
           )}
+          {/* "Quanto economizei" (15/09, pedido do Luiz: "vou saber o quanto
+              estou economizando nos meses") — soma do que sobrou em todo dia
+              abaixo da meta. Só aparece com economia de verdade (>0); sem
+              meta cadastrada nenhum dia, `dailyGoalSavedThisMonth` já vem 0. */}
+          {budget.dailyGoalSavedThisMonth > 0 && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>
+                economizou <Money>R$ {currency(budget.dailyGoalSavedThisMonth)}</Money> esse mês
+              </span>
+              {budget.dailyGoalSavedLastMonth > 0 && (
+                <MonthDelta current={budget.dailyGoalSavedThisMonth} previous={budget.dailyGoalSavedLastMonth} higherIsBetter />
+              )}
+            </div>
+          )}
         </div>
 
         {/* ---------- cartões de crédito ---------- */}

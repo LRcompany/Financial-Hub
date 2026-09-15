@@ -1880,6 +1880,29 @@ Verificado ao vivo em `dev.db`, Dashboard e Orçamento: toggle e calendário id�
 
 **Deployado em produção** (mesmo dia, sem migration — só frontend).
 
+### Relatório mensal ganha economia da meta diária, ranking de categorias, evolução de patrimônio e projetos entregues (15/09)
+
+Luiz: *"precisamos gravar os dias que fico abaixo do valor diário, assim vou saber o quanto estou economizando nos meses. Esses valores com certeza têm que aparecer no meu relatório mensal. Ele ainda está muito pobre visualmente... cadê o gráfico das categorias em orçamento? onde eu gastei mais? Cadê os projetos entregues? Vamos pensar aqui antes de você sair fazendo."* Antes de mexer em código, discutimos a estrutura (ver troca no chat) — duas perguntas precisavam de decisão do Luiz:
+
+1. **"Entregue" não é campo manual** — um projeto vira "finalizado" automaticamente quando o total recebido bate o valor do contrato. Luiz confirmou: *"a entrega está relacionada ao pagamento total do projeto, logo não precisa"* [de campo novo] — ou seja, "entregue no mês X" = a data do recebimento que fechou o contrato caiu no mês X.
+2. **Onde mostrar "quanto economizei"**: Luiz escolheu **"nos dois lugares desde já"** — relatório mensal E os cards ao vivo (Dashboard/Orçamento), não só um dos dois.
+
+**Economia da meta diária — sem tabela nova.** Achado importante: não precisava "gravar" nada — já existe histórico completo de `Transaction` + `DailySpendGoal` (com `effectiveFrom`), então dá pra recalcular "quantos dias fiquei abaixo, quanto sobrou" pra QUALQUER mês passado, sob demanda, do mesmo jeito que todo o resto do relatório já funciona. `budget.ts` ganhou:
+- `dailyGoalSavedThisMonth`/`dailyGoalSavedLastMonth` — sempre "agora" (mesmo critério dos campos `...ThisMonth` já existentes), reaproveitando o loop que já existia pra `daysUnderGoalThisMonth` em vez de rodar `sumOnDay` de novo. Aparecem nos cards "Meta diária de gasto"/"Gasto diário" ao vivo (Dashboard + Orçamento) como "economizou R$X esse mês", com `MonthDelta`.
+- `daysWithGoal`/`daysUnderGoal`/`dailyGoalSaved`/`previousDailyGoalSaved` — nova função `dailyGoalSavingsForRange(start, end, dailyGoals)`, escopada pelo mês/ano DA QUERY (pode ser um mês fechado no passado, diferente de tudo que tem sufixo "ThisMonth") — usada só pelo relatório mensal.
+
+**"Onde eu gastei mais"**: a frase única "categoria que mais gastou" virou uma lista rankeada de verdade (`RankedBarList`, já usado noutros rankings do app) com TODAS as categorias-pai, barra + valor + %, ao lado da pizza que já existia — mantidas as frases "categoria que mais cresceu" e "estourou o planejado em".
+
+**Patrimônio ganhou uma curva de evolução** (`SmoothLineChart` pequeno, sem `threshold`, usando `wealth.evolution`) — antes só tinha o número, sem noção de tendência nenhuma.
+
+**"Projetos entregues"**: `projects.ts` ganhou `deliveredThisMonth` — pra cada projeto não cancelado, soma os recebimentos em ordem cronológica até bater o valor do contrato; se a data desse recebimento cai dentro do mês/ano pedido, o projeto entra na lista (nome, cliente, valor). Projeto que já tinha fechado em mês anterior não aparece de novo.
+
+**Achado incidental no caminho**: dois bugs reais de `key` duplicada no React, achados pelo console ao testar (não relacionados ao pedido, mas expostos por ele) — `overBudgetCategories.map(... key={c.name})` quebrava quando duas categorias-folha diferentes tinham o MESMO nome ("Equipamentos" em "Esportes" e em "Empresa", categorias distintas); trocado pra `key={c.categoryId}` (único de verdade). E a nova lista de projetos entregues usava `key={p.name}`, que colide quando dois projetos diferentes têm o mesmo nome (ex: duas "RENTAL - DEC" de clientes diferentes) — backend passou a mandar `id` do projeto, usado como key.
+
+Verificado ao vivo em `dev.db`: setembro/2026 (mês corrente) mostrou "Economia da meta diária: 5 de 15 dias abaixo da meta — R$215,45 economizados ↓48.7% vs. mês anterior" + lista rankeada completa das 8 categorias + curva de patrimônio; abril/2026 (mês fechado, sem meta diária em vigor ainda) corretamente NÃO mostrou a seção de economia (não inventa dado sem meta), mas mostrou 4 projetos entregues (RENTAL - DEC × 2 clientes, RENTAL - JAN, RENTAL - FEV) batendo com os recebimentos reais daquele mês. Console limpo numa aba nova (as duas mensagens de key duplicada só apareciam numa aba antiga com estado de warning acumulado do React, confirmado como resíduo, não bug ativo, ao testar numa aba genuinamente nova). `tsc --noEmit` (back) + `tsc -b` (front) limpos.
+
+**Deployado em produção** (mesmo dia, sem migration — só lógica nova em cima de dado já existente).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

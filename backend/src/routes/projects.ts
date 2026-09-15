@@ -561,6 +561,36 @@ projectsRouter.get("/projects-summary", async (req, res) => {
       .map(([name, received]) => ({ name, received }))
       .sort((a, b) => b.received - a.received)[0] ?? null;
 
+  // "Projetos entregues esse mês" (pedido do Luiz, 15/09, relatório mensal:
+  // "cadê os projetos entregues?") — não existe um campo manual de entrega
+  // (confirmado com o Luiz: "a entrega está relacionada ao pagamento total
+  // do projeto"), então é derivado: acha a data do recebimento que fez o
+  // total acumulado bater o valor do contrato pela primeira vez (mesma regra
+  // de `finalized`/`finalizedCount` acima — recebeu tudo = entregue) e
+  // verifica se essa data caiu dentro do mês pedido. Projeto que já tinha
+  // batido 100% em mês anterior não entra de novo (a entrega já aconteceu
+  // lá, não agora).
+  const deliveredThisMonth = notCancelled
+    .map((p) => {
+      const sorted = [...p.receipts].sort((a, b) => a.paymentDate.getTime() - b.paymentDate.getTime());
+      let cumulative = 0;
+      let deliveryDate: Date | null = null;
+      for (const r of sorted) {
+        cumulative += r.amount;
+        if (cumulative >= p.contractValue) {
+          deliveryDate = r.paymentDate;
+          break;
+        }
+      }
+      return deliveryDate ? { id: p.id, name: p.name, client: p.client.name, contractValue: p.contractValue, deliveryDate } : null;
+    })
+    .filter(
+      (x): x is { id: string; name: string; client: string; contractValue: number; deliveryDate: Date } =>
+        x != null && x.deliveryDate >= monthRangeReq.gte && x.deliveryDate < monthRangeReq.lt
+    )
+    .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime())
+    .map((x) => ({ id: x.id, name: x.name, client: x.client, contractValue: x.contractValue, deliveryDate: x.deliveryDate.toISOString() }));
+
   res.json({
     grossRevenue,
     netRevenue,
@@ -584,5 +614,6 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     clientContractValue,
     activeProjects,
     bestProjectThisMonth,
+    deliveredThisMonth,
   });
 });
