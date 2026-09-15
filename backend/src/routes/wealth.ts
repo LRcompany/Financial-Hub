@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { projectFirstMillion } from "../services/wealthProjection.js";
-import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
+import { computeAverageMonthlyReturnPct, projectFirstMillion } from "../services/wealthProjection.js";
+import { fetchAllSnapshots, activeSnapshotsAsOf, automatedStartYmByBrokerType, yearMonth } from "../services/activePositions.js";
 
 export const wealthRouter = Router();
 
@@ -9,27 +9,33 @@ export const wealthRouter = Router();
 // Tudo calculado em cima de PositionSnapshot (populado pelo sync da Pluggy ou
 // lançamento manual) — sem número fixo. Enquanto não houver snapshot nenhum,
 // retorna hasData: false em vez de zero fake.
-wealthRouter.get("/wealth-overview", async (_req, res) => {
+// `month`/`year` opcionais (08/09, relatório mensal) — sem eles, comportamento
+// de sempre ("agora", usado por Dashboard/Patrimônio). Com eles, todo o
+// resto da conta (`total`, `previousTotal`, `movers`, `investedThisMonth`...)
+// desliza pra ver a carteira COMO ELA ESTAVA naquele mês, não hoje — sem
+// isso, o relatório de um mês passado mostraria o patrimônio de hoje, errado.
+wealthRouter.get("/wealth-overview", async (req, res) => {
   const all = await fetchAllSnapshots();
 
   if (all.length === 0) {
-    const [wealthGoal, wealthGoalYearly] = await Promise.all([
-      prisma.wealthGoal.findFirst(),
-      prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
-    ]);
+    const wealthGoal = await prisma.wealthGoal.findFirst();
     return res.json({
       hasData: false,
       wealthGoal,
-      wealthGoalYearly,
       evolution: [],
+      investedByMonth: [],
+      dividendsByMonth: [],
       allocation: [],
       movers: [],
+      avgMonthlyReturnPct: null,
       projection: null,
       yearlyBreakdown: [],
     });
   }
 
-  const nowYm = yearMonth(all[0].year, all[0].month);
+  const queryMonth = req.query.month ? Number(req.query.month) : null;
+  const queryYear = req.query.year ? Number(req.query.year) : null;
+  const nowYm = queryMonth && queryYear ? yearMonth(queryYear, queryMonth) : yearMonth(all[0].year, all[0].month);
   const latestSnaps = activeSnapshotsAsOf(all, nowYm);
   const previousSnaps = activeSnapshotsAsOf(all, nowYm - 1);
   const beforePreviousSnaps = activeSnapshotsAsOf(all, nowYm - 2);
@@ -51,7 +57,33 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
   const allocation = [...allocationMap.entries()].map(([label, value]) => ({ label, value }));
 
   // ---- evolução: últimos 12 meses corridos, carregando o último valor ativo de cada mês ----
+  // Guarda o investedAmount total junto (não só marketValue) — é o que
+  // permite calcular o retorno médio REAL da carteira mais abaixo (separar
+  // valorização de mercado de dinheiro novo que entrou).
   const evolution: { label: string; value: number }[] = [];
+  const monthlyTotals: { marketValue: number; investedAmount: number }[] = [];
+  // Ano-calendário E ym de cada entrada de `evolution`/`monthlyTotals`, na
+  // mesma ordem/índice (o loop pula mês sem snapshot, então não dá pra
+  // recalcular isso de fora depois — precisa guardar junto). `monthMetaYear`
+  // usado logo abaixo pra somar só os meses do ano corrente (aportado real
+  // no ano); `monthYms` usado pra achar mês de migração manual→automático
+  // (ver `investedByKey`/`automatedStartYm` abaixo).
+  const monthMetaYear: number[] = [];
+  const monthYms: number[] = [];
+  // Soma de investedAmount por chave `brokerId:security.type`, um mês por
+  // índice (mesmo índice de `evolution`/`monthlyTotals`) — permite achar,
+  // mês a mês, quanto cada broker+tipo tinha investido, pra excluir da conta
+  // de "aporte" o mês exato em que um broker+tipo migra de manual pra
+  // automático (ver mais abaixo).
+  function investedByKey(snaps: typeof all) {
+    const map = new Map<string, number>();
+    for (const s of snaps) {
+      const key = `${s.brokerId}:${s.security.type}`;
+      map.set(key, (map.get(key) ?? 0) + s.investedAmount);
+    }
+    return map;
+  }
+  const investedByKeyByMonth: Map<string, number>[] = [];
   for (let i = 11; i >= 0; i--) {
     const ym = nowYm - i;
     const year = Math.floor((ym - 1) / 12);
@@ -62,78 +94,234 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
       label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
       value: snaps.reduce((sum, s) => sum + s.marketValue, 0),
     });
+    monthlyTotals.push({
+      marketValue: snaps.reduce((sum, s) => sum + s.marketValue, 0),
+      investedAmount: snaps.reduce((sum, s) => sum + s.investedAmount, 0),
+    });
+    monthMetaYear.push(year);
+    monthYms.push(ym);
+    investedByKeyByMonth.push(investedByKey(snaps));
   }
+  const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals);
 
-  // ---- aportes do mês: variação do total investido (não posição por posição) ----
+  // ---- investido por mês (histórico) — pro gráfico "Investido por mês" E
+  // pro "Aportado real" da "Primeiro Milhão" ----
+  // Mesma ideia de `investedDelta` abaixo, mas mês a mês pra todo o período
+  // visível (não só o mês atual x anterior). Precisa de 1 mês a mais de
+  // baseline (nowYm-12) só pra conseguir calcular a variação do PRIMEIRO mês
+  // visível também — senão o gráfico começaria faltando o primeiro ponto.
+  const baselineSnaps = activeSnapshotsAsOf(all, nowYm - 12);
+  const baselineInvestedByKey = baselineSnaps.length > 0 ? investedByKey(baselineSnaps) : null;
+  // Bug real (14/09, Luiz: "o valor que mostra em aportado real, realmente
+  // está correto?"): quando um broker+tipo migra de manual pra automático
+  // (Pluggy — ver `activeSnapshotsAsOf`), o `investedAmount` daquele tipo
+  // muda de fonte no MESMO mês — de "o que o Luiz digitou à mão" pra "o que
+  // a Pluggy calcula de verdade". Comparar esse mês com o anterior como se
+  // fosse um aporte normal conta a DIFERENÇA DE PRECISÃO entre as duas
+  // fontes como se fosse dinheiro novo — achado real: a migração da Sofisa
+  // em ago/2026 sozinha "criou" R$36 mil de "aporte" que não existiu (manual
+  // tinha só R$18.000 registrado, a Pluggy revelou R$54.040 de verdade — a
+  // diferença é o manual tendo subestimado o valor o tempo todo, não dinheiro
+  // que entrou naquele mês). Fix: no mês EXATO em que um broker+tipo começa a
+  // ter fonte automática (`automatedStartYm === ym` daquele mês), a
+  // contribuição desse broker+tipo pro delta do mês é ZERADA (nem soma nem
+  // subtrai) — os outros broker+tipo do mesmo mês continuam contando normal.
+  const automatedStartYm = automatedStartYmByBrokerType(all);
+  // Guarda o ano-calendário junto de cada delta — sem baseline (12 meses
+  // atrás sem snapshot nenhum), o primeiro mês de `monthlyTotals` fica de
+  // fora do `investedByMonth` (não dá pra calcular delta sem "antes"), então
+  // os índices dos dois arrays NÃO alinham 1:1 nesse caso — não dá pra
+  // recuperar o ano depois só pelo índice, precisa vir junto aqui.
+  const investedByMonthWithYear: { label: string; value: number; year: number }[] = [];
+  let prevInvestedByKey = baselineInvestedByKey;
+  for (let idx = 0; idx < monthlyTotals.length; idx++) {
+    const curByKey = investedByKeyByMonth[idx];
+    const curYm = monthYms[idx];
+    if (prevInvestedByKey !== null) {
+      const keys = new Set([...prevInvestedByKey.keys(), ...curByKey.keys()]);
+      let delta = 0;
+      for (const key of keys) {
+        if (automatedStartYm.get(key) === curYm) continue; // mês da migração — artefato, não aporte
+        delta += (curByKey.get(key) ?? 0) - (prevInvestedByKey.get(key) ?? 0);
+      }
+      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx] });
+    }
+    prevInvestedByKey = curByKey;
+  }
+  const investedByMonth = investedByMonthWithYear.map(({ label, value }) => ({ label, value }));
+
+  // ---- aportado REAL no ano corrente até agora — comparação com a coluna
+  // "contribution" (planejada) do yearlyBreakdown da "Primeira Milhão"
+  // (pedido do Luiz, 04/09: "em 2026 tá escrito que eu devia aportar 30k,
+  // mas eu fiz isso?"). Soma só as entradas cujo mês cai no ano corrente —
+  // sempre um subconjunto dos últimos 12 meses (jan a dezembro nunca passa
+  // de 12 meses atrás de "agora").
+  const currentCalendarYear = new Date().getFullYear();
+  const realContributionThisYear = investedByMonthWithYear
+    .filter((e) => e.year === currentCalendarYear)
+    .reduce((sum, e) => sum + e.value, 0);
+
+  // ---- aportes do mês: variação do total investido, por broker+tipo (não
+  // posição por posição, não total puro) ----
   // Comparar por security individual quebra sempre que a identidade do ativo
   // muda de fonte (ex: histórico manual agregava "AÇÕES" numa linha só, a
-  // Pluggy reporta cada ação separada) — o total de investedAmount não
-  // depende de identidade, só precisa das somas de cada período.
-  function investedDelta(current: { investedAmount: number }[], prior: { investedAmount: number }[]) {
-    const totalCurrent = current.reduce((sum, s) => sum + s.investedAmount, 0);
-    const totalPrior = prior.reduce((sum, s) => sum + s.investedAmount, 0);
-    return totalCurrent - totalPrior;
+  // Pluggy reporta cada ação separada). Comparar só o TOTAL puro (como era
+  // antes, 14/09) tem o mesmo problema do "Aportado real" acima: no mês em
+  // que um broker+tipo migra de manual pra automático, a diferença de
+  // precisão entre as duas fontes conta como se fosse aporte. Mesma exclusão
+  // por broker+tipo aplicada aqui, pra "Investido este mês" (Dashboard) nunca
+  // dizer algo diferente do "Aportado real" (Patrimônio) sobre o mesmo mês.
+  function investedDelta(curSnaps: typeof all, curYm: number, priorSnaps: typeof all) {
+    const curByKey = investedByKey(curSnaps);
+    const priorByKey = investedByKey(priorSnaps);
+    const keys = new Set([...curByKey.keys(), ...priorByKey.keys()]);
+    let delta = 0;
+    for (const key of keys) {
+      if (automatedStartYm.get(key) === curYm) continue;
+      delta += (curByKey.get(key) ?? 0) - (priorByKey.get(key) ?? 0);
+    }
+    return delta;
   }
-  const investedThisMonth = investedDelta(latestSnaps, previousSnaps);
-  const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, beforePreviousSnaps) : null;
+  const investedThisMonth = investedDelta(latestSnaps, nowYm, previousSnaps);
+  const investedLastMonth = previousSnaps.length > 0 ? investedDelta(previousSnaps, nowYm - 1, beforePreviousSnaps) : null;
 
-  // ---- proventos: soma do campo dividends do período (null = ainda não coletado, não é 0) ----
-  function dividendsSum(snaps: { dividends: number | null }[]): number | null {
-    const withData = snaps.filter((s) => s.dividends !== null);
-    if (withData.length === 0) return null;
-    return withData.reduce((sum, s) => sum + (s.dividends ?? 0), 0);
+  // ---- proventos: soma de DividendPayment do período (11/09: Ação/FII vêm
+  // de verdade da Pluggy via GET /investments/{id}/transactions; Fundo é
+  // lançamento MANUAL — pedido do Luiz pro fundo VALORA, que a Pluggy não
+  // reporta dividendo — mas os dois entram na mesma soma, sem distinção
+  // aqui. null = "ainda sem provento coletado/lançado nesse período", nunca
+  // 0 fake. Tabela PRÓPRIA (não `PositionSnapshot.dividends`) de propósito
+  // — dividendo é um FLUXO ligado à DATA REAL do pagamento, não ao mês em
+  // que a gente por acaso já tinha um snapshot daquela posição (ver
+  // comentário no schema: BTG só passou a sincronizar Ação/FII por ticker
+  // individual a partir de ago/2026, mas o extrato de transações já tinha
+  // histórico bem anterior — sem uma tabela própria, jan-jul ficariam pra
+  // sempre sem provento nenhum mesmo com dinheiro real recebido). Nunca
+  // `activeSnapshotsAsOf` aqui: arrastar o último valor conhecido
+  // duplicaria o provento de um mês pro seguinte. ----
+  async function dividendsForYm(ym: number): Promise<number | null> {
+    const year = Math.floor((ym - 1) / 12);
+    const month = ym - year * 12;
+    const payments = await prisma.dividendPayment.findMany({ where: { year, month } });
+    if (payments.length === 0) return null;
+    return payments.reduce((sum, p) => sum + p.amount, 0);
   }
-  const projectedDividends = dividendsSum(latestSnaps);
-  const projectedDividendsLastMonth = previousSnaps.length > 0 ? dividendsSum(previousSnaps) : null;
+  const dividendsThisMonth = await dividendsForYm(nowYm);
+  const dividendsLastMonth = await dividendsForYm(nowYm - 1);
 
-  // ---- destaques do mês: maior variação % de valor de mercado por ativo ----
-  // `s.month`/`s.year` aqui é a data REAL do snapshot no banco — quando um
-  // broker não foi ressincronizado esse mês, `activeSnapshotsAsOf` "carrega"
-  // pra frente o snapshot antigo (é assim que deve ser pro total geral), mas
-  // isso NÃO é uma posição que "não mudou este mês" — é uma posição sem dado
-  // novo nenhum. Contar como destaque de 0% seria mentir que sabemos que não
-  // mudou; o correto é exigir dado realmente datado do mês corrente.
-  function marketValueBySecurity(snaps: { securityId: string; marketValue: number; month: number; year: number; security: { name: string; ticker: string | null } }[]) {
-    const map = new Map<string, { name: string; ticker: string | null; value: number; month: number; year: number }>();
+  // ---- proventos por mês do ano corrente, separado Ação x FII (11/09,
+  // pedido do Luiz: "gráfico por mês do ano... o que veio do FII e o que
+  // veio da Ação... quanto já ganhei de proventos no ano total... traga
+  // todos desse ano, de janeiro até agora"). SEMPRE o ano-calendário de
+  // verdade (`now`), janeiro até o mês atual — mesmo critério já usado em
+  // "Recebido no ano"/"Média mensal" de Projetos (nunca mistura mês do ano
+  // passado). Vem de `DividendPayment` (não do snapshot) — cobre um mês
+  // mesmo sem `PositionSnapshot` por ticker naquele mês (jan-jul/2026, antes
+  // do BTG sincronizar Ação/FII individualmente via Pluggy).
+  const nowReal = new Date();
+  const currentYear = nowReal.getFullYear();
+  const currentMonth = nowReal.getMonth() + 1;
+  const dividendPaymentsThisYear = await prisma.dividendPayment.findMany({
+    where: { year: currentYear, month: { lte: currentMonth } },
+    include: { security: true },
+  });
+  // `fundo` (11/09) — Luiz pediu lançamento MANUAL de provento pra posição
+  // tipo Fundo (a Pluggy não manda isso pra esse tipo, ver pluggySync.ts) e
+  // confirmou que deve somar no mesmo total/gráfico agregado, não ficar de
+  // fora. Terceira série ao lado de Ação/FII — DividendPayment não distingue
+  // "veio da Pluggy" de "lançado à mão", então qualquer tipo com provento
+  // registrado aparece aqui automaticamente.
+  // De onde veio a grana daquele mês, mas agora separado POR SÉRIE (Ação/
+  // FII/Fundo) — pedido do Luiz, 14/09: "quero passar o mouse nas cores da
+  // barra e mostrar apenas os itens que fazem parte da cor" (antes o hover
+  // misturava tudo do mês, independente de qual segmento colorido o mouse
+  // estava). Soma por ativo dentro do mesmo tipo, pro caso raro de a MESMA
+  // ação/FII aparecer em duas corretoras dentro do mesmo mês não duplicar
+  // linha no hover. Ticker só é um nome de verdade pra Ação/FII (PETR4,
+  // HGLG11) — mesma regra já usada em `displayName` no front
+  // (Patrimonio.tsx): pra Fundo a Pluggy manda o CNPJ no campo `ticker`
+  // (ex: "60.645.828/0001-29"), que não diz nada no hover — usa o nome
+  // nesse caso. Só entra quem realmente pagou algo (>0) — nunca lista
+  // posição zerada só pra "preencher" o hover.
+  function breakdownByAsset(payments: typeof dividendPaymentsThisYear) {
+    const map = new Map<string, number>();
+    for (const p of payments) {
+      if (p.amount <= 0) continue;
+      const key = (p.security.type === "Ação" || p.security.type === "FII") && p.security.ticker ? p.security.ticker : p.security.name;
+      map.set(key, (map.get(key) ?? 0) + p.amount);
+    }
+    return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+  }
+  const dividendsByMonth: {
+    label: string;
+    acao: number;
+    fii: number;
+    fundo: number;
+    acaoBreakdown: { label: string; value: number }[];
+    fiiBreakdown: { label: string; value: number }[];
+    fundoBreakdown: { label: string; value: number }[];
+  }[] = [];
+  let dividendsThisYear = 0;
+  for (let m = 1; m <= currentMonth; m++) {
+    const monthPayments = dividendPaymentsThisYear.filter((p) => p.month === m);
+    const acaoPayments = monthPayments.filter((p) => p.security.type === "Ação");
+    const fiiPayments = monthPayments.filter((p) => p.security.type === "FII");
+    const fundoPayments = monthPayments.filter((p) => p.security.type === "Fundo");
+    const acao = acaoPayments.reduce((sum, p) => sum + p.amount, 0);
+    const fii = fiiPayments.reduce((sum, p) => sum + p.amount, 0);
+    const fundo = fundoPayments.reduce((sum, p) => sum + p.amount, 0);
+    dividendsByMonth.push({
+      label: new Date(currentYear, m - 1, 1).toLocaleDateString("pt-BR", { month: "short" }),
+      acao,
+      fii,
+      fundo,
+      acaoBreakdown: breakdownByAsset(acaoPayments),
+      fiiBreakdown: breakdownByAsset(fiiPayments),
+      fundoBreakdown: breakdownByAsset(fundoPayments),
+    });
+    dividendsThisYear += acao + fii + fundo;
+  }
+
+  // ---- destaques do mês: maior variação % por CATEGORIA (não por ativo) ----
+  // Antes mostrava o ativo individual (ticker/CUSIP) — pra título de renda
+  // fixa isso vira um código sem significado nenhum pra ele (ex: "105756CG3",
+  // o CUSIP de um bond da Nomad). Trocado pra a mesma categoria já usada na
+  // "Alocação de investimentos" logo acima (tipo do ativo, ou o nome da
+  // corretora quando ela é "standalone" tipo Nomad/INCO) — sempre uma
+  // categoria reconhecível (Renda Fixa, Ação, FII, NOMAD...), nunca um
+  // identificador técnico de ativo.
+  function totalByCategory(snaps: { marketValue: number; security: { type: string }; broker: { name: string; standalone: boolean } }[]) {
+    const map = new Map<string, number>();
     for (const s of snaps) {
-      const existing = map.get(s.securityId);
-      map.set(s.securityId, {
-        name: s.security.name,
-        ticker: s.security.ticker,
-        value: (existing?.value ?? 0) + s.marketValue,
-        month: s.month,
-        year: s.year,
-      });
+      const key = s.broker.standalone ? s.broker.name : s.security.type;
+      map.set(key, (map.get(key) ?? 0) + s.marketValue);
     }
     return map;
   }
-  const curYear = Math.floor((nowYm - 1) / 12);
-  const curMonth = nowYm - curYear * 12;
-  const latestBySecurity = marketValueBySecurity(latestSnaps);
-  const previousBySecurity = marketValueBySecurity(previousSnaps);
-  const movers = [...latestBySecurity.entries()]
-    // só ativo com dado datado deste mês mesmo — carry-forward do mês
-    // passado não é "destaque do mês", é ausência de dado novo
-    .filter(([, cur]) => cur.year === curYear && cur.month === curMonth)
-    .map(([securityId, cur]) => {
-      const prior = previousBySecurity.get(securityId);
-      // sem posição equivalente no mês anterior (ex: broker que acabou de
-      // migrar de estimativa manual pra Pluggy — o id muda) — não dá pra
-      // saber "quanto mudou", não inventa 0%, só não aparece como destaque
-      if (!prior || prior.value === 0) return null;
-      const changePct = ((cur.value - prior.value) / prior.value) * 100;
-      return { ticker: cur.ticker ?? cur.name, changePct };
+  const latestByCategory = totalByCategory(latestSnaps);
+  const previousByCategory = totalByCategory(previousSnaps);
+  const movers = [...latestByCategory.entries()]
+    .map(([category, curValue]) => {
+      const priorValue = previousByCategory.get(category);
+      // categoria não existia no mês anterior — não dá pra saber "quanto
+      // mudou", não inventa 0%, só não aparece como destaque
+      if (!priorValue) return null;
+      const changePct = ((curValue - priorValue) / priorValue) * 100;
+      return { category, changePct };
     })
-    .filter((m): m is { ticker: string; changePct: number } => m !== null)
+    .filter((m): m is { category: string; changePct: number } => m !== null)
     .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
     .slice(0, 5);
 
-  // ---- projeção "primeira milhão" (meta ano a ano, ver services/wealthProjection.ts) ----
-  const [wealthGoal, wealthGoalYearly] = await Promise.all([
-    prisma.wealthGoal.findFirst(),
-    prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
-  ]);
-  const { projection, yearlyBreakdown } = projectFirstMillion(total, wealthGoal?.targetAmount ?? null, wealthGoalYearly);
+  // ---- projeção "primeira milhão" (retorno real + aporte mensal, ver services/wealthProjection.ts) ----
+  const wealthGoal = await prisma.wealthGoal.findFirst();
+  const { projection, yearlyBreakdown } = projectFirstMillion(
+    total,
+    wealthGoal?.targetAmount ?? null,
+    wealthGoal?.monthlyContribution ?? 0,
+    avgMonthlyReturnPct,
+    realContributionThisYear
+  );
 
   res.json({
     hasData: true,
@@ -143,11 +331,14 @@ wealthRouter.get("/wealth-overview", async (_req, res) => {
     evolution,
     investedThisMonth,
     investedLastMonth,
-    projectedDividends,
-    projectedDividendsLastMonth,
+    investedByMonth,
+    dividendsThisMonth,
+    dividendsLastMonth,
+    dividendsByMonth,
+    dividendsThisYear,
     movers,
     wealthGoal,
-    wealthGoalYearly,
+    avgMonthlyReturnPct,
     projection,
     yearlyBreakdown,
   });

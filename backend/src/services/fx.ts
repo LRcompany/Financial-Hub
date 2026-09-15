@@ -1,24 +1,52 @@
 // Cotação USD/BRL — usada pra converter posições em dólar (Nomad, Phantom)
 // pro BRL na hora de gravar o PositionSnapshot. AwesomeAPI é pública, sem
 // chave, mantida por devs brasileiros especificamente pra cotação de câmbio.
+import { prisma } from "../prisma.js";
+
 const AWESOME_API_URL = "https://economia.awesomeapi.com.br/last/USD-BRL";
+const PAIR = "USD-BRL";
 
 let cached: { rate: number; expiresAt: number } | null = null;
+
+async function fetchLiveRate(): Promise<number> {
+  const response = await fetch(AWESOME_API_URL);
+  if (!response.ok) {
+    throw new Error(`Falha ao buscar cotação USD/BRL: ${response.status}`);
+  }
+  const data = (await response.json()) as { USDBRL: { bid: string } };
+  return Number(data.USDBRL.bid);
+}
 
 export async function getUsdToBrlRate(): Promise<number> {
   if (cached && cached.expiresAt > Date.now()) {
     return cached.rate;
   }
 
-  const response = await fetch(AWESOME_API_URL);
-  if (!response.ok) {
-    throw new Error(`Falha ao buscar cotação USD/BRL: ${response.status}`);
+  try {
+    const rate = await fetchLiveRate();
+    cached = { rate, expiresAt: Date.now() + 30 * 60 * 1000 }; // 30min
+    // Grava como fallback pra sobreviver a um restart do processo bem no
+    // meio de uma janela de rate-limit da API (achado real, 08/09) — nunca
+    // deixa a gravação em si quebrar o fluxo principal.
+    await prisma.fxRateCache
+      .upsert({ where: { pair: PAIR }, update: { rate, fetchedAt: new Date() }, create: { pair: PAIR, rate, fetchedAt: new Date() } })
+      .catch(() => {});
+    return rate;
+  } catch (err) {
+    // API externa sem chave/SLA — pode ficar fora do ar ou dar 429 (rate
+    // limit por IP; confirmado ao vivo, 08/09, o IP do droplet tomando 429
+    // no meio de um "Registrar aporte" em dólar). Cai pro último câmbio que
+    // ela realmente devolveu em vez de travar a ação inteira — câmbio não
+    // pula o suficiente em poucas horas pra isso importar de verdade.
+    const fallback = await prisma.fxRateCache.findUnique({ where: { pair: PAIR } }).catch(() => null);
+    if (fallback) {
+      // Cache curto (não os 30min normais) — tenta buscar o valor ao vivo
+      // de novo na próxima chamada, assim que a API voltar.
+      cached = { rate: fallback.rate, expiresAt: Date.now() + 5 * 60 * 1000 };
+      return fallback.rate;
+    }
+    throw err;
   }
-  const data = (await response.json()) as { USDBRL: { bid: string } };
-  const rate = Number(data.USDBRL.bid);
-
-  cached = { rate, expiresAt: Date.now() + 30 * 60 * 1000 }; // 30min
-  return rate;
 }
 
 const historicalCache = new Map<string, number>();

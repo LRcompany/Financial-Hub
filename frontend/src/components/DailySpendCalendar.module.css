@@ -1,0 +1,112 @@
+.wrap {
+  width: 100%;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+/* Reseta o `.trigger` genérico do HoverCard (inline-block + sublinhado
+   tracejado, pensado pra texto) — aqui o gatilho É a própria célula do
+   calendário, sem sublinhado nenhum, esticada pra preencher a célula do
+   grid inteira (mesmo motivo/técnica de `VerticalBarChart.segmentTrigger`:
+   dar tamanho explícito em vez de confiar em blockificação implícita do
+   grid). Import deste módulo vem DEPOIS de HoverCard.tsx no componente,
+   então em empate de especificidade essa regra ganha. */
+.dayTrigger {
+  display: block;
+  width: 100%;
+  border-bottom: none;
+}
+
+.cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-future {
+  color: var(--ink-faint);
+}
+
+.cell-neutral {
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+}
+
+.cell-under {
+  background: var(--success-soft);
+  color: var(--success);
+  font-weight: 600;
+}
+
+.cell-over {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+}
+
+.dotUnder {
+  background: var(--success);
+}
+
+.dotOver {
+  background: var(--danger);
+}
+
+.dotNeutral {
+  background: var(--ink-faint);
+}
+
+/* Tela estreita (07/09, mesmo raciocínio já usado em outros gráficos):
+   célula um pouco menor pra caber sem apertar o card. */
+@media (max-width: 640px) {
+  .grid {
+    gap: 3px;
+  }
+  .cell {
+    font-size: 11px;
+  }
+}
