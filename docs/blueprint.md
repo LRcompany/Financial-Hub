@@ -1851,6 +1851,14 @@ Verificado ao vivo em `dev.db`: hover no dia 08/09 (Dashboard) mostrou "Boleto �
 
 **Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
 
+### Tag "projetado" saiu da lista do tooltip de gasto diário (15/09, mesmo dia)
+
+Luiz, logo depois de ver a lista: *"tira a tag projetado, assim não tem espaço pra ler o nome direito."* A `<ProjectedTag/>` competia por largura com o nome da compra num tooltip já estreito (max 260px) — removida dessa lista específica (`SmoothLineChart`, breakdown do "gasto diário"). O dado (`item.projected`) continua vindo do backend, só não vira badge visual ali; a tag continua existindo normalmente em todo resto do app (Orçamento, relatório mensal) — mudança escopada só a essa lista.
+
+Verificado ao vivo: nome "D M RODRIGUES PSICOLOGIA LTDA" que antes truncava bem mais cedo agora tem ~35px a mais de espaço só nessa mudança. `npx tsc -b` limpo.
+
+**Deployado em produção** (mesmo dia, sem migration): build + rsync + `pm2 restart`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

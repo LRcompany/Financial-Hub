@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Money } from './Money'
-import { ProjectedTag } from './Badge'
 import styles from './SmoothLineChart.module.css'
 
 const GRADIENT_STOPS = [
@@ -256,13 +255,18 @@ export function SmoothLineChart({
               <div className={styles.tooltipBreakdown}>
                 {items.map((item, i) => (
                   <div key={i} className={styles.tooltipBreakdownRow}>
+                    {/* Sem `<ProjectedTag/>` aqui de propósito (15/09,
+                        pedido do Luiz: "tira a tag projetado, assim não tem
+                        espaço pra ler o nome direito") — a tag comia largura
+                        que o nome da compra precisa, num tooltip já estreito
+                        (max 260px). O dado (`item.projected`) continua
+                        existindo, só não vira badge nessa lista específica. */}
                     <span className={styles.tooltipBreakdownLabel}>{item.label}</span>
                     <span className={styles.tooltipBreakdownValue}>
                       <Money>
                         {valuePrefix}
                         {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Money>
-                      {item.projected && <ProjectedTag />}
                     </span>
                   </div>
                 ))}
