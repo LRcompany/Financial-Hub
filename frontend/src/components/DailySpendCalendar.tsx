@@ -58,20 +58,22 @@ export function DailySpendCalendar({ days }: { days: DaySpend[] }) {
           // spent > planned` — meta zerada com gasto real também é estouro.
           const status: 'over' | 'under' | 'neutral' | 'future' =
             data == null ? 'future' : data.goal == null ? 'neutral' : data.amount > data.goal ? 'over' : 'under'
+          // Ordem "recibo" (15/09, pedido do Luiz vendo o popup: "a hierarquia
+          // está confusa... não precisa repetir a meta aqui, e mude gasto
+          // pra total, coloca abaixo de tudo") — meta já aparece no card (não
+          // precisa duplicar aqui); itens primeiro, "Total" por último,
+          // como a soma de uma nota, não como cabeçalho.
           const content =
-            data == null
+            data == null || (data.amount === 0 && data.breakdown.length === 0)
               ? null
               : [
-                  <HoverRow key="amount" label="Gasto" value={<Money>{`R$ ${currency(data.amount)}`}</Money>} />,
-                  data.goal != null ? (
-                    <HoverRow key="goal" label="Meta" value={<Money>{`R$ ${currency(data.goal)}`}</Money>} />
-                  ) : null,
                   ...data.breakdown.map((b, bi) => (
                     <HoverRow key={`b-${bi}`} label={b.label} value={<Money>{`R$ ${currency(b.value)}`}</Money>} />
                   )),
-                ].filter(Boolean)
+                  <HoverRow key="total" label="Total" value={<Money>{`R$ ${currency(data.amount)}`}</Money>} />,
+                ]
           return (
-            <HoverCard key={i} content={content && content.length > 0 ? content : null} className={styles.dayTrigger}>
+            <HoverCard key={i} content={content} className={styles.dayTrigger}>
               <div className={`${styles.cell} ${styles[`cell-${status}`]}`}>
                 <span className={styles.dayNumber}>{dayNumber}</span>
               </div>

@@ -1870,6 +1870,16 @@ Verificado ao vivo em `dev.db`, desktop e mobile: setembro/2026 mostrou dias 1/3
 
 **Deployado em produção** (mesmo dia, sem migration — sem mudança nenhuma de backend, só frontend).
 
+### Calendário de gasto diário replicado no Dashboard + popup reorganizado (15/09, mesmo dia)
+
+Luiz: *"isso tem que aparecer no Dashboard também, não temos meta diária de gasto lá?"* — sim, "Meta diária de gasto" no Dashboard é o mesmo conceito de "Gasto diário" em Orçamento (já documentado como "card separado duplicado" desde 04/09), então ganhou o mesmo toggle gráfico/calendário. `.dailyViewToggle`/`.dailyViewToggleBtn`/`.dailyViewToggleBtnActive` saíram de `Orcamento.module.css` e foram pro `cards.module.css` compartilhado — as duas telas usam a mesma classe agora, sem duplicar CSS. No Dashboard o toggle fica sozinho alinhado à direita (esse card nunca teve um rótulo "Neste mês" acima do gráfico, só a legenda "neste mês" abaixo); a legenda "linha tracejada = meta de R$X" (que só faz sentido no modo gráfico) some quando o calendário está ativo.
+
+Logo depois, Luiz mandou print do popup de hover do calendário (GASTO/META/itens) reclamando: *"não precisa repetir a meta aqui... e mude gasto para Total. Coloca abaixo de tudo. A hierarquia está confusa aqui pra mim."* Fix no `DailySpendCalendar`: tirei a linha "Meta" (já visível no card, não precisa duplicar no hover), renomeei "Gasto" pra "Total", e reordenei pra formato "recibo" — itens da compra primeiro, "Total" por último (soma no fim, não cabeçalho no topo). Mesmo componente usado nas duas telas, fix vale pras duas automaticamente.
+
+Verificado ao vivo em `dev.db`, Dashboard e Orçamento: toggle e calendário idênticos nos dois lugares; hover no dia 8 mostrou "Boleto R$4.659,15 / D M Rodrigues R$600,00 / Tramontina R$237,53 / Total R$5.496,68" — sem Meta, total no fim. `npx tsc -b` (front) + `tsc --noEmit` (back) limpos, sem erro de console.
+
+**Deployado em produção** (mesmo dia, sem migration — só frontend).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

@@ -10,6 +10,7 @@ import {
   PieChart,
   Receipt,
   LineChart,
+  CalendarDays,
   Coins,
   Activity,
   Briefcase,
@@ -25,6 +26,7 @@ import {
   type LeafCategoryOption,
 } from '../lib/api'
 import { SmoothLineChart } from '../components/SmoothLineChart'
+import { DailySpendCalendar } from '../components/DailySpendCalendar'
 import { MonthDelta } from '../components/MonthDelta'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
@@ -83,6 +85,11 @@ export function Dashboard() {
 
   const [budget, setBudget] = useState<BudgetSummary | null>(null)
   const [budgetError, setBudgetError] = useState(false)
+  // "Meta diária de gasto" tem duas visualizações do MESMO `daysThisMonth`
+  // (15/09, pedido do Luiz: "isso tem que aparecer no Dashboard também" —
+  // mesmo toggle já implementado em Orçamento, mesmo dia). Nunca recarrega
+  // nada ao trocar, é só outra forma de olhar o array que já veio do backend.
+  const [dailyView, setDailyView] = useState<'chart' | 'calendar'>('chart')
 
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
   const [wealthError, setWealthError] = useState(false)
@@ -276,18 +283,53 @@ export function Dashboard() {
                   </span>
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
-                <SmoothLineChart
-                  values={budget.daysThisMonth.map((d) => d.amount)}
-                  labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
-                  threshold={budget.dailyGoal ?? undefined}
-                  gradientId="dailySpendGradient"
-                  className={styles.evolutionChart}
-                  markedIndex={markedDayIndex}
-                  breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
-                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
+                  {/* Duas formas de ver o MESMO `daysThisMonth` (15/09, mesmo
+                      toggle de Orçamento — "isso tem que aparecer no
+                      Dashboard também"). Sem `<h4>` rótulo aqui do lado
+                      (esse card não tinha um "Neste mês" acima do gráfico,
+                      só a legenda "neste mês" abaixo) — o toggle fica
+                      sozinho, alinhado à direita. */}
+                  <div className={styles.dailyViewToggle}>
+                    <button
+                      type="button"
+                      className={`${styles.dailyViewToggleBtn} ${dailyView === 'chart' ? styles.dailyViewToggleBtnActive : ''}`}
+                      onClick={() => setDailyView('chart')}
+                      aria-label="Ver como gráfico"
+                      aria-pressed={dailyView === 'chart'}
+                    >
+                      <LineChart size={14} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.dailyViewToggleBtn} ${dailyView === 'calendar' ? styles.dailyViewToggleBtnActive : ''}`}
+                      onClick={() => setDailyView('calendar')}
+                      aria-label="Ver como calendário"
+                      aria-pressed={dailyView === 'calendar'}
+                    >
+                      <CalendarDays size={14} strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+                {dailyView === 'chart' ? (
+                  <SmoothLineChart
+                    values={budget.daysThisMonth.map((d) => d.amount)}
+                    labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
+                    threshold={budget.dailyGoal ?? undefined}
+                    gradientId="dailySpendGradient"
+                    className={styles.evolutionChart}
+                    markedIndex={markedDayIndex}
+                    breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
+                  />
+                ) : (
+                  <DailySpendCalendar days={budget.daysThisMonth} />
+                )}
                 <div className={styles.chartMeta}>
                   <span>neste mês</span>
-                  {budget.dailyGoal != null && (
+                  {/* "linha tracejada" só faz sentido no gráfico — no
+                      calendário não tem linha nenhuma, a meta já aparece
+                      colorindo cada dia. */}
+                  {dailyView === 'chart' && budget.dailyGoal != null && (
                     <span>
                       linha tracejada = meta de <Money>R$ {budget.dailyGoal}</Money>
                     </span>

@@ -423,10 +423,10 @@ export function Orcamento() {
                   fiquei fora, visualmente... pode ser no mesmo box, duas
                   formas de visualizar"). Troca é só de estado local, sem
                   recarregar nada — o array já veio do backend inteiro. */}
-              <div className={styles.dailyViewToggle}>
+              <div className={cards.dailyViewToggle}>
                 <button
                   type="button"
-                  className={`${styles.dailyViewToggleBtn} ${dailyView === 'chart' ? styles.dailyViewToggleBtnActive : ''}`}
+                  className={`${cards.dailyViewToggleBtn} ${dailyView === 'chart' ? cards.dailyViewToggleBtnActive : ''}`}
                   onClick={() => setDailyView('chart')}
                   aria-label="Ver como gráfico"
                   aria-pressed={dailyView === 'chart'}
@@ -435,7 +435,7 @@ export function Orcamento() {
                 </button>
                 <button
                   type="button"
-                  className={`${styles.dailyViewToggleBtn} ${dailyView === 'calendar' ? styles.dailyViewToggleBtnActive : ''}`}
+                  className={`${cards.dailyViewToggleBtn} ${dailyView === 'calendar' ? cards.dailyViewToggleBtnActive : ''}`}
                   onClick={() => setDailyView('calendar')}
                   aria-label="Ver como calendário"
                   aria-pressed={dailyView === 'calendar'}

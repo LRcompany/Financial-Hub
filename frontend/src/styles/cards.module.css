@@ -156,6 +156,45 @@
   margin-top: var(--space-4);
 }
 
+/* Par de botões "gráfico"/"calendário" (15/09, "gasto diário" ganhou uma
+   segunda forma de ver o mesmo dado) — compartilhado entre Dashboard e
+   Orçamento (mesmo card conceitual, duplicado nas duas telas). Mesma
+   linguagem de seleção real (--accent-soft) já usada em aba ativa/chip
+   marcado em todo o app, nunca um `--fill-muted` no item ativo (esse é
+   reservado pra "expandido/aberto", não seleção de verdade). */
+.dailyViewToggle {
+  display: inline-flex;
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dailyViewToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: none;
+  border-radius: var(--r-full);
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.dailyViewToggleBtn:hover {
+  color: var(--ink-soft);
+}
+
+.dailyViewToggleBtnActive,
+.dailyViewToggleBtnActive:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* ---------- stat row (patrimônio "este mês") ---------- */
 .statRow {
   display: flex;
