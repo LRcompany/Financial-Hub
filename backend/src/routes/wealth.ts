@@ -314,6 +314,57 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     .slice(0, 5);
 
   // ---- projeção "primeira milhão" (retorno real + aporte mensal, ver services/wealthProjection.ts) ----
+  // ---- variação por ATIVO, mês contra mês (relatório mensal, 21/09: "qual
+  // foi o investimento que mais rendeu? ou aquele que caiu?") ----
+  // Valorização de verdade, SEM aporte: (valor agora - valor antes - dinheiro
+  // novo que entrou) / valor antes. Agrupa por tipo+nome de exibição (lotes de
+  // Tesouro/CDB somam num papel só) e só entra quem existe nos DOIS meses —
+  // posição nova ou recém-migrada de manual pra automático não tem "antes"
+  // comparável, então não inventa variação pra ela.
+  function assetLabel(s: (typeof latestSnaps)[number]) {
+    const useTicker = (s.security.type === "Ação" || s.security.type === "FII") && s.security.ticker;
+    return `${s.security.type}|${useTicker ? s.security.ticker : s.security.name}`;
+  }
+  function byAsset(snaps: typeof latestSnaps) {
+    const map = new Map<string, { market: number; invested: number }>();
+    for (const sn of snaps) {
+      const k = assetLabel(sn);
+      const cur = map.get(k) ?? { market: 0, invested: 0 };
+      cur.market += sn.marketValue;
+      cur.invested += sn.investedAmount;
+      map.set(k, cur);
+    }
+    return map;
+  }
+  const assetsNow = byAsset(latestSnaps);
+  const assetsBefore = byAsset(previousSnaps);
+  const positionMovers: { label: string; type: string; marketValue: number; changePct: number }[] = [];
+  for (const [k, cur] of assetsNow) {
+    const prev = assetsBefore.get(k);
+    if (!prev || prev.market <= 0) continue;
+    const gain = cur.market - prev.market - (cur.invested - prev.invested);
+    const [type, label] = k.split("|");
+    positionMovers.push({ label, type, marketValue: cur.market, changePct: (gain / prev.market) * 100 });
+  }
+  positionMovers.sort((a, b) => b.changePct - a.changePct);
+
+  // Proventos do mês pedido, por ativo (mesma regra de nome do gráfico anual).
+  const dividendRows = await prisma.dividendPayment.findMany({
+    where: { year: Math.floor((nowYm - 1) / 12), month: nowYm - Math.floor((nowYm - 1) / 12) * 12 },
+    include: { security: true },
+  });
+  const dividendMap = new Map<string, { value: number; type: string }>();
+  for (const p of dividendRows) {
+    if (p.amount <= 0) continue;
+    const label = (p.security.type === "Ação" || p.security.type === "FII") && p.security.ticker ? p.security.ticker : p.security.name;
+    const cur = dividendMap.get(label) ?? { value: 0, type: p.security.type };
+    cur.value += p.amount;
+    dividendMap.set(label, cur);
+  }
+  const dividendsBreakdown = [...dividendMap.entries()]
+    .map(([label, v]) => ({ label, type: v.type, value: v.value }))
+    .sort((a, b) => b.value - a.value);
+
   const wealthGoal = await prisma.wealthGoal.findFirst();
   const { projection, yearlyBreakdown } = projectFirstMillion(
     total,
@@ -337,6 +388,8 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     dividendsByMonth,
     dividendsThisYear,
     movers,
+    positionMovers,
+    dividendsBreakdown,
     wealthGoal,
     avgMonthlyReturnPct,
     projection,

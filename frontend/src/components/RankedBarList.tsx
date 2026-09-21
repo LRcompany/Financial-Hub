@@ -28,8 +28,8 @@ export function RankedBarList({ data, max = 8 }: { data: Item[]; max?: number })
 
   return (
     <div className={styles.list}>
-      {rows.map((item) => (
-        <div key={item.label} className={styles.row}>
+      {rows.map((item, idx) => (
+        <div key={`${idx}-${item.label}`} className={styles.row}>
           <div className={styles.rowTop}>
             <HoverCard
               content={

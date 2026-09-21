@@ -591,6 +591,31 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime())
     .map((x) => ({ id: x.id, name: x.name, client: x.client, contractValue: x.contractValue, deliveryDate: x.deliveryDate.toISOString() }));
 
+  // ---- relatório mensal (21/09): projetos que ENTRARAM no mês, imposto pago
+  // no mês e dias trabalhados no mês (pra "quanto ganhei por dia") ----
+  const startedThisMonth = notCancelled
+    .filter((p) => p.startDate >= monthRangeReq.gte && p.startDate < monthRangeReq.lt)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+    .map((p) => ({ id: p.id, name: p.name, client: p.client.name, contractValue: p.contractValue, startDate: p.startDate.toISOString() }));
+  // Imposto pago = TaxPayment cujo pagamento caiu no mês (data que o dinheiro
+  // saiu, não a competência — competência é o mês de faturamento que o DAS
+  // cobre, geralmente o anterior).
+  const taxPaymentsThisMonth = taxPayments.filter((t) => t.paymentDate >= monthRangeReq.gte && t.paymentDate < monthRangeReq.lt);
+  const taxPaidThisMonth = taxPaymentsThisMonth.reduce((sum, t) => sum + t.amountPaid, 0);
+  // Dias trabalhados no mês: dias DISTINTOS do calendário cobertos por algum
+  // projeto (início→fim) — dois projetos no mesmo dia contam 1 dia, não 2
+  // (senão "ganho por dia" ficaria artificialmente baixo). Só projeto COM data
+  // de fim entra, mesma regra de `totalDaysWorked` acima; cancelado fica de fora.
+  const DAY_MS = 86400000;
+  const workedDays = new Set<number>();
+  for (const p of notCancelled) {
+    if (!p.endDate) continue;
+    const from = Math.max(p.startDate.getTime(), monthRangeReq.gte.getTime());
+    const to = Math.min(p.endDate.getTime(), monthRangeReq.lt.getTime() - 1);
+    for (let t = from; t <= to; t += DAY_MS) workedDays.add(Math.floor((t - monthRangeReq.gte.getTime()) / DAY_MS));
+  }
+  const workedDaysThisMonth = workedDays.size;
+
   res.json({
     grossRevenue,
     netRevenue,
@@ -615,5 +640,8 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     activeProjects,
     bestProjectThisMonth,
     deliveredThisMonth,
+    startedThisMonth,
+    taxPaidThisMonth,
+    workedDaysThisMonth,
   });
 });

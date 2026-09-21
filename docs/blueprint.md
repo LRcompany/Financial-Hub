@@ -1911,6 +1911,25 @@ Luiz, olhando "Cartões de crédito" em Orçamento: *"não consigo ver a barra d
 
 **Deployado em produção** (só frontend).
 
+### Relatório mensal reescrito em PÁGINAS: Resumo, Orçamento, Patrimônio, Projetos (21/09)
+
+Luiz: *"com tudo o que temos na plataforma, mostrar só isso é complicado"*, listando o que cada área deveria ter e pedindo várias páginas (primeira = resumo, uma por área). `MonthlyReportModal` virou 4 páginas com abas fixas no topo (sticky); no PDF (`window.print()`) todas saem, cada uma numa folha nova (`break-before: page`, abas escondidas). Modal alargada (`maxWidth` 860).
+
+- **Resumo**: 4 números de cada área + gráfico (ranking de categorias top 5, curva de patrimônio) + destaques (onde mais gastou, categorias que estouraram, investimento que mais rendeu/caiu, projeto que mais rendeu).
+- **Orçamento**: totais, pizza + ranking de TODAS as categorias, gasto diário (linha + calendário + "X de Y dias abaixo da meta, R$ economizados"), e tabela **categoria por categoria: gasto x estipulado x diferença**, agrupada por categoria-mãe, com o ícone de estouro (`spent > planned`, regra de sempre).
+- **Patrimônio**: total/investido/proventos com comparação, **% do primeiro milhão** (barra + quanto falta), evolução + alocação, **variação % por classe e por ativo** (top 5 que mais renderam / mais caíram) e **proventos do mês por ativo**.
+- **Projetos**: recebido, **dias trabalhados** e **ganho por dia** (só o recebido no mês ÷ dias), a receber, **imposto pago no mês**, listas de projetos que **entraram** e que foram **entregues**, e visão do ano (recebido por mês + receita por cliente).
+
+Backend novo (sem migration): `wealth-overview` → `positionMovers` (variação % por ativo, **já descontado aporte**: `(valor agora − valor antes − dinheiro novo) ÷ valor antes`; só entra ativo presente nos dois meses, então posição nova/migrada não inventa variação) e `dividendsBreakdown`; `budget-summary` → `dailyDaysForPeriod` (dia a dia do mês do relatório com meta e detalhe, incluindo parcela projetada pra o total bater com a lista); `projects-summary` → `startedThisMonth`, `taxPaidThisMonth` (DAS cuja data de PAGAMENTO caiu no mês, não a competência) e `workedDaysThisMonth`.
+
+**Decisão de interpretação (avisar o Luiz)**: "dias trabalhados no mês" = dias **distintos** do calendário cobertos por algum projeto com data de fim (início→fim), cancelado fora; dois projetos no mesmo dia contam 1 dia (senão o "ganho por dia" ficaria artificialmente baixo). Projeto sem data de fim não entra (mesma regra do `totalDaysWorked` global).
+
+Incidentais: `RankedBarList` usava `key={label}` e quebrava quando há uma categoria "Outros" E o bucket "Outros" (key duplicada) → key com índice; `MonthDelta` ganhou `compact` (só seta+%, sem "vs. mês anterior" repetido em lista); `.tabs` precisou de `flex-shrink: 0` (o `.content` do ModalShell é flex column e a barra com `overflow-x:auto` encolhia até 6px).
+
+Verificado ao vivo em `dev.db` (setembro/2026, via servidor de teste temporário sem login — a sessão do preview expirou e não digito senha): as 4 páginas renderizam, tabela com 54 linhas / 22 estouros marcados, variação por ativo e por classe, gráficos de projetos. `tsc` (back+front) limpos. Não conferi visualmente o PDF impresso (`window.print()` não é capturável aqui) nem o mês de abril com projetos/imposto na UI, só via API.
+
+**Deployado em produção** (sem migration).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

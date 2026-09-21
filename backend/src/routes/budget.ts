@@ -380,17 +380,22 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     start: Date,
     end: Date,
     goals: { amount: number; effectiveFrom: Date }[]
-  ): Promise<{ daysWithGoal: number; daysUnder: number; saved: number }> {
+  ): Promise<{
+    daysWithGoal: number;
+    daysUnder: number;
+    saved: number;
+    days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[];
+  }> {
     // Nunca conta dia futuro (ainda não aconteceu, não é "abaixo" nem
     // "acima") — cap no dia de hoje quando o período pedido inclui o futuro
     // (ex: relatório do mês corrente, ainda em andamento).
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const effectiveEnd = end < tomorrow ? end : tomorrow;
-    if (effectiveEnd <= start) return { daysWithGoal: 0, daysUnder: 0, saved: 0 };
+    if (effectiveEnd <= start) return { daysWithGoal: 0, daysUnder: 0, saved: 0, days: [] };
     const [rangeTransactions, rangeInstallments, rangePostedKeys] = await Promise.all([
       prisma.transaction.findMany({
         where: { type: "expense", isTransfer: false, date: { gte: start, lt: effectiveEnd } },
-        select: { date: true, amount: true },
+        select: { date: true, amount: true, description: true },
       }),
       prisma.upcomingInstallment.findMany({
         where: { dueDate: { gte: start, lt: effectiveEnd } },
@@ -410,17 +415,35 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     let daysWithGoal = 0;
     let daysUnder = 0;
     let saved = 0;
+    const days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[] = [];
     for (let day = new Date(start); day < effectiveEnd; day = new Date(day.getTime() + 24 * 60 * 60 * 1000)) {
       const goal = goalAt(goals, day);
+      const spent = spentOnDay(day);
+      // Detalhe do dia (relatório: calendário com hover), agrupado por compra.
+      const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+      const groups = new Map<string, number>();
+      for (const t of rangeTransactions) {
+        if (t.date >= day && t.date < dayEnd) groups.set(purchaseBase(t.description), (groups.get(purchaseBase(t.description)) ?? 0) + t.amount);
+      }
+      // Parcela futura comprometida daquele dia entra na lista também (mesmo
+      // dado que já soma em `spent`), senão o total não bate com os itens.
+      for (const i of rangeProjected) {
+        if (i.dueDate >= day && i.dueDate < dayEnd) groups.set(purchaseBase(i.description), (groups.get(purchaseBase(i.description)) ?? 0) + i.amount);
+      }
+      days.push({
+        date: day.toISOString().slice(0, 10),
+        amount: spent,
+        goal,
+        breakdown: [...groups.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+      });
       if (goal == null) continue;
       daysWithGoal++;
-      const spent = spentOnDay(day);
       if (spent <= goal) {
         daysUnder++;
         saved += goal - spent;
       }
     }
-    return { daysWithGoal, daysUnder, saved };
+    return { daysWithGoal, daysUnder, saved, days };
   }
   const [dailyGoalSavingsForPeriod, dailyGoalSavingsForPreviousPeriod] = await Promise.all([
     dailyGoalSavingsForRange(monthStart, monthEnd, dailyGoals),
@@ -446,6 +469,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     daysWithGoal: dailyGoalSavingsForPeriod.daysWithGoal,
     daysUnderGoal: dailyGoalSavingsForPeriod.daysUnder,
     dailyGoalSaved: dailyGoalSavingsForPeriod.saved,
+    dailyDaysForPeriod: dailyGoalSavingsForPeriod.days,
     previousDailyGoalSaved: dailyGoalSavingsForPreviousPeriod.saved,
     daysThisMonth,
     totalPlanned,

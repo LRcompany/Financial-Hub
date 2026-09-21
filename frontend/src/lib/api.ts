@@ -163,6 +163,9 @@ export interface BudgetSummary {
   daysWithGoal: number
   daysUnderGoal: number
   dailyGoalSaved: number
+  // Dia a dia do período do relatório (mês/ano da query), com meta e detalhe —
+  // alimenta o calendário/gráfico do relatório de meses passados.
+  dailyDaysForPeriod: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[]
   previousDailyGoalSaved: number
   // Mês-calendário ATUAL de verdade, do dia 1 até hoje (pedido do Luiz,
   // 08/09) — antes era um rolling de 14 dias, que no início do mês
@@ -319,6 +322,10 @@ export interface WealthOverview {
   }[]
   dividendsThisYear?: number
   movers: { category: string; changePct: number }[]
+  // Variação por ATIVO no mês, já descontado aporte (só valorização) — melhor→pior.
+  positionMovers: { label: string; type: string; marketValue: number; changePct: number }[]
+  // Proventos do mês pedido, por ativo, maior primeiro.
+  dividendsBreakdown: { label: string; type: string; value: number }[]
   wealthGoal: WealthGoal | null
   /** Retorno médio mensal REAL (%), calculado do histórico de PositionSnapshot
    * — null quando não tem pelo menos 2 meses de dado pra calcular. */
@@ -365,6 +372,11 @@ export interface ProjectsSummary {
   // que fechou o contrato (confirmado com o Luiz: "a entrega está
   // relacionada ao pagamento total do projeto"). Vazio quando nenhum
   // projeto fechou o contrato nesse mês específico.
+  // Projetos que COMEÇARAM no mês, imposto (DAS) pago no mês e dias distintos
+  // trabalhados no mês (pra "quanto ganhei por dia").
+  startedThisMonth: { id: string; name: string; client: string; contractValue: number; startDate: string }[]
+  taxPaidThisMonth: number
+  workedDaysThisMonth: number
   deliveredThisMonth: { id: string; name: string; client: string; contractValue: number; deliveryDate: string }[]
 }
 

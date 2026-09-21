@@ -160,6 +160,184 @@
   border-top: none;
 }
 
+/* ---------- páginas do relatório (21/09) ---------- */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 3px;
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+  /* Fixas no topo da área rolável — trocar de página sem rolar de volta. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* `.content` do ModalShell é flex column: sem isso a barra (overflow-x:auto)
+     encolhia até sobrar só o padding (6px) e os botões sumiam. */
+  flex-shrink: 0;
+}
+
+.calendarWrap {
+  max-width: 420px;
+  margin-top: var(--space-4);
+}
+
+.tab {
+  flex: 1;
+  min-width: max-content;
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: none;
+  background: none;
+  border-radius: var(--r-full);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.page {
+  display: none;
+}
+
+.pageActive {
+  display: block;
+}
+
+.pageTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 var(--space-5);
+}
+
+.twoCols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (min-width: 720px) {
+  .twoCols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.chartCaption {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin: var(--space-2) 0 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th:not(:first-child),
+.table td:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.groupRow td {
+  font-weight: 600;
+  background: var(--fill-muted);
+}
+
+.leafRow td:first-child {
+  padding-left: var(--space-5);
+  color: var(--ink-soft);
+}
+
+.moverList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moverRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.moverRow:first-child {
+  border-top: none;
+}
+
+.moverType {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  margin-left: 4px;
+}
+
+.goalRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-2);
+}
+
+.goalRow strong {
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.goalTrack {
+  height: 8px;
+  background: var(--fill-muted);
+  border-radius: var(--r-bar);
+  overflow: hidden;
+}
+
+.goalFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-bar);
+}
+
 /* ---------- impressão / "baixar PDF" via window.print() ----------
    Esconder/reposicionar overlay+sheet é genérico, já vem do ModalShell
    (`printable`) — aqui só o que é específico DESSE conteúdo. */
@@ -175,5 +353,19 @@
   .stat {
     background: none;
     border: 1px solid var(--border);
+  }
+
+  /* PDF: todas as páginas saem, cada uma começando numa folha nova; abas não. */
+  .tabs {
+    display: none !important;
+  }
+
+  .page {
+    display: block !important;
+    break-before: page;
+  }
+
+  .page:first-of-type {
+    break-before: auto;
   }
 }
