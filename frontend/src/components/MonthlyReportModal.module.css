@@ -488,6 +488,179 @@
   border-radius: var(--r-bar);
 }
 
+/* ---------- modo compacto do PDF (21/09) ----------
+   Ligado por JS (`beforeprint`, ver MonthlyReportModal.tsx) em vez de só
+   `@media print`, porque a MESMA regra precisa valer na hora de MEDIR cada
+   página (pra calcular o zoom que faz caber numa folha A4). Larguras de
+   grade forçadas: a media query de 720px não pega no papel (190mm ≈ 718px). */
+.printMode .pageTitle {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.printMode .box,
+.printMode .highlights {
+  padding: 8px 12px 10px;
+  margin-bottom: 8px;
+}
+
+.printMode .boxHeader {
+  margin-bottom: 6px;
+}
+
+.printMode .boxTitle {
+  font-size: 12px;
+}
+
+.printMode .subBox {
+  padding: 6px 10px 8px;
+  margin-top: 6px;
+}
+
+.printMode .subTitle {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.printMode .statGrid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.printMode .stat {
+  padding: 6px 8px;
+}
+
+.printMode .statValue {
+  font-size: 12.5px;
+}
+
+.printMode .statLabel,
+.printMode .highlightLabel {
+  font-size: 9.5px;
+}
+
+.printMode .highlightValue {
+  font-size: 11.5px;
+}
+
+.printMode .highlightGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+}
+
+.printMode .twoCols {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.printMode .table,
+.printMode .moverRow,
+.printMode .deliveredRow,
+.printMode .note {
+  font-size: 9.5px;
+}
+
+.printMode .table th,
+.printMode .table td {
+  padding: 2px 6px;
+}
+
+.printMode .moverRow,
+.printMode .deliveredRow {
+  padding: 3px 0;
+}
+
+.printMode .dayChip {
+  padding: 2px 7px;
+  font-size: 9.5px;
+}
+
+.printMode .dayChips {
+  gap: 4px;
+}
+
+.printMode .emptyNote,
+.printMode .chartCaption {
+  font-size: 10px;
+}
+
+/* Tabela de categorias do PDF: só no modo compacto, em 2 colunas. */
+.printCols {
+  display: none;
+}
+
+.printMode .printHide {
+  display: none;
+}
+
+.printMode .twoCols:has(> .printHide) {
+  grid-template-columns: 1fr;
+}
+
+.printMode .screenOnly {
+  display: none;
+}
+
+.printMode .printCols {
+  display: block;
+  column-count: 2;
+  column-gap: 12px;
+}
+
+.printMode .printCols .table {
+  break-inside: avoid;
+  margin-bottom: 6px;
+}
+
+/* Ícone de estouro e tag "projetado" menores no PDF — inflavam a altura de
+   cada linha da tabela (22px em vez de ~13px). */
+.printMode .printCols [class*='overBudgetIcon'] {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.printMode .printCols [class*='overBudgetIcon'] svg {
+  width: 8px;
+  height: 8px;
+}
+
+.printMode .printCols [class*='projected'] {
+  font-size: 8px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+.printMode .printCols .table td {
+  line-height: 1.25;
+}
+
+/* Ranking em 2 colunas no PDF. */
+.printMode .rankCols > div {
+  display: block; /* a lista original é flex column — colunas CSS não valem nela */
+  column-count: 2;
+  column-gap: 14px;
+}
+
+.printMode .rankCols > div > div {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+
+.printMode .printCols .table th,
+.printMode .printCols .table td {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
 /* ---------- impressão / "baixar PDF" via window.print() ----------
    Esconder/reposicionar overlay+sheet é genérico, já vem do ModalShell
    (`printable`) — aqui só o que é específico DESSE conteúdo. */
@@ -525,6 +698,7 @@
   .page {
     display: block !important;
     break-before: page;
+    break-inside: avoid;
   }
 
   .page:first-of-type {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Download, Sparkles, PieChart, Wallet, Briefcase, Flag } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
@@ -18,6 +18,8 @@ const MONTH_NAMES_FULL = [
 ]
 
 type PageId = 'resumo' | 'orcamento' | 'patrimonio' | 'projetos'
+/** Altura útil (px) de uma folha A4 com margem de 10mm, já descontando folga. */
+const PRINT_PAGE_PX = 960
 const PAGES: { id: PageId; label: string }[] = [
   { id: 'resumo', label: 'Resumo' },
   { id: 'orcamento', label: 'Orçamento' },
@@ -237,6 +239,7 @@ export function MonthlyReportModal({
   const [projects, setProjects] = useState<ProjectsSummary | null>(null)
   const [printed, setPrinted] = useState(false)
   const [page, setPage] = useState<PageId>('resumo')
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setBudget(null)
@@ -255,6 +258,58 @@ export function MonthlyReportModal({
       window.print()
     }
   }, [autoPrint, loading, printed])
+
+
+  // PDF em 4 folhas A4, uma por página do relatório (21/09, Luiz: "o PDF ficou
+  // desconfigurado... tente manter 4 páginas... reduza o tamanho dos elementos
+  // pra ficar certinho"). Antes de imprimir: aplica o modo compacto
+  // (`.printMode`), fixa a largura útil da folha (190mm) e mede cada página
+  // NESSA largura — o `zoom` de cada uma é o que faz caber numa folha só
+  // (nunca aumenta, mínimo 0.4 pra não virar ilegível). Feito em JS porque a
+  // altura depende dos dados (54 linhas de categoria em um mês, 10 em outro).
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    function fit() {
+      const el = rootRef.current
+      if (!el) return
+      el.classList.add(styles.printMode)
+      el.style.width = '190mm'
+      el.querySelectorAll<HTMLElement>('[data-report-page]').forEach((pg) => {
+        pg.style.display = 'block'
+        // Refina 3x: com zoom < 1 o conteúdo reflui numa largura maior e
+        // encolhe, então a 1ª estimativa (feita em zoom 1) sobra folga — mede
+        // a altura VISUAL de verdade e reajusta até encostar no limite.
+        let z = 1
+        for (let i = 0; i < 4; i++) {
+          pg.style.zoom = String(z)
+          const visual = pg.getBoundingClientRect().height
+          if (visual <= 0) break
+          const next = Math.max(0.4, Math.min(1, z * (PRINT_PAGE_PX / visual)))
+          if (Math.abs(next - z) < 0.01) break
+          z = next
+        }
+        pg.style.zoom = String(z)
+      })
+    }
+    function reset() {
+      const el = rootRef.current
+      if (!el) return
+      el.classList.remove(styles.printMode)
+      el.style.width = ''
+      el.querySelectorAll<HTMLElement>('[data-report-page]').forEach((pg) => {
+        pg.style.display = ''
+        pg.style.zoom = ''
+      })
+    }
+    window.addEventListener('beforeprint', fit)
+    window.addEventListener('afterprint', reset)
+    return () => {
+      window.removeEventListener('beforeprint', fit)
+      window.removeEventListener('afterprint', reset)
+      reset()
+    }
+  }, [loading])
 
   const monthLabel = `${MONTH_NAMES_FULL[month - 1]} de ${year}`
 
@@ -366,7 +421,7 @@ export function MonthlyReportModal({
       {loading && <p className={styles.loading}>Carregando relatório...</p>}
 
       {!loading && (
-        <>
+        <div ref={rootRef}>
           <p className={styles.printTitle}>Command OS — Relatório de {monthLabel}</p>
 
           {/* Abas de página — só na tela; no PDF todas as páginas saem. */}
@@ -386,7 +441,7 @@ export function MonthlyReportModal({
           </div>
 
           {/* =============== PÁGINA 1 — RESUMO =============== */}
-          <div className={`${styles.page} ${page === 'resumo' ? styles.pageActive : ''}`}>
+          <div data-report-page className={`${styles.page} ${page === 'resumo' ? styles.pageActive : ''}`}>
             <h3 className={styles.pageTitle}>Resumo do mês</h3>
             <Highlights items={summaryHighlights} />
 
@@ -470,10 +525,13 @@ export function MonthlyReportModal({
           </div>
 
           {/* =============== PÁGINA 2 — ORÇAMENTO =============== */}
-          <div className={`${styles.page} ${page === 'orcamento' ? styles.pageActive : ''}`}>
+          <div data-report-page className={`${styles.page} ${page === 'orcamento' ? styles.pageActive : ''}`}>
             <h3 className={styles.pageTitle}>Orçamento</h3>
             <Highlights items={budgetHighlights} />
 
+            {/* Some no PDF: os mesmos números já estão no Resumo (folha 1) e
+                nos Destaques — sem isso a folha do Orçamento não cabe. */}
+            <div className={styles.printHide}>
             <Box icon={PieChart} title="Números do mês">
               <div className={styles.statGrid}>
                 <Stat
@@ -513,12 +571,19 @@ export function MonthlyReportModal({
                 </p>
               )}
             </Box>
+            </div>
 
             <Box icon={PieChart} title="Onde gastei mais">
               {pieData.length > 0 ? (
                 <div className={styles.twoCols}>
-                  <ClientPieChart data={pieData} />
-                  <RankedBarList data={pieData} />
+                  {/* Pizza some no PDF (o ranking ao lado já diz a mesma coisa
+                      e a legenda da pizza é alta demais pra caber em 1 folha). */}
+                  <div className={styles.printHide}>
+                    <ClientPieChart data={pieData} />
+                  </div>
+                  <div className={styles.rankCols}>
+                    <RankedBarList data={pieData} />
+                  </div>
                 </div>
               ) : (
                 <p className={styles.emptyNote}>Nenhum gasto categorizado em {monthLabel} ainda.</p>
@@ -539,6 +604,7 @@ export function MonthlyReportModal({
                     </Stat>
                   </div>
                   {dailyDays.length >= 2 && (
+                    <div className={styles.printHide}>
                     <SubBox title="Gasto dia a dia">
                       <SmoothLineChart
                         values={dailyDays.map((d) => d.amount)}
@@ -551,6 +617,7 @@ export function MonthlyReportModal({
                         Média de <Money>R$ {currency(daysAvgSpend)}</Money> por dia · linha tracejada = meta diária
                       </p>
                     </SubBox>
+                    </div>
                   )}
                   <div className={styles.twoCols}>
                     <SubBox title={`Dias abaixo da meta (${daysUnder.length})`}>
@@ -568,7 +635,8 @@ export function MonthlyReportModal({
 
             <Box icon={PieChart} title="Categorias: gasto x estipulado">
               {groups.length > 0 ? (
-                <div className={styles.tableWrap}>
+                <>
+                <div className={`${styles.tableWrap} ${styles.screenOnly}`}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
@@ -585,6 +653,27 @@ export function MonthlyReportModal({
                     </tbody>
                   </table>
                 </div>
+                {/* Versão do PDF: um bloco por categoria-mãe, em 2 colunas (só
+                    aparece no modo compacto) — 54 linhas numa coluna só não
+                    cabem em 1 folha nem com zoom. */}
+                <div className={styles.printCols}>
+                  {groups.map((g) => (
+                    <table key={g.name} className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>Categoria</th>
+                          <th>Gasto</th>
+                          <th>Estipulado</th>
+                          <th>Diferença</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <GroupRows group={g} />
+                      </tbody>
+                    </table>
+                  ))}
+                </div>
+                </>
               ) : (
                 <p className={styles.emptyNote}>Sem categoria com meta ou gasto em {monthLabel}.</p>
               )}
@@ -592,7 +681,7 @@ export function MonthlyReportModal({
           </div>
 
           {/* =============== PÁGINA 3 — PATRIMÔNIO =============== */}
-          <div className={`${styles.page} ${page === 'patrimonio' ? styles.pageActive : ''}`}>
+          <div data-report-page className={`${styles.page} ${page === 'patrimonio' ? styles.pageActive : ''}`}>
             <h3 className={styles.pageTitle}>Patrimônio</h3>
             {wealth!.hasData ? (
               <>
@@ -718,7 +807,7 @@ export function MonthlyReportModal({
           </div>
 
           {/* =============== PÁGINA 4 — PROJETOS =============== */}
-          <div className={`${styles.page} ${page === 'projetos' ? styles.pageActive : ''}`}>
+          <div data-report-page className={`${styles.page} ${page === 'projetos' ? styles.pageActive : ''}`}>
             <h3 className={styles.pageTitle}>Projetos</h3>
             <Highlights items={projectHighlights} />
 
@@ -808,7 +897,7 @@ export function MonthlyReportModal({
               </Box>
             )}
           </div>
-        </>
+        </div>
       )}
     </ModalShell>
   )

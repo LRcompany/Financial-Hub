@@ -1948,6 +1948,20 @@ Verificado ao vivo em `dev.db` (via servidor de teste temporário sem login; pro
 
 **Deployado em produção** (sem migration).
 
+### PDF do relatório mensal: 4 folhas A4, uma por página (21/09)
+
+Luiz: *"o PDF ficou desconfigurado... tente manter 4 páginas: Resumo, Orçamento, Patrimônio e Projetos. Se for o caso, reduza o tamanho dos elementos."* Causa: o conteúdo (54 linhas de categoria, pizzas, gráficos) era mais alto que uma folha e o navegador quebrava onde quisesse.
+
+**Como funciona agora** (`MonthlyReportModal.tsx`, ouvinte de `beforeprint`/`afterprint`):
+1. Liga o **modo compacto** (`.printMode`: fontes/paddings menores, grades de 2–3 colunas forçadas, já que a media query de 720px não pega nos 190mm ≈ 718px do papel) e fixa a largura útil da folha.
+2. **Mede cada página nessa largura e aplica `zoom`** até a altura visual encostar em ~960px (folha A4 com margem de 10mm tem ~1047px). Refina 4x porque, com zoom < 1, o conteúdo reflui mais largo e encolhe. Nunca aumenta (máx 1), mínimo 0,4. Feito em JS porque a altura depende dos dados (mês com 54 categorias x mês com 10).
+3. Cada página começa numa folha nova (`break-before: page`, `break-inside: avoid`), `@page { size: A4; margin: 10mm }`.
+4. Ajustes só do PDF: tabela de categorias vira **2 colunas** (um bloco por categoria-mãe), ranking em 2 colunas, ícone de estouro/tag "projetado" menores nas linhas, e **somem no PDF** a pizza do Orçamento, o gráfico de linha do gasto diário e o box "Números do mês" do Orçamento (já estão no Resumo/Destaques; os dias acima/abaixo em chips continuam).
+
+Verificado no navegador simulando `beforeprint` no mês mais cheio (setembro/2026, dev.db): alturas visuais 898 / 956 / 956 / 806px, ou seja, todas cabem numa folha; zoom 1,00 / 0,83 / 0,87 / 1,00. **Não vi o PDF/impressão real** (o navegador de teste não abre a caixa de impressão) — se algo ainda quebrar no PDF de verdade, o ajuste é `PRINT_PAGE_PX` (folga) ou o que se esconde no modo compacto.
+
+**Deployado em produção** (só frontend).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
