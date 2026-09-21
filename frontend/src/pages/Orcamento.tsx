@@ -524,7 +524,7 @@ export function Orcamento() {
                           <span>de <Money>R$ {currency(c.creditLimit!)}</Money></span>
                           <span><Money>R$ {currency(c.availableLimit!)}</Money> livre</span>
                         </div>
-                        <div className={cards.progressTrack} style={{ marginTop: 'var(--space-2)' }}>
+                        <div className={`${cards.progressTrack} ${styles.creditLimitTrack}`} style={{ marginTop: 'var(--space-2)' }}>
                           <div
                             className={cards.progressFill}
                             style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}

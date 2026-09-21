@@ -363,6 +363,14 @@
   margin-bottom: var(--space-2);
 }
 
+/* Trilha da barra de limite em --surface (branca no claro) — o tile já é
+   --fill-muted, e a trilha padrão (`cards.progressTrack`, também --fill-muted)
+   sumia contra ele: não dava pra ver onde o limite acaba (Luiz, 21/09).
+   Mesmo raciocínio já documentado em `.totalTrack` (cards.module.css). */
+.creditLimitTrack {
+  background: var(--surface);
+}
+
 .creditCardName {
   font-size: 13px;
   font-weight: 600;

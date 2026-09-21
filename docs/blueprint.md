@@ -1903,6 +1903,14 @@ Verificado ao vivo em `dev.db`: setembro/2026 (mês corrente) mostrou "Economia 
 
 **Deployado em produção** (mesmo dia, sem migration — só lógica nova em cima de dado já existente).
 
+### Barra de limite dos cartões de crédito agora é branca (21/09)
+
+Luiz, olhando "Cartões de crédito" em Orçamento: *"não consigo ver a barra direito do limite. Deixe ela branca."* Causa: o tile do cartão é `--fill-muted` e a trilha da barra (`cards.progressTrack`) também — a trilha sumia contra o fundo, só dava pra ver o pedaço preenchido, nunca onde o limite acaba. Fix: `.creditLimitTrack` (`background: var(--surface)`, branca no claro / escura no escuro) combinada com `cards.progressTrack` só nesse tile. Mesmo raciocínio já documentado em `.totalTrack` (barra dentro de fundo `--fill-muted` precisa de trilha diferente). Não verificável ao vivo em `dev.db` (sem cartão, vem da Pluggy); `tsc -b` limpo.
+
+**Achado, não corrigido**: "vencimento 31/08/2026" (BTG) e "14/08/2026" (C6) estão no passado (hoje é 21/09) — vêm de `balanceDueDate` da Pluggy, provavelmente sync de cartão desatualizado. Perguntei ao Luiz o que ele quis dizer com "olha esses caras".
+
+**Deployado em produção** (só frontend).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
