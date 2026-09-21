@@ -218,9 +218,159 @@
 }
 
 .pageTitle {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   margin: 0 0 var(--space-5);
+}
+
+/* ---------- boxes e destaques (21/09, redesenho do layout) ----------
+   Hierarquia: .pageTitle (20px) > .boxTitle (14px, tinta cheia) > .subTitle
+   (11.5px maiúsculo, tinta suave). Antes tudo era o mesmo texto cinza
+   grudado ("não tem hierarquia... está tudo confuso e misturado"). */
+.box {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.boxHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--ink-soft);
+}
+
+.boxTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.subBox {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+.subTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-3);
+}
+
+/* Destaques: fundo azul clarinho, sempre o primeiro bloco da página. */
+.highlights {
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.highlights .boxHeader,
+.highlights .boxTitle {
+  color: var(--accent);
+}
+
+.highlightGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+@media (max-width: 520px) {
+  .highlightGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.highlightItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.highlightLabel {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.highlightValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: var(--space-3) 0 0;
+}
+
+.note strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Dias acima/abaixo da meta — mesmas cores de sempre (success/danger). */
+.dayChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dayChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dayChip strong {
+  font-size: 12.5px;
+}
+
+.dayChipUnder {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.dayChipOver {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Proventos: uma coluna por tipo de ativo. */
+.dividendsTable th,
+.dividendsTable td {
+  text-align: left !important;
+  vertical-align: top;
+  white-space: normal !important;
+}
+
+.dividendsTable tfoot td {
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.dividendCell {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .twoCols {
@@ -353,6 +503,18 @@
   .stat {
     background: none;
     border: 1px solid var(--border);
+  }
+
+  .subBox,
+  .highlights {
+    break-inside: avoid;
+  }
+
+  /* Cores de fundo (destaques, chips) precisam sair no papel. */
+  .highlights,
+  .dayChip {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* PDF: todas as páginas saem, cada uma começando numa folha nova; abas não. */

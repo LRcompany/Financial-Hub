@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Sparkles, PieChart, Wallet, Briefcase, Flag } from 'lucide-react'
+import type { ComponentType } from 'react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
 import { ClientPieChart } from './ClientPieChart'
 import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
-import { DailySpendCalendar } from './DailySpendCalendar'
 import { MonthDelta } from './MonthDelta'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
@@ -85,13 +85,142 @@ function Stat({ label, children, note }: { label: string; children: ReactNode; n
   )
 }
 
-/** Conteúdo do relatório mensal, numa modal com PÁGINAS (21/09, pedido do
- * Luiz: "crie várias páginas se necessário. A primeira página é um resumo, e
- * as outras páginas serão para cada área: Orçamento, Patrimônio e
- * Projetos"). Na tela, abas trocam a página; no PDF (`window.print()`) todas
- * as páginas saem, cada uma começando numa folha nova. `autoPrint` dispara
- * `window.print()` sozinho assim que os dados carregam — usado pelo botão
- * "Baixar PDF" do controle. */
+type IconType = ComponentType<{ size?: number; strokeWidth?: number }>
+
+/** Caixa de uma seção do relatório (21/09, pedido do Luiz: "jogue orçamento,
+ * patrimônio e projetos em boxes, assim dá pra diferenciar o que é cada") —
+ * borda + título com ícone. Hierarquia: título da página (maior) > título do
+ * box > subtítulo dentro do box (`SubBox`/`.subTitle`). */
+function Box({ icon: Icon, title, children }: { icon?: IconType; title: string; children: ReactNode }) {
+  return (
+    <section className={styles.box}>
+      <div className={styles.boxHeader}>
+        {Icon && <Icon size={16} strokeWidth={2} />}
+        <h4 className={styles.boxTitle}>{title}</h4>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** Caixa menor DENTRO de um `Box` (ex: "Que mais renderam" x "Que mais
+ * caíram") — separa blocos que antes ficavam colados um no outro. */
+function SubBox({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className={styles.subBox}>
+      <h5 className={styles.subTitle}>{title}</h5>
+      {children}
+    </div>
+  )
+}
+
+/** Destaques no TOPO de cada página, fundo azul clarinho (`--accent-soft`,
+ * pedido do Luiz: "os destaques que era pra ser destaque estão escondidos...
+ * coloque no topo com um fundo azul clarinho"). Cada item = rótulo pequeno +
+ * valor em negrito. Sem item nenhum, nem aparece. */
+function Highlights({ items }: { items: { label: string; value: ReactNode }[] }) {
+  if (items.length === 0) return null
+  return (
+    <section className={styles.highlights}>
+      <div className={styles.boxHeader}>
+        <Sparkles size={16} strokeWidth={2} />
+        <h4 className={styles.boxTitle}>Destaques</h4>
+      </div>
+      <div className={styles.highlightGrid}>
+        {items.map((it) => (
+          <div key={it.label} className={styles.highlightItem}>
+            <span className={styles.highlightLabel}>{it.label}</span>
+            <span className={styles.highlightValue}>{it.value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const DIVIDEND_COLUMNS: { type: string; label: string }[] = [
+  { type: 'FII', label: 'FIIs' },
+  { type: 'Ação', label: 'Ações' },
+  { type: 'Fundo', label: 'Fundos' },
+]
+
+/** Proventos do mês em colunas por tipo de ativo (pedido do Luiz: "uma
+ * tabela com colunas, FIIs, ações, fundos"). Tipo fora dessas três (se
+ * houver) vira "Outros" — nunca some valor. */
+function DividendsTable({ rows }: { rows: { label: string; type: string; value: number }[] }) {
+  const known = new Set(DIVIDEND_COLUMNS.map((c) => c.type))
+  const columns = [
+    ...DIVIDEND_COLUMNS.map((c) => ({ label: c.label, items: rows.filter((r) => r.type === c.type) })),
+    { label: 'Outros', items: rows.filter((r) => !known.has(r.type)) },
+  ].filter((c) => c.items.length > 0)
+  const depth = Math.max(...columns.map((c) => c.items.length))
+  return (
+    <div className={styles.tableWrap}>
+      <table className={`${styles.table} ${styles.dividendsTable}`}>
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.label}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: depth }, (_, i) => (
+            <tr key={i}>
+              {columns.map((c) => {
+                const it = c.items[i]
+                return (
+                  <td key={c.label}>
+                    {it ? (
+                      <span className={styles.dividendCell}>
+                        <span>{it.label}</span>
+                        <Money>{`R$ ${currency(it.value)}`}</Money>
+                      </span>
+                    ) : null}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            {columns.map((c) => (
+              <td key={c.label}>
+                <span className={styles.dividendCell}>
+                  <strong>Total</strong>
+                  <strong>
+                    <Money>{`R$ ${currency(c.items.reduce((s, r) => s + r.value, 0))}`}</Money>
+                  </strong>
+                </span>
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+function DayChips({ days, tone }: { days: { date: string; amount: number }[]; tone: 'under' | 'over' }) {
+  if (days.length === 0) return <p className={styles.emptyNote}>Nenhum dia.</p>
+  return (
+    <div className={styles.dayChips}>
+      {days.map((d) => (
+        <span key={d.date} className={`${styles.dayChip} ${tone === 'under' ? styles.dayChipUnder : styles.dayChipOver}`}>
+          <strong>{d.date.split('-')[2]}</strong>
+          <Money>{`R$ ${currency(d.amount)}`}</Money>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** Conteúdo do relatório mensal, numa modal com PÁGINAS: Resumo + uma por área.
+ * Na tela, abas trocam a página; no PDF (`window.print()`) todas saem, cada
+ * uma numa folha nova. Cada página = Destaques (azul clarinho) no topo + boxes
+ * por assunto. `autoPrint` dispara `window.print()` assim que os dados
+ * carregam — usado pelo botão "Baixar PDF" do controle. */
 export function MonthlyReportModal({
   month,
   year,
@@ -150,6 +279,11 @@ export function MonthlyReportModal({
   const groups = budget ? groupedCategories(budget.categories) : []
   const dailyDays = budget?.dailyDaysForPeriod ?? []
   const daysAvgSpend = dailyDays.length > 0 ? dailyDays.reduce((s, d) => s + d.amount, 0) / dailyDays.length : 0
+  // Dias abaixo x acima da meta (só dia com meta em vigor) — no lugar do
+  // calendário (pedido do Luiz: "não precisa mostrar o calendário, mas podemos
+  // mostrar apenas os dias que fiquei acima e abaixo").
+  const daysUnder = dailyDays.filter((d) => d.goal != null && d.amount <= d.goal)
+  const daysOver = dailyDays.filter((d) => d.goal != null && d.amount > d.goal)
 
   // ---------------- Patrimônio ----------------
   const allocationData = wealth?.allocation.filter((a) => a.value > 0) ?? []
@@ -169,6 +303,52 @@ export function MonthlyReportModal({
       projects.deliveredThisMonth.length > 0 ||
       projects.startedThisMonth.length > 0 ||
       projects.taxPaidThisMonth > 0)
+
+  // ---------------- Destaques de cada página ----------------
+  const dailyGoalItems = budget && budget.daysWithGoal > 0
+    ? [
+        { label: 'Dias abaixo da meta diária', value: `${budget.daysUnderGoal} de ${budget.daysWithGoal}` },
+        ...(budget.dailyGoalSaved > 0 ? [{ label: 'Economizado na meta diária', value: <Money>R$ {currency(budget.dailyGoalSaved)}</Money> }] : []),
+      ]
+    : []
+  const budgetHighlights = [
+    ...(pieData[0] ? [{ label: 'Onde mais gastou', value: <>{pieData[0].label} · <Money>R$ {currency(pieData[0].value)}</Money></> }] : []),
+    ...(fastestGrowingCategory
+      ? [{ label: 'Categoria que mais cresceu', value: <>{fastestGrowingCategory.label} · <Money>+R$ {currency(fastestGrowingCategory.delta)}</Money></> }]
+      : []),
+    ...(overBudgetCategories.length > 0
+      ? [{ label: 'Passou do estipulado', value: <>{overBudgetCategories.length} categoria{overBudgetCategories.length === 1 ? '' : 's'} <OverBudgetIcon /></> }]
+      : []),
+    ...(budget?.biggestPurchase
+      ? [{ label: 'Maior compra', value: <>{budget.biggestPurchase.description} · <Money>R$ {currency(budget.biggestPurchase.amount)}</Money></> }]
+      : []),
+    ...dailyGoalItems,
+  ]
+  const wealthHighlights = [
+    ...(topGainers[0] ? [{ label: 'Investimento que mais rendeu', value: `${topGainers[0].label} · +${topGainers[0].changePct.toFixed(1)}%` }] : []),
+    ...(topLosers[0] ? [{ label: 'Investimento que mais caiu', value: `${topLosers[0].label} · ${topLosers[0].changePct.toFixed(1)}%` }] : []),
+    ...(wealth?.dividendsThisMonth != null
+      ? [{ label: 'Proventos recebidos', value: <Money>R$ {currency(wealth.dividendsThisMonth)}</Money> }]
+      : []),
+    ...(goalPct != null ? [{ label: 'Rumo ao primeiro milhão', value: `${goalPct.toFixed(1)}%` }] : []),
+  ]
+  const projectHighlights = [
+    ...(projects && projects.receivedThisMonth > 0 ? [{ label: 'Recebido no mês', value: <Money>R$ {currency(projects.receivedThisMonth)}</Money> }] : []),
+    ...(receivedPerDay != null && receivedPerDay > 0 ? [{ label: 'Ganho por dia trabalhado', value: <Money>R$ {currency(receivedPerDay)}</Money> }] : []),
+    ...(projects?.bestProjectThisMonth
+      ? [{ label: 'Projeto que mais rendeu', value: <>{projects.bestProjectThisMonth.name} · <Money>R$ {currency(projects.bestProjectThisMonth.received)}</Money></> }]
+      : []),
+    ...(projects && projects.deliveredThisMonth.length > 0 ? [{ label: 'Projetos entregues', value: projects.deliveredThisMonth.length }] : []),
+    ...(projects && projects.startedThisMonth.length > 0 ? [{ label: 'Projetos que entraram', value: projects.startedThisMonth.length }] : []),
+    ...(projects && projects.taxPaidThisMonth > 0 ? [{ label: 'Imposto pago no mês', value: <Money>R$ {currency(projects.taxPaidThisMonth)}</Money> }] : []),
+  ]
+  // Resumo: os destaques mais fortes de cada área, juntos, no topo.
+  const summaryHighlights = [
+    ...budgetHighlights.slice(0, 2),
+    ...dailyGoalItems.slice(0, 1),
+    ...wealthHighlights.slice(0, 3),
+    ...projectHighlights.slice(0, 2),
+  ]
 
   return (
     <ModalShell
@@ -207,10 +387,10 @@ export function MonthlyReportModal({
 
           {/* =============== PÁGINA 1 — RESUMO =============== */}
           <div className={`${styles.page} ${page === 'resumo' ? styles.pageActive : ''}`}>
-            <h4 className={styles.pageTitle}>Resumo do mês</h4>
+            <h3 className={styles.pageTitle}>Resumo do mês</h3>
+            <Highlights items={summaryHighlights} />
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Orçamento</h4>
+            <Box icon={PieChart} title="Orçamento">
               <div className={styles.statGrid}>
                 <Stat
                   label="Total gasto"
@@ -228,21 +408,15 @@ export function MonthlyReportModal({
                   <Money>R$ {currency(Math.abs(diffFromPlanned))}</Money>
                   {!withinBudget && <OverBudgetIcon />}
                 </Stat>
-                {budget!.daysWithGoal > 0 && (
-                  <Stat label="Dias abaixo da meta diária" note={budget!.dailyGoalSaved > 0 && <span className={styles.projectedNote}>economizou <Money>R$ {currency(budget!.dailyGoalSaved)}</Money></span>}>
-                    {budget!.daysUnderGoal} de {budget!.daysWithGoal}
-                  </Stat>
-                )}
               </div>
               {pieData.length > 0 && (
-                <div className={styles.chartWrap}>
+                <SubBox title="Onde mais gastei">
                   <RankedBarList data={pieData} max={5} />
-                </div>
+                </SubBox>
               )}
-            </section>
+            </Box>
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Patrimônio</h4>
+            <Box icon={Wallet} title="Patrimônio">
               {wealth!.hasData ? (
                 <>
                   <div className={styles.statGrid}>
@@ -258,26 +432,24 @@ export function MonthlyReportModal({
                     <Stat label="Proventos no mês">
                       {wealth!.dividendsThisMonth != null ? <Money>{`R$ ${currency(wealth!.dividendsThisMonth)}`}</Money> : '—'}
                     </Stat>
-                    {goalPct != null && <Stat label="Rumo ao primeiro milhão">{goalPct.toFixed(1)}%</Stat>}
                   </div>
                   {wealth!.evolution.length >= 2 && (
-                    <div className={styles.chartWrap}>
+                    <SubBox title="Evolução do patrimônio">
                       <SmoothLineChart
                         values={wealth!.evolution.map((e) => e.value)}
                         labels={wealth!.evolution.map((e) => e.label)}
                         gradientId="reportSummaryWealth"
                         height={70}
                       />
-                    </div>
+                    </SubBox>
                   )}
                 </>
               ) : (
                 <p className={styles.emptyNote}>Sem dado de patrimônio ainda.</p>
               )}
-            </section>
+            </Box>
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Projetos</h4>
+            <Box icon={Briefcase} title="Projetos">
               {hasProjectsData ? (
                 <div className={styles.statGrid}>
                   <Stat
@@ -290,50 +462,19 @@ export function MonthlyReportModal({
                     {receivedPerDay != null ? <Money>{`R$ ${currency(receivedPerDay)}`}</Money> : '—'}
                   </Stat>
                   <Stat label="Projetos entregues">{projects!.deliveredThisMonth.length}</Stat>
-                  <Stat label="Imposto pago no mês">
-                    <Money>R$ {currency(projects!.taxPaidThisMonth)}</Money>
-                  </Stat>
                 </div>
               ) : (
                 <p className={styles.emptyNote}>Sem movimento de projeto registrado em {monthLabel}.</p>
               )}
-            </section>
-
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Destaques</h4>
-              {pieData[0] && (
-                <p className={styles.highlight}>
-                  Onde mais gastou: <strong>{pieData[0].label}</strong> (<Money>R$ {currency(pieData[0].value)}</Money>)
-                </p>
-              )}
-              {overBudgetCategories.length > 0 && (
-                <p className={styles.highlight}>
-                  {overBudgetCategories.length} categoria{overBudgetCategories.length === 1 ? '' : 's'} passou do valor estipulado <OverBudgetIcon />
-                </p>
-              )}
-              {topGainers[0] && (
-                <p className={styles.highlight}>
-                  Investimento que mais rendeu: <strong>{topGainers[0].label}</strong> (+{topGainers[0].changePct.toFixed(1)}%)
-                </p>
-              )}
-              {topLosers[0] && (
-                <p className={styles.highlight}>
-                  Investimento que mais caiu: <strong>{topLosers[0].label}</strong> ({topLosers[0].changePct.toFixed(1)}%)
-                </p>
-              )}
-              {projects!.bestProjectThisMonth && (
-                <p className={styles.highlight}>
-                  Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (<Money>R$ {currency(projects!.bestProjectThisMonth.received)}</Money>)
-                </p>
-              )}
-            </section>
+            </Box>
           </div>
 
           {/* =============== PÁGINA 2 — ORÇAMENTO =============== */}
           <div className={`${styles.page} ${page === 'orcamento' ? styles.pageActive : ''}`}>
-            <h4 className={styles.pageTitle}>Orçamento</h4>
+            <h3 className={styles.pageTitle}>Orçamento</h3>
+            <Highlights items={budgetHighlights} />
 
-            <section className={styles.block}>
+            <Box icon={PieChart} title="Números do mês">
               <div className={styles.statGrid}>
                 <Stat
                   label="Total gasto"
@@ -363,7 +504,7 @@ export function MonthlyReportModal({
                 <span>Não essencial: <Money>R$ {currency(nonEssentialSpent)}</Money></span>
               </div>
               {budget!.biggestPurchase && (
-                <p className={styles.highlight}>
+                <p className={styles.note}>
                   Maior compra: <strong>{budget!.biggestPurchase.description}</strong>
                   <InstallmentBadge number={budget!.biggestPurchase.installmentNumber} total={budget!.biggestPurchase.totalInstallments} />
                   {' — '}
@@ -371,10 +512,9 @@ export function MonthlyReportModal({
                   {budget!.biggestPurchase.category ? ` · ${budget!.biggestPurchase.category}` : ''} · {formatDate(budget!.biggestPurchase.date)}
                 </p>
               )}
-            </section>
+            </Box>
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Onde gastei mais</h4>
+            <Box icon={PieChart} title="Onde gastei mais">
               {pieData.length > 0 ? (
                 <div className={styles.twoCols}>
                   <ClientPieChart data={pieData} />
@@ -383,56 +523,50 @@ export function MonthlyReportModal({
               ) : (
                 <p className={styles.emptyNote}>Nenhum gasto categorizado em {monthLabel} ainda.</p>
               )}
-              {fastestGrowingCategory && (
-                <p className={styles.highlight}>
-                  Categoria que mais cresceu: <strong>{fastestGrowingCategory.label}</strong> (
-                  <Money>+R$ {currency(fastestGrowingCategory.delta)}</Money> vs. mês anterior)
-                </p>
-              )}
-            </section>
+            </Box>
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Gasto diário e meta</h4>
+            <Box icon={Flag} title="Meta diária de gasto">
               {budget!.daysWithGoal > 0 ? (
-                <p className={styles.highlight} style={{ marginTop: 0 }}>
-                  <strong>
-                    {budget!.daysUnderGoal} de {budget!.daysWithGoal} dia{budget!.daysWithGoal === 1 ? '' : 's'} abaixo da meta diária
-                  </strong>
-                  {budget!.dailyGoalSaved > 0 && (
-                    <>
-                      {' '}— <Money>R$ {currency(budget!.dailyGoalSaved)}</Money> economizados
-                      {budget!.previousDailyGoalSaved > 0 && (
-                        <MonthDelta current={budget!.dailyGoalSaved} previous={budget!.previousDailyGoalSaved} higherIsBetter />
-                      )}
-                    </>
+                <>
+                  <div className={styles.statGrid}>
+                    <Stat label="Dias abaixo da meta">{daysUnder.length}</Stat>
+                    <Stat label="Dias acima da meta">{daysOver.length}</Stat>
+                    <Stat
+                      label="Economizado"
+                      note={budget!.previousDailyGoalSaved > 0 && <MonthDelta current={budget!.dailyGoalSaved} previous={budget!.previousDailyGoalSaved} higherIsBetter />}
+                    >
+                      <Money>R$ {currency(budget!.dailyGoalSaved)}</Money>
+                    </Stat>
+                  </div>
+                  {dailyDays.length >= 2 && (
+                    <SubBox title="Gasto dia a dia">
+                      <SmoothLineChart
+                        values={dailyDays.map((d) => d.amount)}
+                        labels={dailyDays.map((d) => formatDayLabel(d.date))}
+                        threshold={dailyDays.find((d) => d.goal != null)?.goal ?? undefined}
+                        gradientId="reportDailySpend"
+                        breakdowns={dailyDays.map((d) => d.breakdown)}
+                      />
+                      <p className={styles.chartCaption}>
+                        Média de <Money>R$ {currency(daysAvgSpend)}</Money> por dia · linha tracejada = meta diária
+                      </p>
+                    </SubBox>
                   )}
-                </p>
+                  <div className={styles.twoCols}>
+                    <SubBox title={`Dias abaixo da meta (${daysUnder.length})`}>
+                      <DayChips days={daysUnder} tone="under" />
+                    </SubBox>
+                    <SubBox title={`Dias acima da meta (${daysOver.length})`}>
+                      <DayChips days={daysOver} tone="over" />
+                    </SubBox>
+                  </div>
+                </>
               ) : (
                 <p className={styles.emptyNote}>Nenhuma meta diária estava em vigor em {monthLabel}.</p>
               )}
-              {dailyDays.length >= 2 && (
-                <>
-                  <div className={styles.chartWrap}>
-                    <SmoothLineChart
-                      values={dailyDays.map((d) => d.amount)}
-                      labels={dailyDays.map((d) => formatDayLabel(d.date))}
-                      threshold={dailyDays.find((d) => d.goal != null)?.goal ?? undefined}
-                      gradientId="reportDailySpend"
-                      breakdowns={dailyDays.map((d) => d.breakdown)}
-                    />
-                    <p className={styles.chartCaption}>
-                      Média de <Money>R$ {currency(daysAvgSpend)}</Money> por dia · linha tracejada = meta diária
-                    </p>
-                  </div>
-                  <div className={styles.calendarWrap}>
-                    <DailySpendCalendar days={dailyDays} />
-                  </div>
-                </>
-              )}
-            </section>
+            </Box>
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Categorias: gasto x estipulado</h4>
+            <Box icon={PieChart} title="Categorias: gasto x estipulado">
               {groups.length > 0 ? (
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
@@ -454,27 +588,17 @@ export function MonthlyReportModal({
               ) : (
                 <p className={styles.emptyNote}>Sem categoria com meta ou gasto em {monthLabel}.</p>
               )}
-              {overBudgetCategories.length > 0 && (
-                <p className={styles.highlight}>
-                  Passou do valor estipulado em {overBudgetCategories.length} categoria{overBudgetCategories.length === 1 ? '' : 's'}, destaque para{' '}
-                  {overBudgetCategories.slice(0, 3).map((c, i) => (
-                    <span key={c.categoryId}>
-                      {i > 0 && ', '}
-                      <strong>{c.name}</strong> (<Money>+R$ {currency(c.spent - c.planned)}</Money>)
-                    </span>
-                  ))}
-                  <OverBudgetIcon />
-                </p>
-              )}
-            </section>
+            </Box>
           </div>
 
           {/* =============== PÁGINA 3 — PATRIMÔNIO =============== */}
           <div className={`${styles.page} ${page === 'patrimonio' ? styles.pageActive : ''}`}>
-            <h4 className={styles.pageTitle}>Patrimônio</h4>
+            <h3 className={styles.pageTitle}>Patrimônio</h3>
             {wealth!.hasData ? (
               <>
-                <section className={styles.block}>
+                <Highlights items={wealthHighlights} />
+
+                <Box icon={Wallet} title="Números do mês">
                   <div className={styles.statGrid}>
                     <Stat
                       label="Patrimônio total"
@@ -495,11 +619,10 @@ export function MonthlyReportModal({
                       {wealth!.dividendsThisMonth != null ? <Money>{`R$ ${currency(wealth!.dividendsThisMonth)}`}</Money> : '—'}
                     </Stat>
                   </div>
-                </section>
+                </Box>
 
                 {goalPct != null && goalTarget != null && (
-                  <section className={styles.block}>
-                    <h4 className={styles.blockTitle}>Rumo ao primeiro milhão</h4>
+                  <Box icon={Flag} title="Rumo ao primeiro milhão">
                     <div className={styles.goalRow}>
                       <strong>{goalPct.toFixed(1)}%</strong>
                       <span>
@@ -509,33 +632,29 @@ export function MonthlyReportModal({
                     <div className={styles.goalTrack}>
                       <div className={styles.goalFill} style={{ width: `${goalPct}%` }} />
                     </div>
-                  </section>
+                  </Box>
                 )}
 
-                <section className={styles.block}>
-                  <h4 className={styles.blockTitle}>Evolução e composição</h4>
-                  {wealth!.evolution.length >= 2 && (
-                    <div className={styles.chartWrap}>
-                      <SmoothLineChart
-                        values={wealth!.evolution.map((e) => e.value)}
-                        labels={wealth!.evolution.map((e) => e.label)}
-                        gradientId="reportWealthEvolution"
-                        height={80}
-                      />
-                    </div>
-                  )}
-                  {allocationData.length > 0 && (
-                    <div className={styles.chartWrap}>
-                      <ClientPieChart data={allocationData} />
-                    </div>
-                  )}
-                </section>
+                {wealth!.evolution.length >= 2 && (
+                  <Box icon={Wallet} title="Evolução do patrimônio">
+                    <SmoothLineChart
+                      values={wealth!.evolution.map((e) => e.value)}
+                      labels={wealth!.evolution.map((e) => e.label)}
+                      gradientId="reportWealthEvolution"
+                      height={80}
+                    />
+                  </Box>
+                )}
 
-                <section className={styles.block}>
-                  <h4 className={styles.blockTitle}>Variação dos investimentos (mês contra mês)</h4>
+                {allocationData.length > 0 && (
+                  <Box icon={PieChart} title="Composição da carteira">
+                    <ClientPieChart data={allocationData} />
+                  </Box>
+                )}
+
+                <Box icon={Wallet} title="Variação dos investimentos (mês contra mês)">
                   {wealth!.movers.length > 0 && (
-                    <>
-                      <h5 className={styles.subBlockTitle}>Por classe de ativo</h5>
+                    <SubBox title="Por classe de ativo">
                       <ul className={styles.moverList}>
                         {[...wealth!.movers].sort((a, b) => b.changePct - a.changePct).map((m) => (
                           <li key={m.category} className={styles.moverRow}>
@@ -544,11 +663,10 @@ export function MonthlyReportModal({
                           </li>
                         ))}
                       </ul>
-                    </>
+                    </SubBox>
                   )}
                   <div className={styles.twoCols}>
-                    <div>
-                      <h5 className={styles.subBlockTitle}>Que mais renderam</h5>
+                    <SubBox title="Que mais renderam">
                       {topGainers.length > 0 ? (
                         <ul className={styles.moverList}>
                           {topGainers.map((m) => (
@@ -563,9 +681,8 @@ export function MonthlyReportModal({
                       ) : (
                         <p className={styles.emptyNote}>Nenhum ativo com alta este mês.</p>
                       )}
-                    </div>
-                    <div>
-                      <h5 className={styles.subBlockTitle}>Que mais caíram</h5>
+                    </SubBox>
+                    <SubBox title="Que mais caíram">
                       {topLosers.length > 0 ? (
                         <ul className={styles.moverList}>
                           {topLosers.map((m) => (
@@ -580,31 +697,20 @@ export function MonthlyReportModal({
                       ) : (
                         <p className={styles.emptyNote}>Nenhum ativo caiu este mês.</p>
                       )}
-                    </div>
+                    </SubBox>
                   </div>
                   <p className={styles.chartCaption}>
                     Variação já descontado o dinheiro novo que entrou — só valorização (ou queda) do que já estava investido.
                   </p>
-                </section>
+                </Box>
 
-                <section className={styles.block}>
-                  <h4 className={styles.blockTitle}>Proventos recebidos</h4>
+                <Box icon={Wallet} title="Proventos recebidos no mês">
                   {wealth!.dividendsBreakdown.length > 0 ? (
-                    <>
-                      <p className={styles.highlight} style={{ marginTop: 0 }}>
-                        Total no mês: <strong><Money>R$ {currency(wealth!.dividendsThisMonth ?? 0)}</Money></strong>
-                        {wealth!.dividendsLastMonth != null && wealth!.dividendsLastMonth > 0 && (
-                          <MonthDelta current={wealth!.dividendsThisMonth ?? 0} previous={wealth!.dividendsLastMonth} higherIsBetter />
-                        )}
-                      </p>
-                      <div className={styles.chartWrap}>
-                        <RankedBarList data={wealth!.dividendsBreakdown.map((d) => ({ label: d.label, value: d.value }))} />
-                      </div>
-                    </>
+                    <DividendsTable rows={wealth!.dividendsBreakdown} />
                   ) : (
                     <p className={styles.emptyNote}>Nenhum provento registrado em {monthLabel}.</p>
                   )}
-                </section>
+                </Box>
               </>
             ) : (
               <p className={styles.emptyNote}>Sem dado de patrimônio ainda.</p>
@@ -613,8 +719,10 @@ export function MonthlyReportModal({
 
           {/* =============== PÁGINA 4 — PROJETOS =============== */}
           <div className={`${styles.page} ${page === 'projetos' ? styles.pageActive : ''}`}>
-            <h4 className={styles.pageTitle}>Projetos</h4>
-            <section className={styles.block}>
+            <h3 className={styles.pageTitle}>Projetos</h3>
+            <Highlights items={projectHighlights} />
+
+            <Box icon={Briefcase} title="Números do mês">
               <div className={styles.statGrid}>
                 <Stat
                   label="Recebido no mês"
@@ -623,10 +731,7 @@ export function MonthlyReportModal({
                   <Money>R$ {currency(projects!.receivedThisMonth)}</Money>
                 </Stat>
                 <Stat label="Dias trabalhados no mês">{projects!.workedDaysThisMonth}</Stat>
-                <Stat
-                  label="Ganho por dia trabalhado"
-                  note={<span className={styles.projectedNote}>só o que foi recebido no mês</span>}
-                >
+                <Stat label="Ganho por dia trabalhado" note={<span className={styles.projectedNote}>só o que foi recebido no mês</span>}>
                   {receivedPerDay != null ? <Money>{`R$ ${currency(receivedPerDay)}`}</Money> : '—'}
                 </Stat>
                 <Stat label="A receber">
@@ -639,80 +744,69 @@ export function MonthlyReportModal({
                   {projects!.deliveredThisMonth.length} / {projects!.startedThisMonth.length}
                 </Stat>
               </div>
-              {projects!.bestProjectThisMonth && (
-                <p className={styles.highlight}>
-                  Projeto que mais rendeu: <strong>{projects!.bestProjectThisMonth.name}</strong> (
-                  <Money>R$ {currency(projects!.bestProjectThisMonth.received)}</Money>)
+            </Box>
+
+            <div className={styles.twoCols}>
+              <Box icon={Briefcase} title="Projetos que entraram">
+                {projects!.startedThisMonth.length > 0 ? (
+                  <ul className={styles.deliveredList}>
+                    {projects!.startedThisMonth.map((p) => (
+                      <li key={p.id} className={styles.deliveredRow}>
+                        <span>
+                          <strong>{p.name}</strong> · {p.client} · {formatDate(p.startDate)}
+                        </span>
+                        <span>
+                          <Money>R$ {currency(p.contractValue)}</Money>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.emptyNote}>Nenhum projeto novo começou em {monthLabel}.</p>
+                )}
+              </Box>
+              <Box icon={Briefcase} title="Projetos entregues">
+                {projects!.deliveredThisMonth.length > 0 ? (
+                  <ul className={styles.deliveredList}>
+                    {projects!.deliveredThisMonth.map((p) => (
+                      <li key={p.id} className={styles.deliveredRow}>
+                        <span>
+                          <strong>{p.name}</strong> · {p.client} · {formatDate(p.deliveryDate)}
+                        </span>
+                        <span>
+                          <Money>R$ {currency(p.contractValue)}</Money>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.emptyNote}>Nenhum projeto fechou o pagamento em {monthLabel}.</p>
+                )}
+              </Box>
+            </div>
+
+            {projects!.monthlyReceived.length >= 2 && (
+              <Box icon={Briefcase} title="Recebido por mês no ano">
+                <SmoothLineChart
+                  values={projects!.monthlyReceived.map((m) => m.value)}
+                  labels={projects!.monthlyReceived.map((m) => m.label)}
+                  gradientId="reportProjectsMonthly"
+                  height={80}
+                />
+                <p className={styles.chartCaption}>
+                  <Money>R$ {currency(projects!.receivedThisYear)}</Money> recebidos no ano · média de <Money>R$ {currency(projects!.avgMonthlyThisYear)}</Money> por mês
                 </p>
-              )}
-            </section>
+              </Box>
+            )}
 
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Projetos que entraram</h4>
-              {projects!.startedThisMonth.length > 0 ? (
-                <ul className={styles.deliveredList}>
-                  {projects!.startedThisMonth.map((p) => (
-                    <li key={p.id} className={styles.deliveredRow}>
-                      <span>
-                        <strong>{p.name}</strong> · {p.client} · {formatDate(p.startDate)}
-                      </span>
-                      <span>
-                        <Money>R$ {currency(p.contractValue)}</Money>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={styles.emptyNote}>Nenhum projeto novo começou em {monthLabel}.</p>
-              )}
-            </section>
-
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Projetos entregues</h4>
-              {projects!.deliveredThisMonth.length > 0 ? (
-                <ul className={styles.deliveredList}>
-                  {projects!.deliveredThisMonth.map((p) => (
-                    <li key={p.id} className={styles.deliveredRow}>
-                      <span>
-                        <strong>{p.name}</strong> · {p.client} · {formatDate(p.deliveryDate)}
-                      </span>
-                      <span>
-                        <Money>R$ {currency(p.contractValue)}</Money>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={styles.emptyNote}>Nenhum projeto fechou o pagamento em {monthLabel}.</p>
-              )}
-            </section>
-
-            <section className={styles.block}>
-              <h4 className={styles.blockTitle}>Visão geral do ano</h4>
-              {projects!.monthlyReceived.length >= 2 && (
-                <div className={styles.chartWrap}>
-                  <h5 className={styles.subBlockTitle}>Recebido por mês</h5>
-                  <SmoothLineChart
-                    values={projects!.monthlyReceived.map((m) => m.value)}
-                    labels={projects!.monthlyReceived.map((m) => m.label)}
-                    gradientId="reportProjectsMonthly"
-                    height={80}
-                  />
+            {projects!.clientRevenue.length > 0 && (
+              <Box icon={PieChart} title="Receita por cliente no ano">
+                <div className={styles.twoCols}>
+                  <ClientPieChart data={projects!.clientRevenue} />
+                  <RankedBarList data={projects!.clientRevenue} />
                 </div>
-              )}
-              {projects!.clientRevenue.length > 0 && (
-                <div className={styles.chartWrap}>
-                  <h5 className={styles.subBlockTitle}>Receita por cliente no ano</h5>
-                  <div className={styles.twoCols}>
-                    <ClientPieChart data={projects!.clientRevenue} />
-                    <RankedBarList data={projects!.clientRevenue} />
-                  </div>
-                </div>
-              )}
-              <p className={styles.chartCaption}>
-                <Money>R$ {currency(projects!.receivedThisYear)}</Money> recebidos no ano · média de <Money>R$ {currency(projects!.avgMonthlyThisYear)}</Money> por mês
-              </p>
-            </section>
+              </Box>
+            )}
           </div>
         </>
       )}

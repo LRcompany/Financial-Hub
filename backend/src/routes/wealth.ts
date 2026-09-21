@@ -344,6 +344,9 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     if (!prev || prev.market <= 0) continue;
     const gain = cur.market - prev.market - (cur.invested - prev.invested);
     const [type, label] = k.split("|");
+    // Saldo de conta corrente não é investimento — variação dele é entrada/saída
+    // de dinheiro, não rendimento (ex: saldo da Wise indo de US$1.070 a US$27).
+    if (type === "Conta Corrente" || label === "Conta Corrente") continue;
     positionMovers.push({ label, type, marketValue: cur.market, changePct: (gain / prev.market) * 100 });
   }
   positionMovers.sort((a, b) => b.changePct - a.changePct);

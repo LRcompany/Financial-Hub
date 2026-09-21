@@ -1930,6 +1930,24 @@ Verificado ao vivo em `dev.db` (setembro/2026, via servidor de teste temporário
 
 **Deployado em produção** (sem migration).
 
+### Relatório mensal: layout redesenhado (boxes, hierarquia, destaques no topo) (21/09)
+
+Luiz, olhando o relatório em páginas: *"não tem hierarquia nos títulos e subseções. Os destaques que era pra ser destaque estão escondidos. Está tudo confuso e misturado. Jogue orçamento, patrimônio e projetos em boxes... deixe destaque no topo com fundo azul clarinho... Patrimônio está tudo grudado... Em proventos, uma tabela com colunas, FIIs, ações, fundos."*
+
+- **Hierarquia em 3 níveis**: título da página (20px) > título do box (14px, ícone + tinta cheia) > subtítulo dentro do box (11.5px maiúsculo, tinta suave, dentro de `SubBox` com borda). Antes tudo era o mesmo texto cinza empilhado.
+- **`Box`** (borda + título com ícone) por assunto em TODAS as páginas; `SubBox` separa blocos que antes ficavam colados (ex: "Que mais renderam" x "Que mais caíram", por classe x por ativo).
+- **`Highlights`**: primeiro bloco de cada página, fundo `--accent-soft` (azul clarinho, pedido explícito), grade de rótulo pequeno + valor em negrito. Resumo mostra os mais fortes de cada área; cada área tem os seus (Orçamento: onde mais gastou, mais cresceu, quantas categorias passaram, maior compra, dias abaixo/economia; Patrimônio: quem mais rendeu/caiu, proventos, % do milhão; Projetos: recebido, ganho por dia, projeto que mais rendeu, entregues/entraram, imposto).
+- **Calendário saiu do relatório** (segue nos cards do dia a dia). No lugar: "Dias abaixo da meta (N)" em verde e "Dias acima da meta (N)" em vermelho, chips com dia + valor (`--success-soft`/`--danger-soft`), além da linha do gasto diário.
+- **Proventos em tabela por coluna**: FIIs | Ações | Fundos (+ "Outros" se houver outro tipo — nunca some valor), ativos listados dentro de cada coluna, linha de Total por coluna.
+- **Patrimônio** dividido em boxes separados: números, primeiro milhão, evolução, composição (pizza), variação (classe / renderam / caíram) e proventos.
+- PDF: cores de fundo dos destaques/chips forçadas (`print-color-adjust: exact`), `SubBox`/destaques sem quebrar no meio de página.
+
+Ajustes junto: "Ganho por dia trabalhado" só entra nos destaques quando > 0 (mês sem recebimento mostrava R$0,00); `positionMovers` (backend) ignora **conta corrente** — o saldo da Wise indo de US$1.070 a US$27 aparecia como "investimento que mais caiu (−97,5%)", mas é movimento de caixa, não rendimento.
+
+Verificado ao vivo em `dev.db` (via servidor de teste temporário sem login; proventos com 4 lançamentos de teste inseridos e removidos): Resumo, Orçamento (dias acima 14 / abaixo 7, tabela de categorias) e Patrimônio (tabela de proventos em 3 colunas) renderizam com a nova hierarquia; `tsc` back+front limpos. Não vi a página Projetos redesenhada nem o PDF impresso.
+
+**Deployado em produção** (sem migration).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
