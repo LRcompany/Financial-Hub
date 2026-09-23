@@ -1962,6 +1962,18 @@ Verificado no navegador simulando `beforeprint` no mês mais cheio (setembro/202
 
 **Deployado em produção** (só frontend).
 
+### "Dividir" também em grupo de 2+ transações em "Compras sem categoria" (23/09)
+
+Luiz: *"fiz um Pix da 99 pra minha conta de CNPJ... está identificando com outra pessoa. Me dê a opção pra dividir esse valor também — foi pro contador e pro INSS."* Achado em produção: são dois Pix com o mesmo nome ("LUIZ ANTONIO SOUSA RODRIGUES", R$580,00 e R$1,10, 21/09), então caíram num grupo de 2 em "Compras sem categoria" — e o "Dividir" só aparecia em grupo de UMA transação (regra de 14/09).
+
+**Fix**: "Dividir" aparece em todo grupo. Grupo de 1 abre o editor direto (como antes); grupo de 2+ pergunta antes **qual transação dividir** (chips com data + valor), porque dividir continua sendo decisão sobre UM valor, nunca em bloco. Dividir uma só não some com o grupo — tira só aquela transação dele e recalcula total/quantidade; o resto continua esperando categoria. Backend: `/transactions/uncategorized-groups` passou a mandar `items` (id, valor, data) de cada transação do grupo. A lógica de categorizar/dividir, antes duplicada entre linha (desktop) e card (mobile), virou um hook só (`useGroupActions`) + `SplitFlow`.
+
+Verificado ao vivo em `dev.db` (servidor de teste temporário sem login; `dev.db` restaurado depois): grupo "NOVO ATACAREJO" 2x R$478,69 → escolhi a de R$301,75 → dividi em 200 + 101,75 → grupo virou 1x R$176,94, split gravado certo. `tsc` back+front limpos.
+
+**Achado, não mexido (perguntei ao Luiz)**: em 21/09 ele também lançou à mão "INSS" R$331,08 e "Contador" R$250,00 (99, ainda `awaitingPluggyMatch`). Como o nome/valor não batem com os Pix, a reconciliação não vai casar sozinha — se ele dividir o Pix de R$580 E mantiver os dois manuais, o mesmo dinheiro conta 2x no Orçamento. Nota: 331,08 + 250,00 = 581,08, e os Pix somam 581,10.
+
+**Deployado em produção** (sem migration).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

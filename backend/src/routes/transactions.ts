@@ -66,12 +66,24 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
 
   const groups = new Map<
     string,
-    { description: string; totalAmount: number; ids: string[]; lastDate: Date; installmentNumber: number | null; totalInstallments: number | null }
+    {
+      description: string;
+      totalAmount: number;
+      ids: string[];
+      // Cada transação do grupo com seu valor (23/09) — "Dividir" num grupo
+      // de 2+ precisa saber QUAL transação dividir (ex: dois Pix pro mesmo
+      // CNPJ, R$580 e R$1,10, caindo no mesmo grupo por terem o mesmo nome).
+      items: { id: string; amount: number; date: Date }[];
+      lastDate: Date;
+      installmentNumber: number | null;
+      totalInstallments: number | null;
+    }
   >();
   for (const t of transactions) {
     const existing = groups.get(t.description);
     if (existing) {
       existing.ids.push(t.id);
+      existing.items.push({ id: t.id, amount: t.amount, date: t.date });
       existing.totalAmount += t.amount;
       if (t.date > existing.lastDate) existing.lastDate = t.date;
     } else {
@@ -83,6 +95,7 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
         description: t.description,
         totalAmount: t.amount,
         ids: [t.id],
+        items: [{ id: t.id, amount: t.amount, date: t.date }],
         lastDate: t.date,
         installmentNumber: t.installmentNumber,
         totalInstallments: t.totalInstallments,
@@ -97,6 +110,7 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
       totalAmount: g.totalAmount,
       lastDate: g.lastDate,
       ids: g.ids,
+      items: g.items,
       installmentNumber: g.installmentNumber,
       totalInstallments: g.totalInstallments,
     }))

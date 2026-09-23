@@ -13,30 +13,24 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
-/** Uma linha por comerciante (mesma descrição exata = mesmo comerciante —
- * categoriza todas as compras dele de uma vez, mesmo com valor diferente
- * cada uma). Sem edição de valor/cartão aqui — isso é gasto que JÁ
- * aconteceu (Transaction), diferente da parcela futura.
+type GroupItem = UncategorizedTransactionGroup['items'][number]
+
+/** Estado compartilhado de "categorizar / dividir" de um grupo — usado pela
+ * linha (`GroupRow`, desktop) e pelo card (`GroupCard`, mobile), que antes
+ * duplicavam essa lógica inteira.
  *
- * "Dividir" (14/09, pedido do Luiz: o boleto de aluguel+água+gás+internet+
- * seguro cai aqui como "1 comerciante sem categoria") só faz sentido pra um
- * grupo de UMA transação — dividir é uma decisão sobre um valor específico
- * (essa fatura desse mês), não algo que dá pra aplicar em bloco pra N
- * compras de valores diferentes do mesmo comerciante. Reaproveita o mesmo
- * `SplitEditor` do `TransactionEditModal` — nunca uma segunda versão da UI
- * de dividir. */
-function GroupRow({
-  group,
-  categories,
-  onSaved,
-}: {
-  group: UncategorizedTransactionGroup
-  categories: LeafCategoryOption[]
-  onSaved: (ids: string[]) => void
-}) {
+ * "Dividir" (14/09, boleto de aluguel+água+gás+internet+seguro) é uma
+ * decisão sobre UM valor específico, nunca em bloco. Grupo de 1 transação
+ * abre o editor direto; grupo de 2+ (23/09, pedido do Luiz: dois Pix pra
+ * conta do CNPJ — R$580 e R$1,10 — caíram no mesmo grupo por terem o mesmo
+ * nome, e o "Dividir" nem aparecia) pergunta antes QUAL transação dividir.
+ * Dividir uma só não some com o grupo — só tira aquela transação dele
+ * (`onSaved([id])`), o resto continua esperando categoria. */
+function useGroupActions(group: UncategorizedTransactionGroup, onSaved: (ids: string[]) => void) {
   const [categoryId, setCategoryId] = useState('')
   const [saving, setSaving] = useState(false)
-  const [splitMode, setSplitMode] = useState(false)
+  const [mode, setMode] = useState<'idle' | 'pick' | 'split'>('idle')
+  const [target, setTarget] = useState<GroupItem | null>(null)
   const [splitRows, setSplitRows] = useState<SplitRowValue[]>([])
   const [splitError, setSplitError] = useState<string | null>(null)
 
@@ -51,14 +45,27 @@ function GroupRow({
     }
   }
 
+  function chooseTarget(item: GroupItem) {
+    setTarget(item)
+    setSplitRows(initialSplitRows(item.amount))
+    setSplitError(null)
+    setMode('split')
+  }
+
   function startSplit() {
-    setSplitRows(initialSplitRows(group.totalAmount))
-    setSplitMode(true)
+    if (group.items.length === 1) chooseTarget(group.items[0])
+    else setMode('pick')
+  }
+
+  function cancelSplit() {
+    setMode('idle')
+    setTarget(null)
     setSplitError(null)
   }
 
   async function saveSplit() {
-    const validationError = validateSplitRows(splitRows, group.totalAmount)
+    if (!target) return
+    const validationError = validateSplitRows(splitRows, target.amount)
     if (validationError) {
       setSplitError(validationError)
       return
@@ -66,8 +73,10 @@ function GroupRow({
     setSaving(true)
     setSplitError(null)
     try {
-      await api.splitTransaction(group.ids[0], splitRows.map((r) => ({ categoryId: r.categoryId, amount: Number(r.amount) })))
-      onSaved(group.ids)
+      await api.splitTransaction(target.id, splitRows.map((r) => ({ categoryId: r.categoryId, amount: Number(r.amount) })))
+      const doneId = target.id
+      cancelSplit()
+      onSaved([doneId])
     } catch (err) {
       setSplitError((err as Error).message)
     } finally {
@@ -75,21 +84,88 @@ function GroupRow({
     }
   }
 
-  if (splitMode) {
+  return { categoryId, setCategoryId, saving, mode, target, splitRows, setSplitRows, splitError, save, startSplit, chooseTarget, cancelSplit, saveSplit }
+}
+
+type GroupActions = ReturnType<typeof useGroupActions>
+
+/** Passo "qual transação dividir?" + editor de divisão — mesmo miolo na
+ * linha (dentro de um `<td colSpan>`) e no card. */
+function SplitFlow({
+  group,
+  categories,
+  a,
+}: {
+  group: UncategorizedTransactionGroup
+  categories: LeafCategoryOption[]
+  a: GroupActions
+}) {
+  if (a.mode === 'pick') {
+    return (
+      <>
+        <div className={splitStyles.splitHeader}>
+          <span className={splitStyles.splitLabel}>{group.description} — qual transação dividir?</span>
+          <button type="button" className={splitStyles.splitLinkBtn} onClick={a.cancelSplit}>
+            Cancelar
+          </button>
+        </div>
+        <div className={styles.pickList}>
+          {group.items.map((it) => (
+            <button key={it.id} type="button" className={styles.pickItem} onClick={() => a.chooseTarget(it)}>
+              <span>{formatDate(it.date)}</span>
+              <strong>
+                <Money>R$ {currency(it.amount)}</Money>
+              </strong>
+            </button>
+          ))}
+        </div>
+      </>
+    )
+  }
+  return (
+    <>
+      <div className={splitStyles.splitHeader}>
+        <span className={splitStyles.splitLabel}>
+          {group.description}
+          {a.target && group.items.length > 1 && (
+            <>
+              {' '}— {formatDate(a.target.date)}, <Money>R$ {currency(a.target.amount)}</Money>
+            </>
+          )}
+        </span>
+        <button type="button" className={splitStyles.splitLinkBtn} onClick={a.cancelSplit} disabled={a.saving}>
+          Cancelar divisão
+        </button>
+      </div>
+      <SplitEditor rows={a.splitRows} onChange={a.setSplitRows} categories={categories} totalAmount={a.target?.amount ?? 0} disabled={a.saving} />
+      {a.splitError && <p className={styles.error}>{a.splitError}</p>}
+      <button type="button" className={styles.saveBtn} onClick={a.saveSplit} disabled={a.saving}>
+        {a.saving ? 'Salvando...' : 'Salvar divisão'}
+      </button>
+    </>
+  )
+}
+
+/** Uma linha por comerciante (mesma descrição exata = mesmo comerciante —
+ * categoriza todas as compras dele de uma vez, mesmo com valor diferente
+ * cada uma). Sem edição de valor/cartão aqui — isso é gasto que JÁ
+ * aconteceu (Transaction), diferente da parcela futura. */
+function GroupRow({
+  group,
+  categories,
+  onSaved,
+}: {
+  group: UncategorizedTransactionGroup
+  categories: LeafCategoryOption[]
+  onSaved: (ids: string[]) => void
+}) {
+  const a = useGroupActions(group, onSaved)
+
+  if (a.mode !== 'idle') {
     return (
       <tr>
         <td colSpan={6} className={styles.splitCell}>
-          <div className={splitStyles.splitHeader}>
-            <span className={splitStyles.splitLabel}>{group.description} — dividir em categorias</span>
-            <button type="button" className={splitStyles.splitLinkBtn} onClick={() => setSplitMode(false)} disabled={saving}>
-              Cancelar divisão
-            </button>
-          </div>
-          <SplitEditor rows={splitRows} onChange={setSplitRows} categories={categories} totalAmount={group.totalAmount} disabled={saving} />
-          {splitError && <p className={styles.error}>{splitError}</p>}
-          <button type="button" className={styles.saveBtn} onClick={saveSplit} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar divisão'}
-          </button>
+          <SplitFlow group={group} categories={categories} a={a} />
         </td>
       </tr>
     )
@@ -108,7 +184,7 @@ function GroupRow({
       <td className={styles.numCell}>{formatDate(group.lastDate)}</td>
       <td className={styles.numCell}><Money>R$ {currency(group.totalAmount)}</Money></td>
       <td>
-        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={styles.categorySelect} disabled={saving}>
+        <Select value={a.categoryId} onChange={(e) => a.setCategoryId(e.target.value)} className={styles.categorySelect} disabled={a.saving}>
           <option value="">— escolher —</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -119,14 +195,12 @@ function GroupRow({
       </td>
       <td>
         <div className={styles.rowActions}>
-          <button className={styles.saveBtn} onClick={save} disabled={!categoryId || saving}>
+          <button className={styles.saveBtn} onClick={a.save} disabled={!a.categoryId || a.saving}>
             Salvar
           </button>
-          {group.count === 1 && (
-            <button type="button" className={splitStyles.splitLinkBtn} onClick={startSplit} disabled={saving}>
-              Dividir
-            </button>
-          )}
+          <button type="button" className={splitStyles.splitLinkBtn} onClick={a.startSplit} disabled={a.saving}>
+            Dividir
+          </button>
         </div>
       </td>
     </tr>
@@ -134,10 +208,9 @@ function GroupRow({
 }
 
 /** Mesmo comerciante da `GroupRow` (tabela), em formato de card — pra tela
- * estreita, onde tabela vira sempre card (pedido do Luiz, 11/09: "toda
- * célula numa table vira um card... não rola termos tabela no mobile").
- * Estado próprio (não compartilha com `GroupRow`) — só uma das duas versões
- * fica visível de cada vez via CSS, nunca as duas ao mesmo tempo. */
+ * estreita, onde tabela vira sempre card (pedido do Luiz, 11/09). Estado
+ * próprio (não compartilha com `GroupRow`) — só uma das duas versões fica
+ * visível de cada vez via CSS. */
 function GroupCard({
   group,
   categories,
@@ -147,61 +220,12 @@ function GroupCard({
   categories: LeafCategoryOption[]
   onSaved: (ids: string[]) => void
 }) {
-  const [categoryId, setCategoryId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [splitMode, setSplitMode] = useState(false)
-  const [splitRows, setSplitRows] = useState<SplitRowValue[]>([])
-  const [splitError, setSplitError] = useState<string | null>(null)
+  const a = useGroupActions(group, onSaved)
 
-  async function save() {
-    if (!categoryId) return
-    setSaving(true)
-    try {
-      await api.categorizeTransactionGroup(group.ids, categoryId)
-      onSaved(group.ids)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  function startSplit() {
-    setSplitRows(initialSplitRows(group.totalAmount))
-    setSplitMode(true)
-    setSplitError(null)
-  }
-
-  async function saveSplit() {
-    const validationError = validateSplitRows(splitRows, group.totalAmount)
-    if (validationError) {
-      setSplitError(validationError)
-      return
-    }
-    setSaving(true)
-    setSplitError(null)
-    try {
-      await api.splitTransaction(group.ids[0], splitRows.map((r) => ({ categoryId: r.categoryId, amount: Number(r.amount) })))
-      onSaved(group.ids)
-    } catch (err) {
-      setSplitError((err as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (splitMode) {
+  if (a.mode !== 'idle') {
     return (
       <div className={styles.card}>
-        <div className={splitStyles.splitHeader}>
-          <span className={splitStyles.splitLabel}>{group.description}</span>
-          <button type="button" className={splitStyles.splitLinkBtn} onClick={() => setSplitMode(false)} disabled={saving}>
-            Cancelar divisão
-          </button>
-        </div>
-        <SplitEditor rows={splitRows} onChange={setSplitRows} categories={categories} totalAmount={group.totalAmount} disabled={saving} />
-        {splitError && <p className={styles.error}>{splitError}</p>}
-        <button type="button" className={styles.saveBtn} onClick={saveSplit} disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar divisão'}
-        </button>
+        <SplitFlow group={group} categories={categories} a={a} />
       </div>
     )
   }
@@ -225,7 +249,7 @@ function GroupCard({
         <span><Money>R$ {currency(group.totalAmount)}</Money></span>
       </div>
       <div className={styles.cardActions}>
-        <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>
+        <Select value={a.categoryId} onChange={(e) => a.setCategoryId(e.target.value)} disabled={a.saving}>
           <option value="">— escolher —</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -233,15 +257,13 @@ function GroupCard({
             </option>
           ))}
         </Select>
-        <button className={styles.saveBtn} onClick={save} disabled={!categoryId || saving}>
+        <button className={styles.saveBtn} onClick={a.save} disabled={!a.categoryId || a.saving}>
           Salvar
         </button>
       </div>
-      {group.count === 1 && (
-        <button type="button" className={`${splitStyles.splitLinkBtn} ${styles.cardSplitBtn}`} onClick={startSplit} disabled={saving}>
-          Dividir em categorias
-        </button>
-      )}
+      <button type="button" className={`${splitStyles.splitLinkBtn} ${styles.cardSplitBtn}`} onClick={a.startSplit} disabled={a.saving}>
+        Dividir em categorias
+      </button>
     </div>
   )
 }
@@ -259,12 +281,19 @@ export function TransactionReviewModal({ onClose }: { onClose: () => void }) {
 
   useEffect(load, [])
 
-  function sameIds(a: string[], b: string[]) {
-    return a.length === b.length && a.every((v, i) => v === b[i])
-  }
-
+  // Tira do grupo só as transações resolvidas (categorizar tudo = todas;
+  // dividir uma = só ela) e recalcula total/quantidade; grupo vazio some.
   function handleSaved(ids: string[]) {
-    setGroups((prev) => prev?.filter((g) => !sameIds(g.ids, ids)) ?? null)
+    const done = new Set(ids)
+    setGroups(
+      (prev) =>
+        prev
+          ?.map((g) => {
+            const items = g.items.filter((it) => !done.has(it.id))
+            return { ...g, items, ids: items.map((it) => it.id), count: items.length, totalAmount: items.reduce((sum, it) => sum + it.amount, 0) }
+          })
+          .filter((g) => g.count > 0) ?? null
+    )
   }
 
   return (

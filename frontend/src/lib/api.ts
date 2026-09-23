@@ -86,6 +86,9 @@ export interface UncategorizedTransactionGroup {
   totalAmount: number
   lastDate: string
   ids: string[]
+  // Cada transação do grupo (mais recente primeiro) — pra escolher qual
+  // dividir quando o grupo tem mais de uma.
+  items: { id: string; amount: number; date: string }[]
   installmentNumber: number | null
   totalInstallments: number | null
 }
