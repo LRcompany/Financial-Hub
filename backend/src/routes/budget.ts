@@ -770,24 +770,46 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
 
   const positions = buildInstallmentPositions(allForPositions);
 
+  // "Parcelas que terminam neste mês" (24/09, pedido do Luiz: "quais são as
+  // parcelas que acabam no mês... quero saber quais são e o valor total") —
+  // a última parcela de uma compra é a de vencimento MAIS DISTANTE dentro da
+  // mesma compra (mesma chave `purchaseBase`+valor de `buildInstallmentPositions`),
+  // então não depende de saber o total de parcelas. Usa a lista SEM o dedup
+  // de `postedKeys`: se a última parcela já virou transação real no mês, a
+  // compra continua terminando nesse mês do mesmo jeito.
+  const lastDueByPurchase = new Map<string, number>();
+  for (const r of allForPositions) {
+    const key = `${purchaseBase(r.description)}|${r.amount.toFixed(2)}`;
+    const t = r.dueDate.getTime();
+    if (t > (lastDueByPurchase.get(key) ?? 0)) lastDueByPurchase.set(key, t);
+  }
+  const ending = installmentsRaw
+    .filter((i) => lastDueByPurchase.get(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`) === i.dueDate.getTime())
+    .sort((a, b) => b.amount - a.amount);
+  const endingTotal = ending.reduce((sum, i) => sum + i.amount, 0);
+
+  function toRow(i: (typeof installmentsRaw)[number]) {
+    const position = positions.get(i.id);
+    return {
+      id: i.id,
+      dueDate: i.dueDate,
+      description: i.description,
+      note: i.note,
+      amount: i.amount,
+      category: categoryPath(i.category),
+      cardLabel: i.cardLabel,
+      installmentNumber: position?.installmentNumber ?? null,
+      totalInstallments: position?.totalInstallments ?? null,
+    };
+  }
+
   res.json({
     total,
+    ending: ending.map(toRow),
+    endingTotal,
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     byMonth,
-    installments: installments.map((i) => {
-      const position = positions.get(i.id);
-      return {
-        id: i.id,
-        dueDate: i.dueDate,
-        description: i.description,
-        note: i.note,
-        amount: i.amount,
-        category: categoryPath(i.category),
-        cardLabel: i.cardLabel,
-        installmentNumber: position?.installmentNumber ?? null,
-        totalInstallments: position?.totalInstallments ?? null,
-      };
-    }),
+    installments: installments.map(toRow),
   });
 });
 

@@ -1974,6 +1974,20 @@ Verificado ao vivo em `dev.db` (servidor de teste temporário sem login; `dev.db
 
 **Deployado em produção** (sem migration).
 
+### "Terminam neste mês" no box de parcelas (24/09)
+
+Luiz: *"quero saber quais são as parcelas que acabam no mês... quais são elas e o valor total."* Onde: escolheu **só no box "Comprometido em parcelas futuras"** (Orçamento).
+
+- **Regra**: a última parcela de uma compra é a de vencimento MAIS DISTANTE dentro da mesma compra (mesma chave `purchaseBase`+valor já usada em `buildInstallmentPositions`) — não depende de saber o total de parcelas. Usa a lista do mês SEM o dedup de "já virou transação real" (se a última parcela já caiu na fatura, a compra termina nesse mês do mesmo jeito).
+- **Backend**: `/upcoming-installments` ganhou `ending` (mesmo formato das parcelas, maior valor primeiro) e `endingTotal`.
+- **Tela**: seção "Terminam em <mês>" logo abaixo de "Por cartão", seguindo o mês escolhido no carrossel do próprio box. Resumo em verde (`--success`, é dinheiro que deixa de sair): "N compras · R$X a menos por mês a partir de <mês seguinte>"; lista em 2 colunas com nome (ou a nota do Luiz), badge N/N, cartão e valor.
+
+Verificado ao vivo contra uma cópia local do `prod.db` (só leitura, apagada depois): set/2026 = 16 compras, R$1.791,39 (Movida R$281,35, LA Odontologia R$230,00...); out/2026 = 7 compras, R$628,89. `tsc` back+front limpos.
+
+Limitação conhecida: se o banco ainda não mandou as parcelas seguintes de uma compra, a parcela do mês pode parecer a última. Nos dados de hoje todas as marcadas batem com N/N.
+
+**Deployado em produção** (sem migration).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

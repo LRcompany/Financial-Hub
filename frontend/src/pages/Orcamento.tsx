@@ -609,6 +609,47 @@ export function Orcamento() {
                 </div>
               ))}
             </div>
+            {/* "Terminam neste mês" (24/09, pedido do Luiz: "quais são as
+                parcelas que acabam no mês... quais são elas e o valor total")
+                — compras cuja ÚLTIMA parcela vence no mês selecionado aqui
+                no box (segue o carrossel "Por mês"). O total é dito como o
+                que deixa de sair a partir do mês seguinte, que é o que
+                interessa na prática. */}
+            {displayedInstallments.ending.length > 0 && (() => {
+              const { month: m, year: y } = selectedInstallmentPeriod
+              const next = m === 12 ? { month: 1, year: y + 1 } : { month: m + 1, year: y }
+              const count = displayedInstallments.ending.length
+              return (
+                <div className={styles.endingBlock}>
+                  <div className={styles.endingHeader}>
+                    <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                      Terminam em {formatMonthLabel(m, y)}
+                    </h4>
+                    <span className={styles.endingSummary}>
+                      {count} compra{count === 1 ? '' : 's'} ·{' '}
+                      <strong><Money>R$ {currency(displayedInstallments.endingTotal)}</Money></strong> a menos por mês a
+                      partir de {formatMonthLabel(next.month, next.year)}
+                    </span>
+                  </div>
+                  <ul className={styles.endingList}>
+                    {displayedInstallments.ending.map((i) => (
+                      <li key={i.id} className={styles.endingRow}>
+                        <span className={styles.endingName}>
+                          {i.note ?? i.description}
+                          {i.installmentNumber && i.totalInstallments ? (
+                            <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} />
+                          ) : null}
+                          {i.cardLabel && <span className={styles.endingCard}>{i.cardLabel}</span>}
+                        </span>
+                        <span className={styles.endingValue}>
+                          <Money>R$ {currency(i.amount)}</Money>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
             <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
               <table className={styles.table}>
                 <thead>

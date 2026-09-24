@@ -236,6 +236,11 @@ export interface UpcomingInstallment {
 
 export interface UpcomingInstallmentsSummary {
   total: number
+  // Compras cuja ÚLTIMA parcela vence no mês pedido (24/09) — maior valor
+  // primeiro. `endingTotal` = quanto deixa de sair por mês a partir do
+  // mês seguinte.
+  ending: UpcomingInstallment[]
+  endingTotal: number
   byCard: { card: string; amount: number }[]
   byMonth: { month: number; year: number; amount: number }[]
   installments: UpcomingInstallment[]

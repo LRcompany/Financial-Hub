@@ -582,3 +582,74 @@ button.upcomingMonthChip:hover {
    modal e não diretamente na lista"). A lista agora usa só
    `cards.listRow`/`cards.listRowButton`, sem CSS próprio de página. */
 
+
+/* "Terminam neste mês" (24/09) — compras cuja última parcela vence no mês
+   selecionado no box de parcelas. Resumo em --success (é dinheiro que deixa
+   de sair), lista neutra. */
+.endingBlock {
+  margin-top: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
+}
+
+.endingHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.endingSummary {
+  font-size: 12.5px;
+  color: var(--success);
+  background: var(--success-soft);
+  border-radius: var(--r-full);
+  padding: 4px 12px;
+}
+
+.endingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .endingList {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.endingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: 13px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.endingName {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.endingCard {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.endingValue {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
