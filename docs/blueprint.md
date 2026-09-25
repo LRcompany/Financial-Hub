@@ -1988,6 +1988,14 @@ Limitação conhecida: se o banco ainda não mandou as parcelas seguintes de uma
 
 **Deployado em produção** (sem migration).
 
+### Lista de parcelas do mês dentro de um box próprio (25/09)
+
+Luiz: *"deixa as parcelas abertas dentro de um box com o título 'Parcelas de setembro', igual 'Terminam em set/26' — assim ficou muito solto."* A tabela (e os cards do mobile) do box "Comprometido em parcelas futuras" foram pra dentro de um sub-box com título "Parcelas de <mês por extenso>" (com o ano quando não é o ano corrente) e um chip neutro à direita "N parcelas · R$ total". `.endingBlock`/`.endingHeader` viraram `.subBlock`/`.subBlockHeader` (usados pelas duas seções). Valor da parcela não quebra mais em duas linhas dentro do box.
+
+Verificado contra cópia local do `prod.db` (só leitura, apagada depois): "Parcelas de setembro · 45 parcelas · R$ 10.993,07"; em 1280px a tabela cabe inteira no box. `tsc` limpo.
+
+**Deployado em produção** (só frontend).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

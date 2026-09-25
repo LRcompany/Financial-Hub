@@ -583,17 +583,27 @@ button.upcomingMonthChip:hover {
    `cards.listRow`/`cards.listRowButton`, sem CSS próprio de página. */
 
 
+/* Box interno do card de parcelas — "Terminam em" e "Parcelas de" (25/09
+   generalizado de .endingBlock). */
+.subBlockSummary {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 4px 12px;
+}
+
 /* "Terminam neste mês" (24/09) — compras cuja última parcela vence no mês
    selecionado no box de parcelas. Resumo em --success (é dinheiro que deixa
    de sair), lista neutra. */
-.endingBlock {
+.subBlock {
   margin-top: var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: var(--space-4);
 }
 
-.endingHeader {
+.subBlockHeader {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -652,4 +662,9 @@ button.upcomingMonthChip:hover {
 .endingValue {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Valor da parcela numa linha só dentro do box (não quebrar "R$ 1.159,00"). */
+.subBlock .table td:last-child {
+  white-space: nowrap;
 }

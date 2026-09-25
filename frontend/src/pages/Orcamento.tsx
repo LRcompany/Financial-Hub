@@ -43,6 +43,7 @@ import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
 
+const MONTH_NAMES_FULL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
 // Sem seção de "Investimento" — aporte não é gasto, tem home própria em
@@ -620,8 +621,8 @@ export function Orcamento() {
               const next = m === 12 ? { month: 1, year: y + 1 } : { month: m + 1, year: y }
               const count = displayedInstallments.ending.length
               return (
-                <div className={styles.endingBlock}>
-                  <div className={styles.endingHeader}>
+                <div className={styles.subBlock}>
+                  <div className={styles.subBlockHeader}>
                     <h4 className={styles.chartLabel} style={{ margin: 0 }}>
                       Terminam em {formatMonthLabel(m, y)}
                     </h4>
@@ -650,7 +651,22 @@ export function Orcamento() {
                 </div>
               )
             })()}
-            <div className={styles.tableWrap} style={{ marginTop: 'var(--space-4)' }}>
+            {/* Lista das parcelas do mês dentro de um box próprio (25/09,
+                pedido do Luiz: "deixa as parcelas dentro de um box com o
+                título 'Parcelas de setembro', igual 'Terminam em set/26' —
+                assim ficou muito solto"). Mesmo `.subBlock` da seção acima. */}
+            <div className={styles.subBlock}>
+            <div className={styles.subBlockHeader}>
+              <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                Parcelas de {MONTH_NAMES_FULL[selectedInstallmentPeriod.month - 1]}
+                {selectedInstallmentPeriod.year !== now.getFullYear() ? ` de ${selectedInstallmentPeriod.year}` : ''}
+              </h4>
+              <span className={styles.subBlockSummary}>
+                {displayedInstallments.installments.length} parcela{displayedInstallments.installments.length === 1 ? '' : 's'} ·{' '}
+                <strong><Money>R$ {currency(displayedInstallments.total)}</Money></strong>
+              </span>
+            </div>
+            <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
@@ -692,7 +708,7 @@ export function Orcamento() {
                 a apresentação muda; alternado via CSS (ver .tableWrap/
                 .installmentCards em Orcamento.module.css), sem duplicar
                 busca nenhuma. */}
-            <div className={styles.installmentCards} style={{ marginTop: 'var(--space-4)' }}>
+            <div className={styles.installmentCards}>
               {displayedInstallments.installments.map((i) => (
                 <div key={i.id} className={styles.installmentCard}>
                   <div className={styles.installmentCardTop}>
@@ -718,6 +734,7 @@ export function Orcamento() {
                   </div>
                 </div>
               ))}
+            </div>
             </div>
           </div>
         )}
