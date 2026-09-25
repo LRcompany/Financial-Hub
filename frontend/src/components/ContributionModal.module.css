@@ -1,0 +1,94 @@
+/* overlay/sheet/header/title/subtitle vêm do ModalShell compartilhado
+   (11/09) — aqui só o que é específico dessa modal. */
+
+.helperText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.formRow {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.segmented {
+  display: flex;
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 3px;
+  gap: 2px;
+}
+
+.seg,
+.segActive {
+  flex: 1;
+  border: none;
+  border-radius: var(--r-full);
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-soft);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.seg:hover {
+  background: color-mix(in srgb, var(--fill-muted) 50%, var(--surface) 50%);
+  color: var(--ink);
+}
+
+.segActive {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--danger);
+  margin: 0;
+}
+
+
+.secondaryBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.saveBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.saveBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

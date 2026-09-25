@@ -1,0 +1,1029 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  Target,
+  PieChart,
+  CreditCard as CreditCardIcon,
+  CalendarClock,
+  CalendarDays,
+  LineChart as LineChartIcon,
+  Copy,
+  ListChecks,
+  AlertCircle,
+  Settings as SettingsIcon,
+  Plus,
+  Minus,
+  TrendingUp,
+} from 'lucide-react'
+import {
+  api,
+  type BudgetSummary,
+  type CreditCard,
+  type UpcomingInstallmentsSummary,
+  type BudgetCategory,
+  type Transaction,
+  type LeafCategoryOption,
+} from '../lib/api'
+import { SmoothLineChart } from '../components/SmoothLineChart'
+import { DailySpendCalendar } from '../components/DailySpendCalendar'
+import { MonthDelta } from '../components/MonthDelta'
+import { ClientPieChart } from '../components/ClientPieChart'
+import { CardHeader } from '../components/CardHeader'
+import { Carousel } from '../components/Carousel'
+import { BudgetReviewModal } from '../components/BudgetReviewModal'
+import { InstallmentReviewModal } from '../components/InstallmentReviewModal'
+import { TransactionModal } from '../components/TransactionModal'
+import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
+import { TransactionEditModal } from '../components/TransactionEditModal'
+import { Select } from '../components/Select'
+import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
+import { SpentPlannedValue } from '../components/SpentPlannedValue'
+import { Money } from '../components/Money'
+import { currency } from '../lib/format'
+import cards from '../styles/cards.module.css'
+import styles from './Orcamento.module.css'
+
+const MONTH_NAMES_FULL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+// Sem seção de "Investimento" — aporte não é gasto, tem home própria em
+// Patrimônio (o backend já nem manda categoria desse kind pra cá).
+const KIND_SECTIONS: { kind: BudgetCategory['kind']; title: string }[] = [
+  { kind: 'essential', title: 'Despesas essenciais' },
+  { kind: 'non_essential', title: 'Despesas não essenciais' },
+]
+
+/** "2026-08-21" -> "21 ago", sem passar por UTC (senão pode virar o dia anterior). */
+function formatDayLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+/** "9, 2026" -> "set/26" — label curto pro chip do carrossel "Por mês". */
+function formatMonthLabel(month: number, year: number): string {
+  return `${MONTH_NAMES[month - 1]}/${String(year).slice(2)}`
+}
+
+export function Orcamento() {
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [year, setYear] = useState(now.getFullYear())
+  // Espelha month/year sincronamente — changeMonth lê daqui em vez do state
+  // (que só atualiza no próximo render), pra dois cliques em sequência
+  // rápida não computarem os dois a partir do mesmo mês antigo.
+  const periodRef = useRef({ month, year })
+  useEffect(() => {
+    periodRef.current = { month, year }
+  }, [month, year])
+
+  const [budget, setBudget] = useState<BudgetSummary | null>(null)
+  const [error, setError] = useState(false)
+  const [cardsList, setCardsList] = useState<CreditCard[]>([])
+  const [upcoming, setUpcoming] = useState<UpcomingInstallmentsSummary | null>(null)
+  // Mês escolhido no carrossel "Por mês" do box de parcelas — independente
+  // do mês navegado na página (04/09: "se eu clicar em outubro vou ver o
+  // que foi parcelado em outubro, se eu clicar em novembro..."). null =
+  // segue o mês da página (comportamento padrão).
+  const [installmentMonth, setInstallmentMonth] = useState<{ month: number; year: number } | null>(null)
+  const [installmentDetail, setInstallmentDetail] = useState<UpcomingInstallmentsSummary | null>(null)
+  const [showReview, setShowReview] = useState(false)
+  const [showInstallmentReview, setShowInstallmentReview] = useState(false)
+  const [showAddTransaction, setShowAddTransaction] = useState(false)
+  // Categoria clicada na lista → modal "o que está incluso nesse montante"
+  // (pedido do Luiz, 10/09).
+  const [breakdown, setBreakdown] = useState<{ title: string; categoryIds: string[]; planned: number } | null>(null)
+  const [copying, setCopying] = useState(false)
+  // "Atualizar transações" morava aqui (botão separado, só sincronizava
+  // transação) — centralizado em Configurações (14/09, pedido do Luiz: "não
+  // gostei de termos botões de atualização em lugares diferentes"), o botão
+  // "Atualizar tudo" de lá já sincroniza posição + transação de cada banco.
+
+  // Lista de TODAS as transações do mês navegado. Edição de categoria/nota
+  // virou modal (11/09, pedido do Luiz: "a edição tem que rolar através de
+  // modal e não diretamente na lista... clicou e aí lá você tem as edições
+  // e salvar") — antes o Select/Input de cada linha já vinham abertos
+  // direto na lista, o que não deixava óbvio que dava pra clicar em nota
+  // pra editar. `selectedTransaction` = qual linha está com a modal aberta.
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [leafCategories, setLeafCategories] = useState<LeafCategoryOption[]>([])
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  // Filtro por banco/corretora (14/09, pedido do Luiz: "quero ver quando vem
+  // de banco específico") — '' = todos, '__none__' = só as sem banco (ex:
+  // receita de projeto). Lista de opções vem das próprias transações do mês
+  // carregado, não de um cadastro de corretoras à parte — só aparece banco
+  // que realmente tem transação nesse mês.
+  const [bankFilter, setBankFilter] = useState('')
+
+  // "Gasto diário" tem duas visualizações do MESMO dado (`daysThisMonth`) —
+  // gráfico de linha (como sempre foi) ou calendário (pedido do Luiz,
+  // 15/09: "quero ver quais dias fiquei abaixo da meta e quais fiquei fora,
+  // visualmente... pode ser no mesmo box"). Nunca precisa recarregar nada ao
+  // trocar, é só outra forma de olhar o array que já veio do backend.
+  const [dailyView, setDailyView] = useState<'chart' | 'calendar'>('chart')
+
+  function loadTransactions() {
+    api.transactions({ month, year }).then(setTransactions).catch(() => {})
+  }
+
+  useEffect(() => {
+    loadTransactions()
+    setBankFilter('') // banco filtrado pode não existir no mês novo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year])
+  useEffect(() => {
+    api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
+  }, [])
+
+  function load() {
+    api
+      .budgetSummary({ month, year })
+      .then(setBudget)
+      .catch(() => setError(true))
+  }
+
+  function loadCardsAndUpcoming() {
+    api.creditCards({ month, year }).then((r) => setCardsList(r.cards)).catch(() => {})
+    api.upcomingInstallments({ month, year }).then(setUpcoming).catch(() => {})
+  }
+
+  useEffect(load, [month, year])
+  // Cartões e parcelas futuras acompanham o mês navegado — avançar mês faz o
+  // que já venceu sumir da conta (não é fixo, filtrado no backend por mês).
+  // Também reseta a seleção do carrossel de parcelas pro mês da página.
+  useEffect(() => {
+    loadCardsAndUpcoming()
+    setInstallmentMonth(null)
+    setInstallmentDetail(null)
+  }, [month, year])
+
+  // Clicar num mês do carrossel "Por mês" busca só aquele mês, sem navegar
+  // o resto da página (Cartões, categorias, gráfico diário continuam no mês
+  // atual da página).
+  function selectInstallmentMonth(m: number, y: number) {
+    if (m === month && y === year) {
+      setInstallmentMonth(null)
+      setInstallmentDetail(null)
+      return
+    }
+    setInstallmentMonth({ month: m, year: y })
+    api.upcomingInstallments({ month: m, year: y }).then(setInstallmentDetail).catch(() => {})
+  }
+
+  const displayedInstallments = installmentDetail ?? upcoming
+  const selectedInstallmentPeriod = installmentMonth ?? { month, year }
+
+  function changeMonth(delta: number) {
+    let m = periodRef.current.month + delta
+    let y = periodRef.current.year
+    if (m < 1) {
+      m = 12
+      y -= 1
+    } else if (m > 12) {
+      m = 1
+      y += 1
+    }
+    periodRef.current = { month: m, year: y }
+    setMonth(m)
+    setYear(y)
+  }
+
+  function goToToday() {
+    periodRef.current = { month: now.getMonth() + 1, year: now.getFullYear() }
+    setMonth(now.getMonth() + 1)
+    setYear(now.getFullYear())
+  }
+
+  async function copyPreviousMonth() {
+    setCopying(true)
+    try {
+      const result = await api.copyBudgetFromPreviousMonth(month, year)
+      load()
+      alert(`${result.copied} categoria(s) copiada(s) do mês anterior. ${result.skippedExisting} já tinham meta e não foram sobrescritas.`)
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  if (error) {
+    return <div className={cards.emptyState}>Não consegui falar com o backend ainda.</div>
+  }
+  if (!budget) return null
+
+  // A Pluggy sincroniza com atraso — "gasto de hoje" quase sempre mostra
+  // R$0 só porque a transação de verdade ainda não chegou (não porque o
+  // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
+  // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
+  // "hoje" no dia em que o dado de hoje já chegou de verdade.
+  const todayBucket = budget.daysThisMonth[budget.daysThisMonth.length - 1]
+  const lastSpendDay = budget.lastDayWithSpend
+  const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
+  const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
+  const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
+  // Posição do "último dia com gasto" dentro de daysThisMonth — bolinha fixa no
+  // gráfico marcando "a gente se encontra ali" (pedido do Luiz, 04/09).
+  const lastSpendDayIndex = !isShowingToday && lastSpendDay ? budget.daysThisMonth.findIndex((d) => d.date === lastSpendDay.date) : -1
+  const markedDayIndex = lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
+  const diff = budget.dailyGoal != null ? budget.dailyGoal - displaySpend : null
+
+  // Pizza mostra só onde o dinheiro REALMENTE foi esse mês, agregado por
+  // categoria-MÃE (Moradia, Transporte...) — não a folha (05/09→10/09,
+  // "aqui eu só quero ver as categorias pai, não as subs"): ~30 fatias de
+  // folha era ilegível, e várias folhas repetem nome entre pais diferentes
+  // (Aluguel em Moradia E em Transporte > Carro). Categoria sem gasto nenhum
+  // não vira fatia (fatia de R$0 só polui o gráfico).
+  const pieByParent = new Map<string, number>()
+  for (const c of budget.categories) {
+    if (c.spent <= 0) continue
+    const key = c.parentName ?? 'Outras' // mesmo rótulo do accordion de categorias
+    pieByParent.set(key, (pieByParent.get(key) ?? 0) + c.spent)
+  }
+  const pieData = [...pieByParent.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear()
+  const showReviewBanner = isCurrentMonth && now.getDate() <= 5 && budget.categories.length === 0
+
+  return (
+    <div className={cards.page}>
+      <div className={styles.header}>
+        <h1 className={cards.pageTitle}>Orçamento</h1>
+        <div className={styles.monthNav}>
+          {!isCurrentMonth && (
+            <button className={styles.todayBtn} onClick={goToToday}>
+              Hoje
+            </button>
+          )}
+          <button className={styles.navBtn} onClick={() => changeMonth(-1)} aria-label="Mês anterior">
+            ‹
+          </button>
+          <span className={styles.monthLabel}>
+            {MONTH_NAMES[month - 1]}/{year}
+          </span>
+          <button className={styles.navBtn} onClick={() => changeMonth(1)} aria-label="Próximo mês">
+            ›
+          </button>
+        </div>
+      </div>
+
+      {showReviewBanner && (
+        <div className={styles.reviewBanner}>
+          <AlertCircle size={16} strokeWidth={2} />
+          <span>Mês novo — hora de revisar o orçamento de {MONTH_NAMES[month - 1]}/{year}.</span>
+          <button className={styles.reviewBannerBtn} onClick={() => setShowReview(true)}>
+            Revisar agora
+          </button>
+        </div>
+      )}
+
+      <div className={cards.grid}>
+        {/* ---------- entradas do mês (Salário + Projetos, etc.) ---------- */}
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          <CardHeader icon={TrendingUp} title="Entradas do mês" />
+          <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
+            <Money>R$ {currency(budget.totalIncome)}</Money>
+          </div>
+          <div className={cards.chartMeta}>
+            {/* Hoje toda entrada vem de Projetos (não existe outro fluxo de
+             * receita ainda) — dizer "dos quais R$X vieram de Projetos"
+             * quando X é o total inteiro não informa nada (04/09, pedido do
+             * Luiz). Só mostra a quebra quando ela é PARCIAL — sinal de que
+             * vai fazer sentido de novo se um dia existir renda de outro
+             * lugar além de Projetos. Span sempre presente (mesmo vazio) só
+             * pra manter o layout de 2 colunas (space-between) com o delta. */}
+            <span>
+              {budget.incomeFromProjects > 0 && budget.incomeFromProjects < budget.totalIncome ? (
+                <>
+                  dos quais <Money>R$ {currency(budget.incomeFromProjects)}</Money> vieram de Projetos
+                </>
+              ) : budget.incomeFromProjects === 0 && budget.totalIncome > 0 ? (
+                'nenhum recebimento de Projetos esse mês'
+              ) : (
+                ''
+              )}
+            </span>
+            <MonthDelta current={budget.totalIncome} previous={budget.previousTotalIncome} />
+          </div>
+          {/* Histórico de entrada por mês — Luiz pediu pra visualizar o
+           * ritmo mês a mês, não só o total do mês navegado isolado (04/09). */}
+          {budget.incomeByMonth.length >= 2 && (
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <h4 className={styles.chartLabel}>Por mês</h4>
+              <SmoothLineChart
+                values={budget.incomeByMonth.map((m) => m.value)}
+                labels={budget.incomeByMonth.map((m) => m.label)}
+                gradientId="incomeByMonthGradient"
+                className={cards.evolutionChart}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ---------- total do mês: pizza de onde o dinheiro foi ---------- */}
+        {/* Lado a lado com "Gasto diário" (esquerda, coluna 1.3fr) — pedido
+         * do Luiz, 04/09. */}
+        <div className={cards.card}>
+          <CardHeader
+            icon={PieChart}
+            title="Onde meu dinheiro foi este mês"
+            action={
+              <div className={styles.headerActions}>
+                <button className={styles.copyBtn} onClick={copyPreviousMonth} disabled={copying}>
+                  <Copy size={13} strokeWidth={2} />
+                  Copiar mês anterior
+                </button>
+                <button className={styles.reviewBtn} onClick={() => setShowReview(true)}>
+                  <ListChecks size={13} strokeWidth={2} />
+                  Revisar orçamento
+                </button>
+              </div>
+            }
+          />
+          <div className={cards.heroValue} style={{ fontSize: '1.6rem' }}>
+            <SpentPlannedValue spent={budget.totalSpent} planned={budget.totalPlanned} suffix="planejado" />
+          </div>
+          <div className={cards.chartMeta}>
+            <span>
+              {budget.categories.length} categorias com meta
+              {budget.totalProjected > 0 && (
+                <>
+                  {' · dos quais '}
+                  <Money>R$ {currency(budget.totalProjected)}</Money> <ProjectedTag />
+                </>
+              )}
+            </span>
+          </div>
+          {pieData.length > 0 ? (
+            <div style={{ marginTop: 'var(--space-5)' }}>
+              <ClientPieChart data={pieData} />
+            </div>
+          ) : (
+            <div className={cards.emptyState}>Nenhum gasto categorizado ainda esse mês.</div>
+          )}
+        </div>
+
+        {/* ---------- gasto diário ---------- */}
+        {/* Lado a lado com "Onde meu dinheiro foi" (direita, coluna 1fr). */}
+        <div className={cards.card}>
+          <CardHeader
+            icon={Target}
+            title="Gasto diário"
+            action={
+              <Link to="/configuracoes" className={styles.copyBtn}>
+                <SettingsIcon size={13} strokeWidth={2} />
+                Editar meta em Configurações
+              </Link>
+            }
+          />
+          <div className={cards.dailyGoalTop}>
+            <div>
+              <div className={cards.heroLabel}>{dailySpendLabel}</div>
+              <div className={cards.heroValue}>
+                {/* Estourou a meta diária — só o ícone acusa, o número
+                    continua preto (pedido do Luiz, 11/09). */}
+                <Money>R$ {currency(displaySpend)}</Money>
+                {budget.dailyGoal != null && displaySpend > budget.dailyGoal && <OverBudgetIcon />}
+              </div>
+            </div>
+            <div className={cards.dailyGoalMeta}>
+              <span className={cards.heroLabel}>Meta diária</span>
+              <span style={{ fontWeight: 600 }}>
+                {budget.dailyGoal != null ? <Money>{`R$ ${currency(budget.dailyGoal)}`}</Money> : 'não definida'}
+              </span>
+            </div>
+          </div>
+          {budget.dailyGoal != null && (
+            <div className={cards.progressTrack} style={{ marginTop: 'var(--space-3)' }}>
+              <div
+                className={cards.progressFill}
+                style={{ width: `${Math.min((displaySpend / budget.dailyGoal) * 100, 100)}%`, background: 'var(--accent)' }}
+              />
+            </div>
+          )}
+          <div className={cards.chartMeta}>
+            <span>
+              {diff === null ? (
+                'defina uma meta diária pra acompanhar'
+              ) : diff >= 0 ? (
+                <>
+                  <Money>R$ {currency(diff)}</Money> abaixo da meta{isShowingToday ? ' hoje' : ''}
+                </>
+              ) : (
+                <>
+                  <Money>R$ {currency(-diff)}</Money> acima da meta{isShowingToday ? ' hoje' : ''}
+                </>
+              )}
+            </span>
+            <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
+          </div>
+          <div style={{ marginTop: 'var(--space-5)' }}>
+            <div className={styles.chartLabelRow}>
+              <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                Neste mês
+              </h4>
+              {/* Duas formas de ver o MESMO `daysThisMonth" (15/09, pedido do
+                  Luiz: "quero ver quais dias fiquei abaixo da meta e quais
+                  fiquei fora, visualmente... pode ser no mesmo box, duas
+                  formas de visualizar"). Troca é só de estado local, sem
+                  recarregar nada — o array já veio do backend inteiro. */}
+              <div className={cards.dailyViewToggle}>
+                <button
+                  type="button"
+                  className={`${cards.dailyViewToggleBtn} ${dailyView === 'chart' ? cards.dailyViewToggleBtnActive : ''}`}
+                  onClick={() => setDailyView('chart')}
+                  aria-label="Ver como gráfico"
+                  aria-pressed={dailyView === 'chart'}
+                >
+                  <LineChartIcon size={14} strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  className={`${cards.dailyViewToggleBtn} ${dailyView === 'calendar' ? cards.dailyViewToggleBtnActive : ''}`}
+                  onClick={() => setDailyView('calendar')}
+                  aria-label="Ver como calendário"
+                  aria-pressed={dailyView === 'calendar'}
+                >
+                  <CalendarDays size={14} strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+            {dailyView === 'chart' ? (
+              <SmoothLineChart
+                values={budget.daysThisMonth.map((d) => d.amount)}
+                labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
+                threshold={budget.dailyGoal ?? undefined}
+                gradientId="orcamentoDailyGradient"
+                className={cards.evolutionChart}
+                markedIndex={markedDayIndex}
+                breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
+              />
+            ) : (
+              <DailySpendCalendar days={budget.daysThisMonth} />
+            )}
+          </div>
+          {/* Dia com parcela futura comprometida (ainda não confirmada pela
+              Pluggy) já entra na barra do dia certo — marca aqui pra não
+              parecer gasto "do nada" (pedido do Luiz, 09/09: "no dia 3 tem
+              a parcela da bike pra cair"). */}
+          {budget.daysThisMonth.some((d) => d.projected > 0) && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>Inclui parcela(s) de cartão já comprometida(s), ainda não confirmada(s) pela Pluggy</span>
+            </div>
+          )}
+          {budget.daysWithGoalThisMonth > 0 && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>
+                {budget.daysUnderGoalThisMonth} de {budget.daysWithGoalThisMonth} dia
+                {budget.daysWithGoalThisMonth === 1 ? '' : 's'} abaixo da meta esse mês
+              </span>
+            </div>
+          )}
+          {/* "Quanto economizei" (15/09, pedido do Luiz: "vou saber o quanto
+              estou economizando nos meses") — soma do que sobrou em todo dia
+              abaixo da meta. Só aparece com economia de verdade (>0); sem
+              meta cadastrada nenhum dia, `dailyGoalSavedThisMonth` já vem 0. */}
+          {budget.dailyGoalSavedThisMonth > 0 && (
+            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
+              <span>
+                economizou <Money>R$ {currency(budget.dailyGoalSavedThisMonth)}</Money> esse mês
+              </span>
+              {budget.dailyGoalSavedLastMonth > 0 && (
+                <MonthDelta current={budget.dailyGoalSavedThisMonth} previous={budget.dailyGoalSavedLastMonth} higherIsBetter />
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ---------- cartões de crédito ---------- */}
+        {cardsList.length > 0 && (
+          <div className={`${cards.card} ${cards.fullWidth}`}>
+            <CardHeader icon={CreditCardIcon} title="Cartões de crédito" />
+            <div className={styles.cardsGrid}>
+              {cardsList.map((c) => {
+                const hasLimit = c.creditLimit != null && c.creditLimit > 0
+                const pct = hasLimit ? (c.usedAmount / c.creditLimit!) * 100 : 0
+                return (
+                  <div key={c.broker + c.name} className={styles.creditCardTile}>
+                    <div className={styles.creditCardHeader}>
+                      <span className={styles.creditCardName}>{c.broker}</span>
+                      <div className={styles.creditCardBadges}>
+                        {c.brand && <span className={styles.creditCardBrand}>{c.brand}</span>}
+                        {c.estimated && <span className={styles.estimatedTag}>estimado</span>}
+                      </div>
+                    </div>
+                    <div className={cards.heroValue} style={{ fontSize: '1.2rem' }}>
+                      <Money>R$ {currency(c.usedAmount)}</Money>
+                    </div>
+                    {c.estimated && (
+                      <p className={styles.estimatedNote}>
+                        Projeção a partir do usado de hoje e das parcelas dessa fatura que vencem até este mês — o
+                        banco não informa o "usado" de um mês diferente do atual, pode não bater exato quando o mês
+                        chegar.
+                      </p>
+                    )}
+                    {hasLimit && (
+                      <>
+                        <div className={cards.chartMeta}>
+                          <span>de <Money>R$ {currency(c.creditLimit!)}</Money></span>
+                          <span><Money>R$ {currency(c.availableLimit!)}</Money> livre</span>
+                        </div>
+                        <div className={`${cards.progressTrack} ${styles.creditLimitTrack}`} style={{ marginTop: 'var(--space-2)' }}>
+                          <div
+                            className={cards.progressFill}
+                            style={{ width: `${Math.min(pct, 100)}%`, background: pct > 90 ? 'var(--danger)' : 'var(--accent)' }}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {(c.dueDate || c.minimumPayment != null) && (
+                      <div className={styles.creditCardFooter}>
+                        {c.dueDate && <span>vencimento {new Date(c.dueDate).toLocaleDateString('pt-BR')}</span>}
+                        {c.minimumPayment != null && <span>mínimo <Money>R$ {currency(c.minimumPayment)}</Money></span>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ---------- parcelas futuras (compromissos) ---------- */}
+        {upcoming && (upcoming.installments.length > 0 || upcoming.byMonth.length > 0) && displayedInstallments && (
+          <div className={`${cards.card} ${cards.fullWidth}`}>
+            <CardHeader
+              icon={CalendarClock}
+              title="Comprometido em parcelas futuras"
+              action={
+                <button className={styles.reviewBtn} onClick={() => setShowInstallmentReview(true)}>
+                  <ListChecks size={13} strokeWidth={2} />
+                  Revisar parcelas
+                </button>
+              }
+            />
+            <div className={cards.heroValue} style={{ fontSize: '1.4rem' }}>
+              <Money>R$ {currency(displayedInstallments.total)}</Money>
+            </div>
+            <div className={cards.chartMeta}>
+              <span>
+                {displayedInstallments.installments.length} parcela(s) a vencer em{' '}
+                {formatMonthLabel(selectedInstallmentPeriod.month, selectedInstallmentPeriod.year)}, de compras já
+                feitas
+              </span>
+            </div>
+            <p className={styles.upcomingDisclaimer}>
+              Este total é independente do "usado" mostrado em Cartões de crédito — cada cartão trava limite de um
+              jeito diferente pra parcelamento, não necessariamente o valor restante inteiro de uma vez.
+            </p>
+            {upcoming.byMonth.length > 1 && (
+              <>
+                <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
+                  Por mês
+                </h4>
+                <Carousel
+                  items={upcoming.byMonth}
+                  perPage={6}
+                  keyExtractor={(m) => `${m.year}-${m.month}`}
+                  className={styles.upcomingByMonth}
+                  renderItem={(m) => {
+                    const active = m.month === selectedInstallmentPeriod.month && m.year === selectedInstallmentPeriod.year
+                    return (
+                      <button
+                        type="button"
+                        className={`${styles.upcomingMonthChip} ${active ? styles.upcomingMonthChipActive : ''}`}
+                        onClick={() => selectInstallmentMonth(m.month, m.year)}
+                      >
+                        <span>{formatMonthLabel(m.month, m.year)}</span>
+                        <strong><Money>R$ {currency(m.amount)}</Money></strong>
+                      </button>
+                    )
+                  }}
+                />
+              </>
+            )}
+            <h4 className={styles.chartLabel} style={{ marginTop: 'var(--space-5)' }}>
+              Por cartão
+            </h4>
+            <div className={styles.upcomingByMonth}>
+              {displayedInstallments.byCard.map((c) => (
+                <div key={c.card} className={styles.upcomingMonthChip}>
+                  <span>{c.card}</span>
+                  <strong><Money>R$ {currency(c.amount)}</Money></strong>
+                </div>
+              ))}
+            </div>
+            {/* "Terminam neste mês" (24/09, pedido do Luiz: "quais são as
+                parcelas que acabam no mês... quais são elas e o valor total")
+                — compras cuja ÚLTIMA parcela vence no mês selecionado aqui
+                no box (segue o carrossel "Por mês"). O total é dito como o
+                que deixa de sair a partir do mês seguinte, que é o que
+                interessa na prática. */}
+            {displayedInstallments.ending.length > 0 && (() => {
+              const { month: m, year: y } = selectedInstallmentPeriod
+              const next = m === 12 ? { month: 1, year: y + 1 } : { month: m + 1, year: y }
+              const count = displayedInstallments.ending.length
+              return (
+                <div className={styles.subBlock}>
+                  <div className={styles.subBlockHeader}>
+                    <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                      Terminam em {formatMonthLabel(m, y)}
+                    </h4>
+                    <span className={styles.endingSummary}>
+                      {count} compra{count === 1 ? '' : 's'} ·{' '}
+                      <strong><Money>R$ {currency(displayedInstallments.endingTotal)}</Money></strong> a menos por mês a
+                      partir de {formatMonthLabel(next.month, next.year)}
+                    </span>
+                  </div>
+                  <ul className={styles.endingList}>
+                    {displayedInstallments.ending.map((i) => (
+                      <li key={i.id} className={styles.endingRow}>
+                        <span className={styles.endingName}>
+                          {i.note ?? i.description}
+                          {i.installmentNumber && i.totalInstallments ? (
+                            <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} />
+                          ) : null}
+                          {i.cardLabel && <span className={styles.endingCard}>{i.cardLabel}</span>}
+                        </span>
+                        <span className={styles.endingValue}>
+                          <Money>R$ {currency(i.amount)}</Money>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
+            {/* Lista das parcelas do mês dentro de um box próprio (25/09,
+                pedido do Luiz: "deixa as parcelas dentro de um box com o
+                título 'Parcelas de setembro', igual 'Terminam em set/26' —
+                assim ficou muito solto"). Mesmo `.subBlock` da seção acima. */}
+            <div className={styles.subBlock}>
+            <div className={styles.subBlockHeader}>
+              <h4 className={styles.chartLabel} style={{ margin: 0 }}>
+                Parcelas de {MONTH_NAMES_FULL[selectedInstallmentPeriod.month - 1]}
+                {selectedInstallmentPeriod.year !== now.getFullYear() ? ` de ${selectedInstallmentPeriod.year}` : ''}
+              </h4>
+              <span className={styles.subBlockSummary}>
+                {displayedInstallments.installments.length} parcela{displayedInstallments.installments.length === 1 ? '' : 's'} ·{' '}
+                <strong><Money>R$ {currency(displayedInstallments.total)}</Money></strong>
+              </span>
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Vencimento</th>
+                    <th>Descrição</th>
+                    <th>Parcela</th>
+                    <th>Cartão</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedInstallments.installments.map((i) => (
+                    <tr key={i.id}>
+                      <td>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</td>
+                      <td>
+                        {i.note ? (
+                          <>
+                            {i.note}
+                            <div className={styles.installmentRawName}>{i.description}</div>
+                          </>
+                        ) : (
+                          i.description
+                        )}
+                      </td>
+                      <td>{i.installmentNumber && i.totalInstallments ? <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} /> : '—'}</td>
+                      <td>{i.cardLabel ?? '—'}</td>
+                      <td>{i.category ?? '—'}</td>
+                      <td><Money>R$ {currency(i.amount)}</Money></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Tela estreita (pedido do Luiz, 07/09): tabela vira célula por
+                célula, uma por linha — "não por colunas e linhas, assim não
+                precisamos do scroll" (horizontal). Mesma lista de dados, só
+                a apresentação muda; alternado via CSS (ver .tableWrap/
+                .installmentCards em Orcamento.module.css), sem duplicar
+                busca nenhuma. */}
+            <div className={styles.installmentCards}>
+              {displayedInstallments.installments.map((i) => (
+                <div key={i.id} className={styles.installmentCard}>
+                  <div className={styles.installmentCardTop}>
+                    <span className={styles.installmentCardTitle}>{i.note ?? i.description}</span>
+                    <span className={styles.installmentCardValue}><Money>R$ {currency(i.amount)}</Money></span>
+                  </div>
+                  {i.note && <div className={styles.installmentRawName}>{i.description}</div>}
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Vencimento</span>
+                    <span>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Parcela</span>
+                    <span>{i.installmentNumber && i.totalInstallments ? <InstallmentBadge number={i.installmentNumber} total={i.totalInstallments} /> : '—'}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Cartão</span>
+                    <span>{i.cardLabel ?? '—'}</span>
+                  </div>
+                  <div className={styles.installmentCardRow}>
+                    <span className={styles.installmentCardLabel}>Categoria</span>
+                    <span>{i.category ?? '—'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- categorias, uma coluna por kind, agrupadas por pai ---------- */}
+        <div className={`${cards.fullWidth} ${styles.categoryColumns}`}>
+          {KIND_SECTIONS.map(({ kind, title }) => {
+            const items = budget.categories.filter((c) => c.kind === kind)
+            const totalPlanned = items.reduce((s, c) => s + c.planned, 0)
+            const totalSpent = items.reduce((s, c) => s + c.spent, 0)
+
+            const groups = new Map<string, BudgetCategory[]>()
+            for (const item of items) {
+              const key = item.parentName ?? 'Outras'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key)!.push(item)
+            }
+            const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+
+            return (
+              <div key={kind} className={cards.card}>
+                <h3 className={styles.groupTitle}>{title}</h3>
+                {items.length > 0 && (
+                  <div className={styles.kindSummary}>
+                    <div>
+                      <span className={styles.kindSummaryLabel}>Previsto</span>
+                      <span className={styles.kindSummaryValue}><Money>R$ {currency(totalPlanned)}</Money></span>
+                    </div>
+                    <div>
+                      <span className={styles.kindSummaryLabel}>Gasto</span>
+                      <span className={styles.kindSummaryValue}><Money>R$ {currency(totalSpent)}</Money></span>
+                    </div>
+                  </div>
+                )}
+                {items.length === 0 && (
+                  <div className={cards.emptyState}>
+                    Nenhuma meta de {title.toLowerCase()} pra {MONTH_NAMES[month - 1]}/{year}.
+                  </div>
+                )}
+                {sortedGroups.map(([parentName, groupItems]) => (
+                  <ParentAccordion key={parentName} parentName={parentName} items={groupItems} onOpen={setBreakdown} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className={`${cards.card} ${cards.fullWidth}`}>
+          {(() => {
+            // Bancos com transação nesse mês, ordenado por nome — não vem de
+            // um cadastro de corretoras à parte, só o que aparece na lista
+            // carregada (14/09, pedido do Luiz: "filtro pra ver quando vem
+            // de banco específico").
+            const bankMap = new Map<string, string>()
+            let hasNoBank = false
+            for (const t of transactions) {
+              if (t.broker) bankMap.set(t.broker.id, t.broker.name)
+              else hasNoBank = true
+            }
+            const bankOptions = [...bankMap.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+            const visibleTransactions = !bankFilter
+              ? transactions
+              : bankFilter === '__none__'
+                ? transactions.filter((t) => !t.broker)
+                : transactions.filter((t) => t.broker?.id === bankFilter)
+
+            return (
+              <>
+                <CardHeader
+                  icon={ListChecks}
+                  title="Todas as transações do mês"
+                  action={
+                    (bankOptions.length > 0 || hasNoBank) && (
+                      <Select
+                        aria-label="Filtrar por banco"
+                        value={bankFilter}
+                        onChange={(e) => setBankFilter(e.target.value)}
+                        style={{ width: 'auto', minWidth: 150, height: 32, fontSize: '12.5px' }}
+                      >
+                        <option value="">Todos os bancos</option>
+                        {bankOptions.map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                        {hasNoBank && <option value="__none__">Sem banco</option>}
+                      </Select>
+                    )
+                  }
+                />
+                <p className={styles.transactionsHelperText}>
+                  Clique numa transação pra corrigir categoria ou adicionar uma nota.
+                </p>
+                {visibleTransactions.length === 0 && (
+                  <div className={cards.emptyState}>
+                    {transactions.length === 0
+                      ? `Nenhuma transação em ${MONTH_NAMES[month - 1]}/${year}.`
+                      : 'Nenhuma transação desse banco nesse mês.'}
+                  </div>
+                )}
+                {visibleTransactions.map((t) => (
+                  <button
+                    type="button"
+                    key={t.id}
+                    className={`${cards.listRow} ${cards.listRowButton}`}
+                    onClick={() => setSelectedTransaction(t)}
+                  >
+                    <div className={cards.listIcon}>💳</div>
+                    <div className={cards.listBody}>
+                      <div className={cards.listTitle}>
+                        {t.description}
+                        {t.awaitingPluggyMatch && <span className={cards.pendingPill}>pendente</span>}
+                        {/* Compra parcelada (08/09) — mesmo indicador do modal
+                            "Compras sem categoria", pra não sumir aqui também. */}
+                        <InstallmentBadge number={t.installmentNumber} total={t.totalInstallments} />
+                      </div>
+                      <div className={cards.listSub}>
+                        {formatDayLabel(t.date.slice(0, 10))}
+                        {t.broker && ` · ${t.broker.name}`}
+                        {' · '}
+                        {t.isTransfer
+                          ? 'Transferência'
+                          : t.type === 'income'
+                            ? 'Receita de projeto'
+                            : t.splits.length > 0
+                              ? `Dividida em ${t.splits.length} categorias`
+                              : t.categoryPath || 'Sem categoria'}
+                        {/* Nota livre (08/09) — só leitura aqui, edição é no clique
+                            da linha (modal). */}
+                        {t.note && ` · "${t.note}"`}
+                      </div>
+                    </div>
+                    <div className={cards.listValue}>
+                      <Money>R$ {currency(t.amount)}</Money>
+                    </div>
+                  </button>
+                ))}
+              </>
+            )
+          })()}
+        </div>
+      </div>
+
+      {selectedTransaction && (
+        <TransactionEditModal
+          transaction={selectedTransaction}
+          categories={leafCategories}
+          onClose={() => setSelectedTransaction(null)}
+          onSaved={() => {
+            setSelectedTransaction(null)
+            loadTransactions()
+          }}
+        />
+      )}
+
+      {showReview && (
+        <BudgetReviewModal
+          month={month}
+          year={year}
+          onClose={() => setShowReview(false)}
+          onSaved={() => {
+            setShowReview(false)
+            load()
+          }}
+        />
+      )}
+
+      {showInstallmentReview && (
+        <InstallmentReviewModal
+          onClose={() => {
+            setShowInstallmentReview(false)
+            loadCardsAndUpcoming()
+          }}
+        />
+      )}
+
+      <button className={cards.fab} aria-label="Lançar gasto manual" onClick={() => setShowAddTransaction(true)}>
+        <Plus size={22} strokeWidth={2} />
+      </button>
+
+      {showAddTransaction && (
+        <TransactionModal
+          onClose={() => setShowAddTransaction(false)}
+          onSaved={() => {
+            setShowAddTransaction(false)
+            load()
+          }}
+        />
+      )}
+
+      {breakdown && (
+        <CategoryBreakdownModal
+          title={breakdown.title}
+          categoryIds={breakdown.categoryIds}
+          planned={breakdown.planned}
+          month={month}
+          year={year}
+          onClose={() => setBreakdown(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Uma categoria-mãe (Moradia, Transporte...) em accordion — fechada mostra só
+ * o total agregado das filhas, aberta lista cada uma. Fechado por padrão:
+ * ~80 folhas juntas listadas de uma vez era ilegível, aqui só abre quem
+ * interessa no momento. */
+type BreakdownSel = { title: string; categoryIds: string[]; planned: number }
+
+function ParentAccordion({
+  parentName,
+  items,
+  onOpen,
+}: {
+  parentName: string
+  items: BudgetCategory[]
+  onOpen: (sel: BreakdownSel) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const planned = items.reduce((s, c) => s + c.planned, 0)
+  const spent = items.reduce((s, c) => s + c.spent, 0)
+  const spentProjected = items.reduce((s, c) => s + c.spentProjected, 0)
+  // Sem `planned > 0` no gate (11/09, achado pelo Luiz): categoria com meta
+  // planejada de R$0,00 e gasto real > 0 estourou tanto quanto (ou mais que)
+  // uma com meta positiva — "planned" aqui já vem de um `BudgetTarget`
+  // que EXISTE pra esse mês (0 é um valor real, "não planejei gastar nada
+  // aqui", não "sem meta cadastrada"). `spent > planned` sozinho já cobre
+  // os dois casos (0/0 continua sem alerta, > 0/0 passa a alertar).
+  const isOver = spent > planned
+
+  return (
+    <div className={`${styles.accordion} ${open ? styles.accordionOpen : ''}`}>
+      <button className={styles.accordionHeader} onClick={() => setOpen((v) => !v)}>
+        <span className={styles.accordionToggle}>{open ? <Minus size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}</span>
+        <span className={styles.accordionName}>
+          {parentName}
+          {spentProjected > 0 && <ProjectedTag />}
+          {isOver && <OverBudgetIcon />}
+        </span>
+        <span className={styles.categoryRowValues}>
+          <SpentPlannedValue spent={spent} planned={planned} />
+        </span>
+      </button>
+      {open && (
+        <div className={styles.accordionBody}>
+          {items.map((item) => (
+            <CategoryRow key={item.categoryId} item={item} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Meta editável só pelo modal "Revisar orçamento" agora — essa linha é só
+ * leitura (nome, gasto/meta, comparação com mês anterior). Sem barra — dentro
+ * da meta fica silenciosa, só ganha destaque (ícone + fundo) quando estoura. */
+function CategoryRow({
+  item,
+  onOpen,
+}: {
+  item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number }
+  onOpen: (sel: BreakdownSel) => void
+}) {
+  // Ver comentário equivalente em `ParentAccordion` acima — mesmo fix.
+  const isOver = item.spent > item.planned
+  return (
+    <button
+      type="button"
+      className={`${styles.categoryRow} ${styles.categoryRowButton}`}
+      onClick={() => onOpen({ title: item.name, categoryIds: [item.categoryId], planned: item.planned })}
+    >
+      <div className={styles.categoryRowTop}>
+        <span className={styles.categoryRowName}>
+          {item.name}
+          {/* Parcela futura já comprometida, contando no gasto sem a Pluggy
+              ter confirmado ainda (09/09) — marca visualmente que uma fatia
+              desse valor ainda não é dado real. */}
+          {item.spentProjected > 0 && <ProjectedTag />}
+          {isOver && <OverBudgetIcon />}
+        </span>
+        <span className={styles.categoryRowValues}>
+          <SpentPlannedValue spent={item.spent} planned={item.planned} />
+        </span>
+      </div>
+      <div className={cards.deltaRow}>
+        <MonthDelta current={item.spent} previous={item.previousSpent} higherIsBetter={false} />
+      </div>
+    </button>
+  )
+}

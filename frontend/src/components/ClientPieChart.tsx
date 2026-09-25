@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Money } from './Money'
 import styles from './ClientPieChart.module.css'
 
 // Paleta categórica própria — evita verde/vermelho de propósito, essas cores
@@ -42,7 +43,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
   return (
     <div className={styles.wrap}>
       <div className={styles.svgBox}>
-        <svg viewBox="0 0 160 160" width="160" height="160">
+        <svg viewBox="0 0 160 160">
           {slices.map((s, i) => (
             <path
               key={s.label}
@@ -60,7 +61,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
           <div className={styles.tooltip}>
             <div className={styles.tooltipLabel}>{active.label}</div>
             <div className={styles.tooltipValue}>
-              R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <Money>R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Money>
             </div>
             <div className={styles.tooltipLabel}>{((active.value / total) * 100).toFixed(0)}%</div>
           </div>
@@ -79,7 +80,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
             <span className={styles.legendDot} style={{ background: s.color }} />
             <span className={styles.legendName}>{s.label}</span>
             <span className={styles.legendValue}>
-              R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <Money>R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Money>
             </span>
           </div>
         ))}

@@ -1,0 +1,707 @@
+/* overlay/sheet/header/headerActions/title vêm do ModalShell compartilhado
+   (11/09) — inclusive o suporte a impressão (`printable`, ver
+   ModalShell.module.css). Aqui só o que é específico dessa modal. */
+
+.loading {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+/* Mês/ano vem em minúsculo de `MONTH_NAMES_FULL` — capitaliza só aqui, não
+   no `.title` compartilhado do ModalShell (isso afetaria todo título de
+   toda modal do app). */
+.reportTitle {
+  text-transform: capitalize;
+}
+
+.pdfBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.pdfBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.pdfBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.printTitle {
+  display: none;
+}
+
+.block {
+  margin-bottom: var(--space-6);
+}
+
+.block:last-of-type {
+  margin-bottom: 0;
+}
+
+.blockTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-4);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 480px) {
+  .statGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--fill-muted);
+  border-radius: var(--r-sm);
+  padding: var(--space-3);
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.statValue {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.projectedNote {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.splitRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.emptyNote {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+.chartWrap {
+  margin-top: var(--space-4);
+}
+
+.highlight {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: var(--space-3) 0 0;
+}
+
+.highlight strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* "Projetos entregues" (15/09) — mesma hierarquia visual de `.blockTitle`
+   (rótulo pequeno, maiúsculo), um nível abaixo (não uppercase, não tão
+   destacado) por ser um sub-título DENTRO do bloco "Projetos", não um bloco
+   novo. */
+.subBlockTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.deliveredList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.deliveredRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.deliveredRow:first-child {
+  border-top: none;
+}
+
+/* ---------- páginas do relatório (21/09) ---------- */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--fill-muted);
+  border-radius: var(--r-full);
+  padding: 3px;
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+  /* Fixas no topo da área rolável — trocar de página sem rolar de volta. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* `.content` do ModalShell é flex column: sem isso a barra (overflow-x:auto)
+     encolhia até sobrar só o padding (6px) e os botões sumiam. */
+  flex-shrink: 0;
+}
+
+.calendarWrap {
+  max-width: 420px;
+  margin-top: var(--space-4);
+}
+
+.tab {
+  flex: 1;
+  min-width: max-content;
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: none;
+  background: none;
+  border-radius: var(--r-full);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.page {
+  display: none;
+}
+
+.pageActive {
+  display: block;
+}
+
+.pageTitle {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-5);
+}
+
+/* ---------- boxes e destaques (21/09, redesenho do layout) ----------
+   Hierarquia: .pageTitle (20px) > .boxTitle (14px, tinta cheia) > .subTitle
+   (11.5px maiúsculo, tinta suave). Antes tudo era o mesmo texto cinza
+   grudado ("não tem hierarquia... está tudo confuso e misturado"). */
+.box {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.boxHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  color: var(--ink-soft);
+}
+
+.boxTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.subBox {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+.subTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-3);
+}
+
+/* Destaques: fundo azul clarinho, sempre o primeiro bloco da página. */
+.highlights {
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.highlights .boxHeader,
+.highlights .boxTitle {
+  color: var(--accent);
+}
+
+.highlightGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+@media (max-width: 520px) {
+  .highlightGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.highlightItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.highlightLabel {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.highlightValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: var(--space-3) 0 0;
+}
+
+.note strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Dias acima/abaixo da meta — mesmas cores de sempre (success/danger). */
+.dayChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dayChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dayChip strong {
+  font-size: 12.5px;
+}
+
+.dayChipUnder {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.dayChipOver {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Proventos: uma coluna por tipo de ativo. */
+.dividendsTable th,
+.dividendsTable td {
+  text-align: left !important;
+  vertical-align: top;
+  white-space: normal !important;
+}
+
+.dividendsTable tfoot td {
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.dividendCell {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.twoCols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (min-width: 720px) {
+  .twoCols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.chartCaption {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin: var(--space-2) 0 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th:not(:first-child),
+.table td:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.groupRow td {
+  font-weight: 600;
+  background: var(--fill-muted);
+}
+
+.leafRow td:first-child {
+  padding-left: var(--space-5);
+  color: var(--ink-soft);
+}
+
+.moverList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moverRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.moverRow:first-child {
+  border-top: none;
+}
+
+.moverType {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  margin-left: 4px;
+}
+
+.goalRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-2);
+}
+
+.goalRow strong {
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.goalTrack {
+  height: 8px;
+  background: var(--fill-muted);
+  border-radius: var(--r-bar);
+  overflow: hidden;
+}
+
+.goalFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-bar);
+}
+
+/* ---------- modo compacto do PDF (21/09) ----------
+   Ligado por JS (`beforeprint`, ver MonthlyReportModal.tsx) em vez de só
+   `@media print`, porque a MESMA regra precisa valer na hora de MEDIR cada
+   página (pra calcular o zoom que faz caber numa folha A4). Larguras de
+   grade forçadas: a media query de 720px não pega no papel (190mm ≈ 718px). */
+.printMode .pageTitle {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.printMode .box,
+.printMode .highlights {
+  padding: 8px 12px 10px;
+  margin-bottom: 8px;
+}
+
+.printMode .boxHeader {
+  margin-bottom: 6px;
+}
+
+.printMode .boxTitle {
+  font-size: 12px;
+}
+
+.printMode .subBox {
+  padding: 6px 10px 8px;
+  margin-top: 6px;
+}
+
+.printMode .subTitle {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.printMode .statGrid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.printMode .stat {
+  padding: 6px 8px;
+}
+
+.printMode .statValue {
+  font-size: 12.5px;
+}
+
+.printMode .statLabel,
+.printMode .highlightLabel {
+  font-size: 9.5px;
+}
+
+.printMode .highlightValue {
+  font-size: 11.5px;
+}
+
+.printMode .highlightGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+}
+
+.printMode .twoCols {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.printMode .table,
+.printMode .moverRow,
+.printMode .deliveredRow,
+.printMode .note {
+  font-size: 9.5px;
+}
+
+.printMode .table th,
+.printMode .table td {
+  padding: 2px 6px;
+}
+
+.printMode .moverRow,
+.printMode .deliveredRow {
+  padding: 3px 0;
+}
+
+.printMode .dayChip {
+  padding: 2px 7px;
+  font-size: 9.5px;
+}
+
+.printMode .dayChips {
+  gap: 4px;
+}
+
+.printMode .emptyNote,
+.printMode .chartCaption {
+  font-size: 10px;
+}
+
+/* Tabela de categorias do PDF: só no modo compacto, em 2 colunas. */
+.printCols {
+  display: none;
+}
+
+.printMode .printHide {
+  display: none;
+}
+
+.printMode .twoCols:has(> .printHide) {
+  grid-template-columns: 1fr;
+}
+
+.printMode .screenOnly {
+  display: none;
+}
+
+.printMode .printCols {
+  display: block;
+  column-count: 2;
+  column-gap: 12px;
+}
+
+.printMode .printCols .table {
+  break-inside: avoid;
+  margin-bottom: 6px;
+}
+
+/* Ícone de estouro e tag "projetado" menores no PDF — inflavam a altura de
+   cada linha da tabela (22px em vez de ~13px). */
+.printMode .printCols [class*='overBudgetIcon'] {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.printMode .printCols [class*='overBudgetIcon'] svg {
+  width: 8px;
+  height: 8px;
+}
+
+.printMode .printCols [class*='projected'] {
+  font-size: 8px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+.printMode .printCols .table td {
+  line-height: 1.25;
+}
+
+/* Ranking em 2 colunas no PDF. */
+.printMode .rankCols > div {
+  display: block; /* a lista original é flex column — colunas CSS não valem nela */
+  column-count: 2;
+  column-gap: 14px;
+}
+
+.printMode .rankCols > div > div {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+
+.printMode .printCols .table th,
+.printMode .printCols .table td {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+/* ---------- impressão / "baixar PDF" via window.print() ----------
+   Esconder/reposicionar overlay+sheet é genérico, já vem do ModalShell
+   (`printable`) — aqui só o que é específico DESSE conteúdo. */
+@media print {
+  .printTitle {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 var(--space-5);
+    text-transform: capitalize;
+  }
+
+  .stat {
+    background: none;
+    border: 1px solid var(--border);
+  }
+
+  .subBox,
+  .highlights {
+    break-inside: avoid;
+  }
+
+  /* Cores de fundo (destaques, chips) precisam sair no papel. */
+  .highlights,
+  .dayChip {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* PDF: todas as páginas saem, cada uma começando numa folha nova; abas não. */
+  .tabs {
+    display: none !important;
+  }
+
+  .page {
+    display: block !important;
+    break-before: page;
+    break-inside: avoid;
+  }
+
+  .page:first-of-type {
+    break-before: auto;
+  }
+}

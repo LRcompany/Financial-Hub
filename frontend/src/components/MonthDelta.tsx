@@ -6,6 +6,8 @@ interface MonthDeltaProps {
   previous: number
   /** true = quanto maior, melhor (ex: recebido). false = quanto maior, pior (ex: imposto pago). */
   higherIsBetter?: boolean
+  /** Só seta + %, sem o "vs. mês anterior" — pra lista com muitas linhas. */
+  compact?: boolean
 }
 
 /**
@@ -13,7 +15,7 @@ interface MonthDeltaProps {
  * com o mês anterior. A cor da seta segue a direção real da mudança;
  * `higherIsBetter` existe só pra decidir se sobe = seta verde ou vermelha.
  */
-export function MonthDelta({ current, previous, higherIsBetter = true }: MonthDeltaProps) {
+export function MonthDelta({ current, previous, higherIsBetter = true, compact = false }: MonthDeltaProps) {
   if (previous === 0) return null
   const pct = ((current - previous) / Math.abs(previous)) * 100
   const isUp = pct >= 0
@@ -26,7 +28,7 @@ export function MonthDelta({ current, previous, higherIsBetter = true }: MonthDe
       ) : (
         <ArrowDown size={12} className={isGood ? styles.good : styles.bad} />
       )}
-      {Math.abs(pct).toFixed(1)}% vs. mês anterior
+      {Math.abs(pct).toFixed(1)}%{compact ? '' : ' vs. mês anterior'}
     </span>
   )
 }

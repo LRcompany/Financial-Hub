@@ -1,0 +1,13 @@
+/* Hierarquia fixa pro par "gasto / planejado" em qualquer lugar do app
+   (pedido do Luiz, 11/09): o que já foi gasto sempre em preto/forte — nunca
+   vermelho, estourou a meta ou não, o alerta é só o ícone; o planejado é só
+   referência, sempre mais claro e mais fino. */
+.spent {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.planned {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
