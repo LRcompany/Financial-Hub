@@ -2008,6 +2008,8 @@ Ainda em aberto naquele momento: "Ganho por dia trabalhado" e "Economizado na me
 
 Verificado com servidor temporário contra `dev.db`: chips com 4 tons, calendário com nível, console limpo em aba nova. `tsc` limpo.
 
+**Deployado em produção** (backend + frontend).
+
 ### Saldo da meta diária, valor da diária e revisão do mês novo com splits/parcelas (01/10)
 
 Luiz aprovou as duas trocas propostas na revisão do relatório de setembro e reportou um bug no "Revisar orçamento" de outubro.
@@ -2017,6 +2019,8 @@ Luiz aprovou as duas trocas propostas na revisão do relatório de setembro e re
 - **Bug do "Revisar orçamento"**: `/budget-target/review` calculava o gasto do mês anterior só por `transaction.categoryId`. Ignorava a fatia de transação dividida (os R$250 do Contador vinham do Pix pro CNPJ dividido) e a parcela comprometida que a Pluggy ainda não confirmou, e ainda contava a transação dividida inteira na categoria original. `projectedSpendByCategory` e `splitSpendByCategory` saíram de dentro do `/budget-summary` para o escopo do módulo, e a revisão usa a mesma regra (com `splits: { none: {} }`). Verificado: a revisão de outubro bate com o "gasto" de setembro do Orçamento nas 81 categorias (0 divergências).
 
 Verificado com servidor temporário contra `dev.db`: relatório mostra "Saldo da meta: passou R$ 14.993,79" em vermelho; card do Orçamento mostra "passou R$ 4.549,04 da meta esse mês" em `--danger`. `tsc` limpo nos dois lados.
+
+**Deployado em produção** (backend + frontend; deploy rodado pelo Luiz).
 
 ## Decisões de navegação/IA
 
