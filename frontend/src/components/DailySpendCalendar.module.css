@@ -55,19 +55,45 @@
 }
 
 .cell-under {
-  background: var(--success-soft);
-  color: var(--success);
-  font-weight: 600;
+  --tone: var(--success);
+  --tone-soft: var(--success-soft);
 }
 
 .cell-over {
-  background: var(--danger-soft);
-  color: var(--danger);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+}
+
+/* Intensidade (01/10, pedido do Luiz: "quanto maior for o valor, mais
+   intenso será o vermelho") — nível vem de `goalIntensity()`: quanto mais
+   longe da meta, mais forte o verde/vermelho. Mesmas 2 cores de sempre,
+   só misturando o tom suave com o forte; nível 3 e 4 viram texto claro
+   (`--bg`: branco no tema claro, escuro no tema escuro) pra seguir legível. */
+.lvl1,
+.lvl2,
+.lvl3,
+.lvl4 {
+  color: var(--tone);
   font-weight: 600;
+}
+.lvl1 {
+  background: var(--tone-soft);
+}
+.lvl2 {
+  background: color-mix(in srgb, var(--tone) 30%, var(--tone-soft));
+}
+.lvl3 {
+  background: color-mix(in srgb, var(--tone) 65%, var(--tone-soft));
+  color: var(--bg);
+}
+.lvl4 {
+  background: var(--tone);
+  color: var(--bg);
 }
 
 .legend {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-4);
   margin-top: var(--space-3);
@@ -98,6 +124,17 @@
 
 .dotNeutral {
   background: var(--ink-faint);
+}
+
+.legendScale {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.legendScale span {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
 }
 
 /* Tela estreita (07/09, mesmo raciocínio já usado em outros gráficos):

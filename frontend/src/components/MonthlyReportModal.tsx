@@ -3,12 +3,13 @@ import { Download, Sparkles, PieChart, Wallet, Briefcase, Flag } from 'lucide-re
 import type { ComponentType } from 'react'
 import { api, type BudgetSummary, type WealthOverview, type ProjectsSummary, type BudgetCategory } from '../lib/api'
 import { currency } from '../lib/format'
+import { goalIntensity } from '../lib/dailyGoal'
 import { Money } from './Money'
 import { ClientPieChart } from './ClientPieChart'
 import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
-import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
+import { ProjectedTag, OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
 
@@ -204,12 +205,15 @@ function DividendsTable({ rows }: { rows: { label: string; type: string; value: 
   )
 }
 
-function DayChips({ days, tone }: { days: { date: string; amount: number }[]; tone: 'under' | 'over' }) {
+function DayChips({ days, tone }: { days: { date: string; amount: number; goal: number | null }[]; tone: 'under' | 'over' }) {
   if (days.length === 0) return <p className={styles.emptyNote}>Nenhum dia.</p>
   return (
     <div className={styles.dayChips}>
       {days.map((d) => (
-        <span key={d.date} className={`${styles.dayChip} ${tone === 'under' ? styles.dayChipUnder : styles.dayChipOver}`}>
+        <span
+          key={d.date}
+          className={`${styles.dayChip} ${tone === 'under' ? styles.dayChipUnder : styles.dayChipOver} ${d.goal != null ? styles[`lvl${goalIntensity(d.amount, d.goal)}`] : ''}`}
+        >
           <strong>{d.date.split('-')[2]}</strong>
           <Money>{`R$ ${currency(d.amount)}`}</Money>
         </span>
@@ -561,15 +565,6 @@ export function MonthlyReportModal({
                 <span>Essencial: <Money>R$ {currency(essentialSpent)}</Money></span>
                 <span>Não essencial: <Money>R$ {currency(nonEssentialSpent)}</Money></span>
               </div>
-              {budget!.biggestPurchase && (
-                <p className={styles.note}>
-                  Maior compra: <strong>{budget!.biggestPurchase.description}</strong>
-                  <InstallmentBadge number={budget!.biggestPurchase.installmentNumber} total={budget!.biggestPurchase.totalInstallments} />
-                  {' — '}
-                  <Money>R$ {currency(budget!.biggestPurchase.amount)}</Money>
-                  {budget!.biggestPurchase.category ? ` · ${budget!.biggestPurchase.category}` : ''} · {formatDate(budget!.biggestPurchase.date)}
-                </p>
-              )}
             </Box>
             </div>
 

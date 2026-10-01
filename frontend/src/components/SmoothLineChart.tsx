@@ -118,13 +118,15 @@ export function SmoothLineChart({
   const max = Math.max(...allValues)
   const range = max - min || 1
 
+  // Um ponto só (ex: dia 1º do mês, 01/10) dividia por zero e quebrava o SVG
+  // inteiro com NaN — ponto único fica na ponta direita ("hoje"), sem linha.
   const points: [number, number][] = values.map((v, i) => [
-    (i / (values.length - 1)) * width,
+    values.length > 1 ? (i / (values.length - 1)) * width : width,
     height - padY - ((v - min) / range) * (height - padY * 2),
   ])
 
   const linePath = smoothPath(points)
-  const areaPath = `${linePath} L${points[points.length - 1][0]},${height} L0,${height} Z`
+  const areaPath = linePath ? `${linePath} L${points[points.length - 1][0]},${height} L0,${height} Z` : ''
   const thresholdY = threshold !== undefined ? height - padY - ((threshold - min) / range) * (height - padY * 2) : null
   const tickIndices = pickTickIndices(points.length, maxTicks)
   // Linha do zero — só quando a série realmente cruza zero (tem negativo),

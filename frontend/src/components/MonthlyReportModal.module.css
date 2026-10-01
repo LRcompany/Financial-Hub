@@ -345,13 +345,36 @@
 }
 
 .dayChipUnder {
-  background: var(--success-soft);
-  color: var(--success);
+  --tone: var(--success);
+  --tone-soft: var(--success-soft);
 }
 
 .dayChipOver {
-  background: var(--danger-soft);
-  color: var(--danger);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+}
+
+/* Intensidade por distância da meta — mesma escala de `DailySpendCalendar`
+   (`goalIntensity()`, 01/10). */
+.lvl1,
+.lvl2,
+.lvl3,
+.lvl4 {
+  color: var(--tone);
+}
+.lvl1 {
+  background: var(--tone-soft);
+}
+.lvl2 {
+  background: color-mix(in srgb, var(--tone) 30%, var(--tone-soft));
+}
+.lvl3 {
+  background: color-mix(in srgb, var(--tone) 65%, var(--tone-soft));
+  color: var(--bg);
+}
+.lvl4 {
+  background: var(--tone);
+  color: var(--bg);
 }
 
 /* Proventos: uma coluna por tipo de ativo. */

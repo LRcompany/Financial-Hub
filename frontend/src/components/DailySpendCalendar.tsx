@@ -1,6 +1,7 @@
 import { currency } from '../lib/format'
 import { HoverCard, HoverRow } from './HoverCard'
 import { Money } from './Money'
+import { goalIntensity } from '../lib/dailyGoal'
 import styles from './DailySpendCalendar.module.css'
 
 interface DaySpend {
@@ -63,6 +64,7 @@ export function DailySpendCalendar({ days }: { days: DaySpend[] }) {
           // pra total, coloca abaixo de tudo") — meta já aparece no card (não
           // precisa duplicar aqui); itens primeiro, "Total" por último,
           // como a soma de uma nota, não como cabeçalho.
+          const level = data != null && data.goal != null ? goalIntensity(data.amount, data.goal) : null
           const content =
             data == null || (data.amount === 0 && data.breakdown.length === 0)
               ? null
@@ -74,7 +76,7 @@ export function DailySpendCalendar({ days }: { days: DaySpend[] }) {
                 ]
           return (
             <HoverCard key={i} content={content} className={styles.dayTrigger}>
-              <div className={`${styles.cell} ${styles[`cell-${status}`]}`}>
+              <div className={`${styles.cell} ${styles[`cell-${status}`]} ${level ? styles[`lvl${level}`] : ''}`}>
                 <span className={styles.dayNumber}>{dayNumber}</span>
               </div>
             </HoverCard>
@@ -90,6 +92,14 @@ export function DailySpendCalendar({ days }: { days: DaySpend[] }) {
         </span>
         <span className={styles.legendItem}>
           <span className={`${styles.dot} ${styles.dotNeutral}`} /> sem meta definida
+        </span>
+        <span className={styles.legendItem}>
+          <span className={styles.legendScale}>
+            {[1, 2, 3, 4].map((l) => (
+              <span key={l} className={`${styles['cell-over']} ${styles[`lvl${l}`]}`} />
+            ))}
+          </span>
+          cor mais forte = mais longe da meta
         </span>
       </div>
     </div>

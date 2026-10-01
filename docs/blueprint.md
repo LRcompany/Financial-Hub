@@ -1996,6 +1996,18 @@ Verificado contra cópia local do `prod.db` (só leitura, apagada depois): "Parc
 
 **Deployado em produção** (só frontend).
 
+### Relatório de setembro: ajustes de revisão + intensidade de cor na meta diária (01/10)
+
+Luiz revisando o relatório de setembro:
+- **"Por que o HGLG12 caiu 100%?"**: HGLG12 é direito de subscrição do HGLG11. Foi exercido/expirou e a posição foi a zero, então `positionMovers` (wealth.ts) calculava ganho = −valor anterior = −100%. Posição zerada no mês (venda, direito exercido) agora fica fora do ranking de rendimento: não é queda de preço.
+- **"Maior compra" repetida**: saiu a nota "Maior compra: ..." do box "Números do mês" (página Orçamento). Fica só nos Destaques.
+- **Intensidade de cor**: *"quanto maior for o valor, mais intenso será o vermelho"*. Novo `lib/dailyGoal.ts` → `goalIntensity(amount, goal)` devolve nível 1–4 pela distância da meta (acima: até +25%/+75%/+150%/mais; abaixo: gastou 75%+/50%+/25%+/menos). Aplicado no `DailySpendCalendar` (Orçamento e Dashboard) e nos chips de dias do relatório. Legenda do calendário ganhou a escala "cor mais forte = mais longe da meta".
+- **Bug achado de carona**: no dia 1º do mês o `SmoothLineChart` recebia um ponto só, dividia por zero e o SVG saía com `NaN` (erros no console, gráfico quebrado no card de gasto diário). Ponto único agora fica na ponta direita, sem linha.
+
+Ainda em aberto (perguntas do Luiz, sem mudança de código até ele confirmar): "Ganho por dia trabalhado" (recebido no mês ÷ dias corridos de projeto no mês, mistura caixa com período e conta fim de semana) e "Economizado na meta diária" (hoje soma só os dias abaixo da meta e ignora os dias acima).
+
+Verificado com servidor temporário contra `dev.db`: chips com 4 tons, calendário com nível, console limpo em aba nova. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

@@ -342,6 +342,10 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   for (const [k, cur] of assetsNow) {
     const prev = assetsBefore.get(k);
     if (!prev || prev.market <= 0) continue;
+    // Posição zerada no mês (01/10): vendeu, ou era direito de subscrição
+    // exercido/expirado (ex: HGLG12 virando cota de HGLG11) — não é queda de
+    // preço, então não entra como "-100%" no ranking de rendimento.
+    if (cur.market <= 0) continue;
     const gain = cur.market - prev.market - (cur.invested - prev.invested);
     const [type, label] = k.split("|");
     // Saldo de conta corrente não é investimento — variação dele é entrada/saída
