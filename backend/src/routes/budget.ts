@@ -1085,15 +1085,14 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
       // Transporte > Carro), só o nome sozinho não dá pra distinguir.
       const path = categoryPath(c) ?? c.name;
       const previousSpent = (agg._sum.amount ?? 0) + (projectedPrev.get(c.id) ?? 0) + (splitPrev.get(c.id) ?? 0);
-      // Sugestão de meta (01/10, pedido do Luiz: "se existir compra parcelada
-      // ainda pro mês atual, adiciona no orçamento atual; se a parcela
-      // terminou no mês anterior, no orçamento atual ela deixa de existir"):
-      // gasto do mês passado SEM as parcelas dele + as parcelas que vencem
-      // neste mês. Compra que acabou some, compra que continua entra com o
-      // valor da parcela deste mês, compra nova parcelada já aparece.
+      // Parcela em aberto (01/10, pedido do Luiz): a meta deste mês vem
+      // preenchida SÓ com as parcelas que vencem neste mês — é o único gasto
+      // garantido. Todo o resto (ex: contador, que ele pode parar de pagar)
+      // fica em branco pra ele decidir; o gasto do mês passado continua ao
+      // lado só como referência. Parcela que terminou no mês passado some
+      // sozinha (não vence mais), compra nova parcelada já aparece.
       const previousInstallments = (postedInstPrev.get(c.id) ?? 0) + (projectedPrev.get(c.id) ?? 0);
       const currentInstallments = (postedInstCur.get(c.id) ?? 0) + (projectedCur.get(c.id) ?? 0);
-      const suggested = Math.max(0, previousSpent - previousInstallments + currentInstallments);
       return {
         categoryId: c.id,
         name: c.name,
@@ -1102,7 +1101,6 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
         previousSpent,
         previousInstallments,
         currentInstallments,
-        suggested,
         currentTarget: targetByCategory.get(c.id) ?? null,
       };
     })

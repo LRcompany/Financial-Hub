@@ -12,14 +12,19 @@ const KIND_LABEL: Record<string, string> = {
   investment: 'Investimento',
 }
 
-/** "parcelas: R$ X → R$ Y" embaixo do gasto do mês passado — só quando a
- * parte parcelada muda de um mês pro outro (parcela que terminou, compra
- * nova parcelada). Explica por que a meta sugerida difere do mês passado. */
+/** Campo com número válido (>= 0). Em branco = Luiz decidiu não ter meta
+ * nessa categoria esse mês — nunca vira meta de R$0 fake. */
+function isFilled(v: string | undefined): boolean {
+  return v != null && v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0
+}
+
+/** "parcelas em aberto: R$ Y" embaixo do gasto do mês passado — de onde vem
+ * o valor pré-preenchido na meta. Só aparece quando há parcela neste mês. */
 function InstallmentShift({ c }: { c: BudgetReviewCategory }) {
-  if (Math.abs(c.previousInstallments - c.currentInstallments) < 0.01) return null
+  if (c.currentInstallments < 0.01) return null
   return (
     <div className={styles.installmentShift}>
-      parcelas: <Money>R$ {currency(c.previousInstallments)}</Money> → <Money>R$ {currency(c.currentInstallments)}</Money>
+      parcelas em aberto: <Money>R$ {currency(c.currentInstallments)}</Money>
     </div>
   )
 }
@@ -37,12 +42,23 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
     api.budgetReview(month, year).then((r) => {
       setCategories(r.categories)
       const initial: Record<string, string> = {}
-      // Sem meta ainda: começa pela sugestão (mês passado ajustado pelas
-      // parcelas — ver `suggested` no backend), não pelo gasto cru.
-      for (const c of r.categories) initial[c.categoryId] = String(c.currentTarget ?? Math.round(c.suggested * 100) / 100)
+      // Sem meta ainda: pré-preenche SÓ com as parcelas em aberto que vencem
+      // neste mês (pedido do Luiz, 01/10: "repetir só as parcelas em aberto —
+      // o contador eu posso parar de pagar esse mês"). Sem parcela = campo em
+      // branco, e campo em branco não vira meta ao salvar.
+      for (const c of r.categories) {
+        initial[c.categoryId] =
+          c.currentTarget != null
+            ? String(c.currentTarget)
+            : c.currentInstallments > 0
+              ? String(Math.round(c.currentInstallments * 100) / 100)
+              : ''
+      }
       setValues(initial)
     })
   }, [month, year])
+
+  const filledCount = categories ? categories.filter((c) => isFilled(values[c.categoryId])).length : 0
 
   function updateValue(categoryId: string, v: string) {
     setValues((prev) => ({ ...prev, [categoryId]: v }))
@@ -54,10 +70,7 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
     try {
       // só grava quem realmente tem um número válido — categoria que ele
       // deixou em branco de propósito não vira meta de R$0 fake.
-      const toSave = categories.filter((c) => {
-        const v = values[c.categoryId]
-        return v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0
-      })
+      const toSave = categories.filter((c) => isFilled(values[c.categoryId]))
       await Promise.all(toSave.map((c) => api.setBudgetTarget(c.categoryId, month, year, Number(values[c.categoryId]))))
       onSaved()
     } finally {
@@ -76,8 +89,8 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
             <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
               Cancelar
             </button>
-            <button className={styles.confirmBtn} onClick={saveAll} disabled={saving}>
-              {saving ? 'Salvando...' : `Salvar ${categories.length} categorias`}
+            <button className={styles.confirmBtn} onClick={saveAll} disabled={saving || filledCount === 0}>
+              {saving ? 'Salvando...' : `Salvar ${filledCount} ${filledCount === 1 ? 'categoria' : 'categorias'}`}
             </button>
           </>
         )

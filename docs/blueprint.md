@@ -2035,6 +2035,16 @@ O modal abre cada categoria sem meta com `suggested` (antes era o gasto cru do m
 
 Verificado com servidor temporário contra `dev.db`: em Nutrição, a parcela de R$ 230 (odontologia) terminou em setembro e o whey (R$ 22,44) continua, então a sugestão de outubro é R$ 22,44. 9 categorias com parcela mudando. `tsc` limpo.
 
+### Revisar orçamento: meta pré-preenchida só com parcelas em aberto (01/10)
+
+Luiz, logo depois da entrada anterior: *"vamos repetir na meta deste mês apenas as parcelas em aberto — o contador eu posso parar de pagar esse mês, logo não terei que adicionar lá."* A fórmula "mês passado − parcelas + parcelas" saiu (campo `suggested` removido):
+- Meta deste mês sem valor salvo vem preenchida **só** com `currentInstallments`, as parcelas que vencem no mês.
+- Categoria sem parcela vem **em branco**. Campo em branco não vira meta ao salvar.
+- O botão mostra quantas categorias serão salvas ("Salvar 15 categorias") e fica desabilitado com zero.
+- O "Mês passado" continua ao lado só como referência, com a linha "parcelas em aberto: R$ Y" quando houver parcela.
+
+Verificado com servidor temporário contra `dev.db`: 15 categorias preenchidas, todas parceladas (Nutrição R$ 22,44, Hospedagem R$ 381,59, Itens de Casa R$ 2.316,16). Aluguel, Contador etc. vêm em branco. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
