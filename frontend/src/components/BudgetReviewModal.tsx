@@ -12,6 +12,18 @@ const KIND_LABEL: Record<string, string> = {
   investment: 'Investimento',
 }
 
+/** "parcelas: R$ X → R$ Y" embaixo do gasto do mês passado — só quando a
+ * parte parcelada muda de um mês pro outro (parcela que terminou, compra
+ * nova parcelada). Explica por que a meta sugerida difere do mês passado. */
+function InstallmentShift({ c }: { c: BudgetReviewCategory }) {
+  if (Math.abs(c.previousInstallments - c.currentInstallments) < 0.01) return null
+  return (
+    <div className={styles.installmentShift}>
+      parcelas: <Money>R$ {currency(c.previousInstallments)}</Money> → <Money>R$ {currency(c.currentInstallments)}</Money>
+    </div>
+  )
+}
+
 /** Revisão de orçamento em lista — todas as categorias de uma vez, valor do
  * mês passado ao lado do campo novo, salva tudo junto. Luiz pediu
  * explicitamente que NÃO fosse passo a passo (uma tela por categoria é lento
@@ -25,7 +37,9 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
     api.budgetReview(month, year).then((r) => {
       setCategories(r.categories)
       const initial: Record<string, string> = {}
-      for (const c of r.categories) initial[c.categoryId] = String(c.currentTarget ?? c.previousSpent)
+      // Sem meta ainda: começa pela sugestão (mês passado ajustado pelas
+      // parcelas — ver `suggested` no backend), não pelo gasto cru.
+      for (const c of r.categories) initial[c.categoryId] = String(c.currentTarget ?? Math.round(c.suggested * 100) / 100)
       setValues(initial)
     })
   }, [month, year])
@@ -95,7 +109,10 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                       <td>
                         <span className={styles.kindTag}>{KIND_LABEL[c.kind]}</span>
                       </td>
-                      <td className={styles.previousCell}><Money>R$ {currency(c.previousSpent)}</Money></td>
+                      <td className={styles.previousCell}>
+                        <Money>R$ {currency(c.previousSpent)}</Money>
+                        <InstallmentShift c={c} />
+                      </td>
                       <td>
                         <Input
                           type="number"
@@ -127,7 +144,10 @@ export function BudgetReviewModal({ month, year, onClose, onSaved }: { month: nu
                       </div>
                       <div className={styles.cardRow}>
                         <span className={styles.cardLabel}>Mês passado</span>
-                        <span><Money>R$ {currency(c.previousSpent)}</Money></span>
+                        <span className={styles.cardPrevious}>
+                          <Money>R$ {currency(c.previousSpent)}</Money>
+                          <InstallmentShift c={c} />
+                        </span>
                       </div>
                       <div className={styles.cardRow}>
                         <span className={styles.cardLabel}>Meta deste mês</span>

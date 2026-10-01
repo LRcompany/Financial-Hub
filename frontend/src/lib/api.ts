@@ -133,6 +133,12 @@ export interface BudgetReviewCategory {
   path: string
   kind: CategoryKind
   previousSpent: number
+  // Quanto do mês passado foi parcela, e quanto de parcela vence neste mês
+  // (01/10). `suggested` = mês passado − parcelas dele + parcelas deste mês:
+  // parcela que terminou sai, parcela que continua entra.
+  previousInstallments: number
+  currentInstallments: number
+  suggested: number
   currentTarget: number | null
 }
 

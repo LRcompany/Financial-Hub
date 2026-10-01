@@ -1031,8 +1031,27 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
   const prevYear = prevDate.getFullYear();
   const prevStart = new Date(prevYear, prevMonth - 1, 1);
   const prevEnd = new Date(prevYear, prevMonth, 1);
+  const curStart = new Date(year, month - 1, 1);
+  const curEnd = new Date(year, month, 1);
 
-  const [categories, currentTargets, projectedPrev, splitPrev] = await Promise.all([
+  // Parcela de compra parcelada JÁ LANÇADA como Transaction no período (a
+  // parcela que a Pluggy confirmou — `totalInstallments` > 1), por categoria.
+  // Junto com `projectedSpendByCategory` (parcela prevista ainda não
+  // confirmada) dá "quanto da categoria no período é parcela".
+  async function postedInstallmentsByCategory(start: Date, end: Date): Promise<Map<string, number>> {
+    const rows = await prisma.transaction.findMany({
+      where: { type: "expense", isTransfer: false, date: { gte: start, lt: end }, totalInstallments: { gt: 1 }, splits: { none: {} } },
+      select: { categoryId: true, amount: true },
+    });
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      if (!r.categoryId) continue;
+      map.set(r.categoryId, (map.get(r.categoryId) ?? 0) + r.amount);
+    }
+    return map;
+  }
+
+  const [categories, currentTargets, projectedPrev, splitPrev, postedInstPrev, postedInstCur, projectedCur] = await Promise.all([
     // Mesmo corte do /budget-summary — investimento não é meta de gasto do
     // Orçamento, não faz sentido revisar aportar aqui. `children: { none: {} }`
     // exclui categoria-mãe (Moradia, Transporte...) — mãe é só rollup pra
@@ -1044,6 +1063,9 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
     prisma.budgetTarget.findMany({ where: { month, year } }),
     projectedSpendByCategory(prevStart, prevEnd),
     splitSpendByCategory(prevStart, prevEnd),
+    postedInstallmentsByCategory(prevStart, prevEnd),
+    postedInstallmentsByCategory(curStart, curEnd),
+    projectedSpendByCategory(curStart, curEnd),
   ]);
   const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
 
@@ -1062,12 +1084,25 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
       // entre pais diferentes de propósito (Aluguel existe em Moradia E em
       // Transporte > Carro), só o nome sozinho não dá pra distinguir.
       const path = categoryPath(c) ?? c.name;
+      const previousSpent = (agg._sum.amount ?? 0) + (projectedPrev.get(c.id) ?? 0) + (splitPrev.get(c.id) ?? 0);
+      // Sugestão de meta (01/10, pedido do Luiz: "se existir compra parcelada
+      // ainda pro mês atual, adiciona no orçamento atual; se a parcela
+      // terminou no mês anterior, no orçamento atual ela deixa de existir"):
+      // gasto do mês passado SEM as parcelas dele + as parcelas que vencem
+      // neste mês. Compra que acabou some, compra que continua entra com o
+      // valor da parcela deste mês, compra nova parcelada já aparece.
+      const previousInstallments = (postedInstPrev.get(c.id) ?? 0) + (projectedPrev.get(c.id) ?? 0);
+      const currentInstallments = (postedInstCur.get(c.id) ?? 0) + (projectedCur.get(c.id) ?? 0);
+      const suggested = Math.max(0, previousSpent - previousInstallments + currentInstallments);
       return {
         categoryId: c.id,
         name: c.name,
         path,
         kind: c.kind,
-        previousSpent: (agg._sum.amount ?? 0) + (projectedPrev.get(c.id) ?? 0) + (splitPrev.get(c.id) ?? 0),
+        previousSpent,
+        previousInstallments,
+        currentInstallments,
+        suggested,
         currentTarget: targetByCategory.get(c.id) ?? null,
       };
     })

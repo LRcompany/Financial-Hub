@@ -2022,6 +2022,19 @@ Verificado com servidor temporário contra `dev.db`: relatório mostra "Saldo da
 
 **Deployado em produção** (backend + frontend; deploy rodado pelo Luiz).
 
+### Revisar orçamento: meta sugerida ajustada pelas parcelas (01/10)
+
+Luiz: *"se existir alguma compra parcelada ainda para o mês atual, você adiciona no orçamento atual; se a parcela terminou no mês anterior, no orçamento atual ela deixa de existir."*
+
+`/budget-target/review` devolve, por categoria:
+- `previousInstallments`: parcela no mês passado, lançada (`Transaction` com `totalInstallments > 1`) ou prevista (`projectedSpendByCategory`).
+- `currentInstallments`: mesma conta para o mês sendo revisado.
+- `suggested` = mês passado − `previousInstallments` + `currentInstallments`.
+
+O modal abre cada categoria sem meta com `suggested` (antes era o gasto cru do mês passado). Embaixo do "Mês passado" aparece "parcelas: R$ X → R$ Y" quando a parte parcelada muda, para explicar a diferença. Meta já salva continua com prioridade.
+
+Verificado com servidor temporário contra `dev.db`: em Nutrição, a parcela de R$ 230 (odontologia) terminou em setembro e o whey (R$ 22,44) continua, então a sugestão de outubro é R$ 22,44. 9 categorias com parcela mudando. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
