@@ -2004,9 +2004,19 @@ Luiz revisando o relatório de setembro:
 - **Intensidade de cor**: *"quanto maior for o valor, mais intenso será o vermelho"*. Novo `lib/dailyGoal.ts` → `goalIntensity(amount, goal)` devolve nível 1–4 pela distância da meta (acima: até +25%/+75%/+150%/mais; abaixo: gastou 75%+/50%+/25%+/menos). Aplicado no `DailySpendCalendar` (Orçamento e Dashboard) e nos chips de dias do relatório. Legenda do calendário ganhou a escala "cor mais forte = mais longe da meta".
 - **Bug achado de carona**: no dia 1º do mês o `SmoothLineChart` recebia um ponto só, dividia por zero e o SVG saía com `NaN` (erros no console, gráfico quebrado no card de gasto diário). Ponto único agora fica na ponta direita, sem linha.
 
-Ainda em aberto (perguntas do Luiz, sem mudança de código até ele confirmar): "Ganho por dia trabalhado" (recebido no mês ÷ dias corridos de projeto no mês, mistura caixa com período e conta fim de semana) e "Economizado na meta diária" (hoje soma só os dias abaixo da meta e ignora os dias acima).
+Ainda em aberto naquele momento: "Ganho por dia trabalhado" e "Economizado na meta diária" (resolvidos na entrada seguinte).
 
 Verificado com servidor temporário contra `dev.db`: chips com 4 tons, calendário com nível, console limpo em aba nova. `tsc` limpo.
+
+### Saldo da meta diária, valor da diária e revisão do mês novo com splits/parcelas (01/10)
+
+Luiz aprovou as duas trocas propostas na revisão do relatório de setembro e reportou um bug no "Revisar orçamento" de outubro.
+
+- **Saldo da meta diária** (no lugar de "economizado"): soma de `meta − gasto` em TODO dia com meta. Dia acima da meta desconta, e o saldo pode ficar negativo. Antes somava só os dias abaixo e ignorava os acima (*"esse saldo que sobrou foi usado em outros dias"*). Campos renomeados: `dailyGoalBalanceThisMonth/LastMonth` (cards ao vivo) e `dailyGoalBalance`/`previousDailyGoalBalance` (relatório). Novo componente `DailyGoalBalance` mostra "sobrou R$X" (verde) ou "passou R$X" (vermelho), nunca "−R$" solto; usado em Dashboard, Orçamento e relatório. A comparação com o mês anterior (`MonthDelta`) só aparece quando os dois saldos são positivos: variação % de número negativo não quer dizer nada.
+- **Valor da diária** (no lugar de "ganho por dia trabalhado"): soma do contrato ÷ soma dos dias úteis do projeto inteiro, nos projetos em andamento no mês (média ponderada). Antes era o recebido no mês ÷ dias corridos de projeto no mês: misturava caixa com período e contava fim de semana. `workedDaysThisMonth` agora conta só seg–sex. Novo campo `dailyRateThisMonth` em `/projects-summary`.
+- **Bug do "Revisar orçamento"**: `/budget-target/review` calculava o gasto do mês anterior só por `transaction.categoryId`. Ignorava a fatia de transação dividida (os R$250 do Contador vinham do Pix pro CNPJ dividido) e a parcela comprometida que a Pluggy ainda não confirmou, e ainda contava a transação dividida inteira na categoria original. `projectedSpendByCategory` e `splitSpendByCategory` saíram de dentro do `/budget-summary` para o escopo do módulo, e a revisão usa a mesma regra (com `splits: { none: {} }`). Verificado: a revisão de outubro bate com o "gasto" de setembro do Orçamento nas 81 categorias (0 divergências).
+
+Verificado com servidor temporário contra `dev.db`: relatório mostra "Saldo da meta: passou R$ 14.993,79" em vermelho; card do Orçamento mostra "passou R$ 4.549,04 da meta esse mês" em `--danger`. `tsc` limpo nos dois lados.
 
 ## Decisões de navegação/IA
 

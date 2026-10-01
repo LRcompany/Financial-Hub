@@ -28,6 +28,7 @@ import {
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { DailySpendCalendar } from '../components/DailySpendCalendar'
 import { MonthDelta } from '../components/MonthDelta'
+import { DailyGoalBalance } from '../components/DailyGoalBalance'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
@@ -343,15 +344,13 @@ export function Dashboard() {
                     </span>
                   </div>
                 )}
-                {/* "Quanto economizei" (15/09, mesmo raciocínio de Orçamento —
-                    "vou saber o quanto estou economizando nos meses"). */}
-                {budget.dailyGoalSavedThisMonth > 0 && (
+                {/* Saldo da meta diária (01/10, mesmo de Orçamento): dia acima
+                    da meta desconta, então pode dar "passou R$X". */}
+                {budget.daysWithGoalThisMonth > 0 && (
                   <div className={styles.chartMeta}>
-                    <span>
-                      economizou <Money>R$ {currency(budget.dailyGoalSavedThisMonth)}</Money> esse mês
-                    </span>
-                    {budget.dailyGoalSavedLastMonth > 0 && (
-                      <MonthDelta current={budget.dailyGoalSavedThisMonth} previous={budget.dailyGoalSavedLastMonth} higherIsBetter />
+                    <DailyGoalBalance value={budget.dailyGoalBalanceThisMonth} suffix="da meta esse mês" />
+                    {budget.dailyGoalBalanceThisMonth > 0 && budget.dailyGoalBalanceLastMonth > 0 && (
+                      <MonthDelta current={budget.dailyGoalBalanceThisMonth} previous={budget.dailyGoalBalanceLastMonth} higherIsBetter />
                     )}
                   </div>
                 )}

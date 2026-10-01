@@ -9,6 +9,7 @@ import { ClientPieChart } from './ClientPieChart'
 import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
+import { DailyGoalBalance } from './DailyGoalBalance'
 import { ProjectedTag, OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
@@ -353,8 +354,7 @@ export function MonthlyReportModal({
   const goalPct = goalTarget && goalTarget > 0 && wealth?.total != null ? Math.min((wealth.total / goalTarget) * 100, 100) : null
 
   // ---------------- Projetos ----------------
-  const receivedPerDay =
-    projects && projects.workedDaysThisMonth > 0 ? projects.receivedThisMonth / projects.workedDaysThisMonth : null
+  const dailyRate = projects?.dailyRateThisMonth ?? null
   const hasProjectsData =
     !!projects &&
     (projects.receivedThisMonth > 0 ||
@@ -367,7 +367,7 @@ export function MonthlyReportModal({
   const dailyGoalItems = budget && budget.daysWithGoal > 0
     ? [
         { label: 'Dias abaixo da meta diária', value: `${budget.daysUnderGoal} de ${budget.daysWithGoal}` },
-        ...(budget.dailyGoalSaved > 0 ? [{ label: 'Economizado na meta diária', value: <Money>R$ {currency(budget.dailyGoalSaved)}</Money> }] : []),
+        { label: 'Saldo da meta diária', value: <DailyGoalBalance value={budget.dailyGoalBalance} /> },
       ]
     : []
   const budgetHighlights = [
@@ -393,7 +393,7 @@ export function MonthlyReportModal({
   ]
   const projectHighlights = [
     ...(projects && projects.receivedThisMonth > 0 ? [{ label: 'Recebido no mês', value: <Money>R$ {currency(projects.receivedThisMonth)}</Money> }] : []),
-    ...(receivedPerDay != null && receivedPerDay > 0 ? [{ label: 'Ganho por dia trabalhado', value: <Money>R$ {currency(receivedPerDay)}</Money> }] : []),
+    ...(dailyRate != null && dailyRate > 0 ? [{ label: 'Valor da diária', value: <Money>R$ {currency(dailyRate)}</Money> }] : []),
     ...(projects?.bestProjectThisMonth
       ? [{ label: 'Projeto que mais rendeu', value: <>{projects.bestProjectThisMonth.name} · <Money>R$ {currency(projects.bestProjectThisMonth.received)}</Money></> }]
       : []),
@@ -517,8 +517,8 @@ export function MonthlyReportModal({
                   >
                     <Money>R$ {currency(projects!.receivedThisMonth)}</Money>
                   </Stat>
-                  <Stat label="Ganho por dia trabalhado">
-                    {receivedPerDay != null ? <Money>{`R$ ${currency(receivedPerDay)}`}</Money> : '—'}
+                  <Stat label="Valor da diária">
+                    {dailyRate != null ? <Money>{`R$ ${currency(dailyRate)}`}</Money> : '—'}
                   </Stat>
                   <Stat label="Projetos entregues">{projects!.deliveredThisMonth.length}</Stat>
                 </div>
@@ -592,10 +592,15 @@ export function MonthlyReportModal({
                     <Stat label="Dias abaixo da meta">{daysUnder.length}</Stat>
                     <Stat label="Dias acima da meta">{daysOver.length}</Stat>
                     <Stat
-                      label="Economizado"
-                      note={budget!.previousDailyGoalSaved > 0 && <MonthDelta current={budget!.dailyGoalSaved} previous={budget!.previousDailyGoalSaved} higherIsBetter />}
+                      label="Saldo da meta"
+                      note={
+                        budget!.dailyGoalBalance > 0 &&
+                        budget!.previousDailyGoalBalance > 0 && (
+                          <MonthDelta current={budget!.dailyGoalBalance} previous={budget!.previousDailyGoalBalance} higherIsBetter />
+                        )
+                      }
                     >
-                      <Money>R$ {currency(budget!.dailyGoalSaved)}</Money>
+                      <DailyGoalBalance value={budget!.dailyGoalBalance} />
                     </Stat>
                   </div>
                   {dailyDays.length >= 2 && (
@@ -814,9 +819,9 @@ export function MonthlyReportModal({
                 >
                   <Money>R$ {currency(projects!.receivedThisMonth)}</Money>
                 </Stat>
-                <Stat label="Dias trabalhados no mês">{projects!.workedDaysThisMonth}</Stat>
-                <Stat label="Ganho por dia trabalhado" note={<span className={styles.projectedNote}>só o que foi recebido no mês</span>}>
-                  {receivedPerDay != null ? <Money>{`R$ ${currency(receivedPerDay)}`}</Money> : '—'}
+                <Stat label="Dias úteis trabalhados">{projects!.workedDaysThisMonth}</Stat>
+                <Stat label="Valor da diária" note={<span className={styles.projectedNote}>contrato ÷ dias úteis dos projetos do mês</span>}>
+                  {dailyRate != null ? <Money>{`R$ ${currency(dailyRate)}`}</Money> : '—'}
                 </Stat>
                 <Stat label="A receber">
                   <Money>R$ {currency(projects!.outstanding)}</Money>

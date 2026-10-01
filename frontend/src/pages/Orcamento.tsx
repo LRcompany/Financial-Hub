@@ -27,6 +27,7 @@ import {
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { DailySpendCalendar } from '../components/DailySpendCalendar'
 import { MonthDelta } from '../components/MonthDelta'
+import { DailyGoalBalance } from '../components/DailyGoalBalance'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { Carousel } from '../components/Carousel'
@@ -476,17 +477,16 @@ export function Orcamento() {
               </span>
             </div>
           )}
-          {/* "Quanto economizei" (15/09, pedido do Luiz: "vou saber o quanto
-              estou economizando nos meses") — soma do que sobrou em todo dia
-              abaixo da meta. Só aparece com economia de verdade (>0); sem
-              meta cadastrada nenhum dia, `dailyGoalSavedThisMonth` já vem 0. */}
-          {budget.dailyGoalSavedThisMonth > 0 && (
+          {/* Saldo da meta diária (01/10): soma de `meta - gasto` em todo dia
+              com meta — dia acima desconta. Antes somava só os dias abaixo e
+              enganava (Luiz: "esse saldo que sobrou foi usado em outros
+              dias"). Comparação com o mês anterior só quando os dois são
+              positivos (variação % de número negativo não quer dizer nada). */}
+          {budget.daysWithGoalThisMonth > 0 && (
             <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
-              <span>
-                economizou <Money>R$ {currency(budget.dailyGoalSavedThisMonth)}</Money> esse mês
-              </span>
-              {budget.dailyGoalSavedLastMonth > 0 && (
-                <MonthDelta current={budget.dailyGoalSavedThisMonth} previous={budget.dailyGoalSavedLastMonth} higherIsBetter />
+              <DailyGoalBalance value={budget.dailyGoalBalanceThisMonth} suffix="da meta esse mês" />
+              {budget.dailyGoalBalanceThisMonth > 0 && budget.dailyGoalBalanceLastMonth > 0 && (
+                <MonthDelta current={budget.dailyGoalBalanceThisMonth} previous={budget.dailyGoalBalanceLastMonth} higherIsBetter />
               )}
             </div>
           )}

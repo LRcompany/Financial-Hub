@@ -1,0 +1,7 @@
+.under {
+  color: var(--success);
+}
+
+.over {
+  color: var(--danger);
+}

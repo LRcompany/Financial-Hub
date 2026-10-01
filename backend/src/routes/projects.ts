@@ -602,19 +602,45 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   // cobre, geralmente o anterior).
   const taxPaymentsThisMonth = taxPayments.filter((t) => t.paymentDate >= monthRangeReq.gte && t.paymentDate < monthRangeReq.lt);
   const taxPaidThisMonth = taxPaymentsThisMonth.reduce((sum, t) => sum + t.amountPaid, 0);
-  // Dias trabalhados no mês: dias DISTINTOS do calendário cobertos por algum
-  // projeto (início→fim) — dois projetos no mesmo dia contam 1 dia, não 2
-  // (senão "ganho por dia" ficaria artificialmente baixo). Só projeto COM data
-  // de fim entra, mesma regra de `totalDaysWorked` acima; cancelado fica de fora.
+  // Dias trabalhados no mês: dias ÚTEIS (seg–sex) DISTINTOS cobertos por algum
+  // projeto (início→fim) — dois projetos no mesmo dia contam 1 dia, não 2.
+  // Fim de semana fora desde 01/10 (Luiz estranhou o "ganho por dia" do
+  // relatório de setembro: contava sábado e domingo como dia trabalhado). Só
+  // projeto COM data de fim entra, mesma regra de `totalDaysWorked` acima;
+  // cancelado fica de fora.
   const DAY_MS = 86400000;
+  const isWeekday = (t: number) => {
+    const wd = new Date(t).getDay();
+    return wd !== 0 && wd !== 6;
+  };
   const workedDays = new Set<number>();
   for (const p of notCancelled) {
     if (!p.endDate) continue;
     const from = Math.max(p.startDate.getTime(), monthRangeReq.gte.getTime());
     const to = Math.min(p.endDate.getTime(), monthRangeReq.lt.getTime() - 1);
-    for (let t = from; t <= to; t += DAY_MS) workedDays.add(Math.floor((t - monthRangeReq.gte.getTime()) / DAY_MS));
+    for (let t = from; t <= to; t += DAY_MS) {
+      if (isWeekday(t)) workedDays.add(Math.floor((t - monthRangeReq.gte.getTime()) / DAY_MS));
+    }
   }
   const workedDaysThisMonth = workedDays.size;
+  // Valor da diária (01/10, troca do "ganho por dia trabalhado" — que dividia
+  // o RECEBIDO no mês pelos dias do mês, misturando caixa com período: o que
+  // cai em setembro pode ser de projeto de agosto). Agora é o que o Luiz
+  // COBRA por dia: soma do contrato ÷ soma dos dias úteis do projeto INTEIRO
+  // (início→fim), nos projetos em andamento em algum dia do mês. Média
+  // ponderada (projeto longo pesa mais), não média simples das diárias.
+  let rateContract = 0;
+  let rateDays = 0;
+  for (const p of notCancelled) {
+    if (!p.endDate) continue;
+    if (p.endDate < monthRangeReq.gte || p.startDate >= monthRangeReq.lt) continue;
+    let days = 0;
+    for (let t = p.startDate.getTime(); t <= p.endDate.getTime(); t += DAY_MS) if (isWeekday(t)) days++;
+    if (days === 0) continue;
+    rateContract += p.contractValue;
+    rateDays += days;
+  }
+  const dailyRateThisMonth = rateDays > 0 ? rateContract / rateDays : null;
 
   res.json({
     grossRevenue,
@@ -643,5 +669,6 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     startedThisMonth,
     taxPaidThisMonth,
     workedDaysThisMonth,
+    dailyRateThisMonth,
   });
 });

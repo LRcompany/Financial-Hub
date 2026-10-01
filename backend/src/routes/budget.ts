@@ -15,6 +15,57 @@ function goalAt(goals: { amount: number; effectiveFrom: Date }[], date: Date): n
   return applicable?.amount ?? null;
 }
 
+// Usadas pelo /budget-summary E pelo /budget-target/review (01/10): as duas
+// telas precisam da MESMA regra de "quanto gastei na categoria" (transação
+// sem split + fatia de split + parcela projetada), senão a revisão do mês
+// novo mostra um número diferente do que o Orçamento mostrou no mês passado.
+//
+// Parcela futura comprometida (UpcomingInstallment) que vence dentro do
+// período — conta como "gasto" da categoria/dia mesmo sem a Pluggy ter
+// confirmado ainda (pedido do Luiz, 09/09: "a parcela que fiz... todo mês
+// eu vou pagar 100 reais... é assim a lógica correta"). Dedup contra
+// Transaction real do MESMO período pela mesma chave já usada em
+// /upcoming-installments/groups (purchaseBase+valor) — evita contar duas
+// vezes quando a compra finalmente é confirmada pela Pluggy dentro do
+// próprio mês (ver nota em pluggyTransactionSync.ts sobre parcela manual
+// tipo "PEOPLE BIKE SHOP", criada à mão por falta de billForecastDate).
+async function projectedSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
+  const [installments, postedKeys] = await Promise.all([
+    prisma.upcomingInstallment.findMany({
+      where: { dueDate: { gte: start, lt: end } },
+      select: { amount: true, description: true, categoryId: true },
+    }),
+    getPostedPurchaseKeys(start, end),
+  ]);
+  const map = new Map<string, number>();
+  for (const i of installments) {
+    if (!i.categoryId) continue;
+    const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
+    if (postedKeys.has(key)) continue;
+    map.set(i.categoryId, (map.get(i.categoryId) ?? 0) + i.amount);
+  }
+  return map;
+}
+
+// Transação dividida em N categorias (14/09 — ver TransactionSplit no
+// schema, ex: boleto de aluguel+água+gás+internet+seguro cobrados
+// juntos): cada split conta na SUA categoria, não na `categoryId` (às
+// vezes nem existe mais/nunca existiu) da Transaction inteira. A
+// Transaction em si é excluída do `spentAgg` normal (ver `splits: {
+// none: {} }` nos dois endpoints) — sem isso o valor total contaria 2x, uma vez
+// inteiro na categoria antiga e de novo fatiado nas categorias novas.
+async function splitSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
+  const splits = await prisma.transactionSplit.findMany({
+    where: { transaction: { type: "expense", isTransfer: false, date: { gte: start, lt: end } } },
+    select: { categoryId: true, amount: true },
+  });
+  const map = new Map<string, number>();
+  for (const s of splits) {
+    map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + s.amount);
+  }
+  return map;
+}
+
 // GET /api/budget-summary?month=8&year=2026
 // Orçamento mensal (soma dos BudgetTarget do mês) + gasto real por categoria +
 // meta/gasto diário — tudo calculado a partir de Transaction, sem valor fixo.
@@ -28,52 +79,6 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const prevMonthDate = new Date(year, month - 2, 1);
   const prevMonthStart = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
   const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
-
-  // Parcela futura comprometida (UpcomingInstallment) que vence dentro do
-  // período — conta como "gasto" da categoria/dia mesmo sem a Pluggy ter
-  // confirmado ainda (pedido do Luiz, 09/09: "a parcela que fiz... todo mês
-  // eu vou pagar 100 reais... é assim a lógica correta"). Dedup contra
-  // Transaction real do MESMO período pela mesma chave já usada em
-  // /upcoming-installments/groups (purchaseBase+valor) — evita contar duas
-  // vezes quando a compra finalmente é confirmada pela Pluggy dentro do
-  // próprio mês (ver nota em pluggyTransactionSync.ts sobre parcela manual
-  // tipo "PEOPLE BIKE SHOP", criada à mão por falta de billForecastDate).
-  async function projectedSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
-    const [installments, postedKeys] = await Promise.all([
-      prisma.upcomingInstallment.findMany({
-        where: { dueDate: { gte: start, lt: end } },
-        select: { amount: true, description: true, categoryId: true },
-      }),
-      getPostedPurchaseKeys(start, end),
-    ]);
-    const map = new Map<string, number>();
-    for (const i of installments) {
-      if (!i.categoryId) continue;
-      const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
-      if (postedKeys.has(key)) continue;
-      map.set(i.categoryId, (map.get(i.categoryId) ?? 0) + i.amount);
-    }
-    return map;
-  }
-
-  // Transação dividida em N categorias (14/09 — ver TransactionSplit no
-  // schema, ex: boleto de aluguel+água+gás+internet+seguro cobrados
-  // juntos): cada split conta na SUA categoria, não na `categoryId` (às
-  // vezes nem existe mais/nunca existiu) da Transaction inteira. A
-  // Transaction em si é excluída do `spentAgg` normal (ver `splits: {
-  // none: {} }` abaixo) — sem isso o valor total contaria 2x, uma vez
-  // inteiro na categoria antiga e de novo fatiado nas categorias novas.
-  async function splitSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
-    const splits = await prisma.transactionSplit.findMany({
-      where: { transaction: { type: "expense", isTransfer: false, date: { gte: start, lt: end } } },
-      select: { categoryId: true, amount: true },
-    });
-    const map = new Map<string, number>();
-    for (const s of splits) {
-      map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + s.amount);
-    }
-    return map;
-  }
 
   const [targets, dailyGoals, projectedThisMonth, projectedPrevMonth, splitThisMonth, splitPrevMonth] = await Promise.all([
     // Só categoria de despesa — meta de receita (Salário, projetos) é
@@ -348,26 +353,26 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   // Reaproveita `daysThisMonth` (já tem `amount`+`goal` por dia, dia 1 até
   // HOJE) em vez de rodar `sumOnDay` de novo pros mesmos dias. Dia sem meta
   // cadastrada (goal null) fica de fora — não dá pra avaliar cumprimento sem
-  // meta. `dailyGoalSavedThisMonth` (15/09, pedido do Luiz: "vou saber o
-  // quanto estou economizando nos meses") — soma de `meta - gasto` em todo
-  // dia abaixo, mesmo raciocínio de "quanto sobrou" já usado no card.
+  // meta. `dailyGoalBalanceThisMonth` = saldo da meta diária: soma de
+  // `meta - gasto` em TODO dia com meta, positivo ou negativo. Até 01/10
+  // somava só os dias abaixo e ignorava os acima (Luiz: "não faz sentido,
+  // esse saldo que sobrou foi usado em outros dias") — agora dia acima da
+  // meta desconta, e o saldo pode ficar negativo.
   let daysUnderGoalThisMonth = 0;
   let daysWithGoalThisMonth = 0;
-  let dailyGoalSavedThisMonth = 0;
+  let dailyGoalBalanceThisMonth = 0;
   for (const d of daysThisMonth) {
     if (d.goal == null) continue;
     daysWithGoalThisMonth++;
-    if (d.amount <= d.goal) {
-      daysUnderGoalThisMonth++;
-      dailyGoalSavedThisMonth += d.goal - d.amount;
-    }
+    dailyGoalBalanceThisMonth += d.goal - d.amount;
+    if (d.amount <= d.goal) daysUnderGoalThisMonth++;
   }
   // Mesma conta pro mês anterior (janela alinhada, ver `previousMonthAligned`
   // acima) — só pra comparação (`MonthDelta`) do card ao vivo, nunca exibida
   // sozinha.
-  let dailyGoalSavedLastMonth = 0;
+  let dailyGoalBalanceLastMonth = 0;
   for (const d of previousMonthAligned) {
-    if (d.goal != null && d.amount <= d.goal) dailyGoalSavedLastMonth += d.goal - d.amount;
+    if (d.goal != null) dailyGoalBalanceLastMonth += d.goal - d.amount;
   }
 
   // ---- economia da meta diária, mas pro PERÍODO do relatório (mês/ano da
@@ -376,14 +381,14 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   // certeza têm que aparecer no meu relatório mensal". Não precisa de
   // tabela nova: já temos Transaction + DailyGoal histórico, dá pra
   // recalcular pra qualquer mês sob demanda, igual o resto do relatório. ----
-  async function dailyGoalSavingsForRange(
+  async function dailyGoalBalanceForRange(
     start: Date,
     end: Date,
     goals: { amount: number; effectiveFrom: Date }[]
   ): Promise<{
     daysWithGoal: number;
     daysUnder: number;
-    saved: number;
+    balance: number;
     days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[];
   }> {
     // Nunca conta dia futuro (ainda não aconteceu, não é "abaixo" nem
@@ -391,7 +396,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     // (ex: relatório do mês corrente, ainda em andamento).
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const effectiveEnd = end < tomorrow ? end : tomorrow;
-    if (effectiveEnd <= start) return { daysWithGoal: 0, daysUnder: 0, saved: 0, days: [] };
+    if (effectiveEnd <= start) return { daysWithGoal: 0, daysUnder: 0, balance: 0, days: [] };
     const [rangeTransactions, rangeInstallments, rangePostedKeys] = await Promise.all([
       prisma.transaction.findMany({
         where: { type: "expense", isTransfer: false, date: { gte: start, lt: effectiveEnd } },
@@ -414,7 +419,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     }
     let daysWithGoal = 0;
     let daysUnder = 0;
-    let saved = 0;
+    let balance = 0;
     const days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[] = [];
     for (let day = new Date(start); day < effectiveEnd; day = new Date(day.getTime() + 24 * 60 * 60 * 1000)) {
       const goal = goalAt(goals, day);
@@ -438,16 +443,15 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       });
       if (goal == null) continue;
       daysWithGoal++;
-      if (spent <= goal) {
-        daysUnder++;
-        saved += goal - spent;
-      }
+      // Saldo: dia acima da meta desconta (ver `dailyGoalBalanceThisMonth`).
+      balance += goal - spent;
+      if (spent <= goal) daysUnder++;
     }
-    return { daysWithGoal, daysUnder, saved, days };
+    return { daysWithGoal, daysUnder, balance, days };
   }
-  const [dailyGoalSavingsForPeriod, dailyGoalSavingsForPreviousPeriod] = await Promise.all([
-    dailyGoalSavingsForRange(monthStart, monthEnd, dailyGoals),
-    dailyGoalSavingsForRange(prevMonthStart, prevMonthEnd, dailyGoals),
+  const [dailyGoalForPeriod, dailyGoalForPreviousPeriod] = await Promise.all([
+    dailyGoalBalanceForRange(monthStart, monthEnd, dailyGoals),
+    dailyGoalBalanceForRange(prevMonthStart, prevMonthEnd, dailyGoals),
   ]);
 
   res.json({
@@ -460,17 +464,17 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     previousMonthlyAvgDailySpend,
     daysUnderGoalThisMonth,
     daysWithGoalThisMonth,
-    dailyGoalSavedThisMonth,
-    dailyGoalSavedLastMonth,
-    // Economia da meta diária DO PERÍODO do relatório (mês/ano da query,
-    // não "agora" — ver `dailyGoalSavingsForRange` acima). Nome sem
+    dailyGoalBalanceThisMonth,
+    dailyGoalBalanceLastMonth,
+    // Saldo da meta diária DO PERÍODO do relatório (mês/ano da query,
+    // não "agora" — ver `dailyGoalBalanceForRange` acima). Nome sem
     // "ThisMonth" de propósito, mesma convenção já usada em `totalSpent`/
     // `totalPlanned` (campo escopado pela query, não hardcoded em `now`).
-    daysWithGoal: dailyGoalSavingsForPeriod.daysWithGoal,
-    daysUnderGoal: dailyGoalSavingsForPeriod.daysUnder,
-    dailyGoalSaved: dailyGoalSavingsForPeriod.saved,
-    dailyDaysForPeriod: dailyGoalSavingsForPeriod.days,
-    previousDailyGoalSaved: dailyGoalSavingsForPreviousPeriod.saved,
+    daysWithGoal: dailyGoalForPeriod.daysWithGoal,
+    daysUnderGoal: dailyGoalForPeriod.daysUnder,
+    dailyGoalBalance: dailyGoalForPeriod.balance,
+    dailyDaysForPeriod: dailyGoalForPeriod.days,
+    previousDailyGoalBalance: dailyGoalForPreviousPeriod.balance,
     daysThisMonth,
     totalPlanned,
     totalSpent,
@@ -1028,7 +1032,7 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
   const prevStart = new Date(prevYear, prevMonth - 1, 1);
   const prevEnd = new Date(prevYear, prevMonth, 1);
 
-  const [categories, currentTargets] = await Promise.all([
+  const [categories, currentTargets, projectedPrev, splitPrev] = await Promise.all([
     // Mesmo corte do /budget-summary — investimento não é meta de gasto do
     // Orçamento, não faz sentido revisar aportar aqui. `children: { none: {} }`
     // exclui categoria-mãe (Moradia, Transporte...) — mãe é só rollup pra
@@ -1038,13 +1042,20 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
       include: { parent: { include: { parent: true } } },
     }),
     prisma.budgetTarget.findMany({ where: { month, year } }),
+    projectedSpendByCategory(prevStart, prevEnd),
+    splitSpendByCategory(prevStart, prevEnd),
   ]);
   const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
 
   const result = await Promise.all(
     categories.map(async (c) => {
       const agg = await prisma.transaction.aggregate({
-        where: { categoryId: c.id, type: "expense", isTransfer: false, date: { gte: prevStart, lt: prevEnd } },
+        // Mesma regra do /budget-summary (bug real, 01/10: revisão de outubro
+        // mostrava Contador zerado — os R$250 eram um split do Pix pro CNPJ, e
+        // parcela projetada também ficava de fora): transação dividida sai
+        // daqui e entra fatiada via `splitPrev`; parcela comprometida que
+        // venceu no mês e a Pluggy ainda não confirmou entra via `projectedPrev`.
+        where: { categoryId: c.id, type: "expense", isTransfer: false, date: { gte: prevStart, lt: prevEnd }, splits: { none: {} } },
         _sum: { amount: true },
       });
       // Caminho completo ("Moradia > Aluguel") — várias folhas repetem nome
@@ -1056,7 +1067,7 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
         name: c.name,
         path,
         kind: c.kind,
-        previousSpent: agg._sum.amount ?? 0,
+        previousSpent: (agg._sum.amount ?? 0) + (projectedPrev.get(c.id) ?? 0) + (splitPrev.get(c.id) ?? 0),
         currentTarget: targetByCategory.get(c.id) ?? null,
       };
     })

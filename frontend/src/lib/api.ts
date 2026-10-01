@@ -153,23 +153,23 @@ export interface BudgetSummary {
   // é o denominador (dia sem meta cadastrada não entra em nenhum dos dois).
   daysUnderGoalThisMonth: number
   daysWithGoalThisMonth: number
-  // "Quanto economizei" (15/09, pedido do Luiz: "vou saber o quanto estou
-  // economizando nos meses") — soma de `meta - gasto` em todo dia abaixo,
-  // SEMPRE o mês-calendário atual de verdade (mesmo critério de
-  // daysUnderGoalThisMonth acima). `dailyGoalSavedLastMonth` é a mesma
-  // conta na janela alinhada do mês anterior, só pra comparação (MonthDelta).
-  dailyGoalSavedThisMonth: number
-  dailyGoalSavedLastMonth: number
-  // Mesma "economia da meta diária", mas pro PERÍODO do relatório (mês/ano
+  // Saldo da meta diária (01/10): soma de `meta - gasto` em TODO dia com
+  // meta — dia acima desconta, pode ficar negativo. SEMPRE o mês-calendário
+  // atual de verdade (mesmo critério de daysUnderGoalThisMonth acima).
+  // `dailyGoalBalanceLastMonth` é a mesma conta na janela alinhada do mês
+  // anterior, só pra comparação (MonthDelta).
+  dailyGoalBalanceThisMonth: number
+  dailyGoalBalanceLastMonth: number
+  // Mesmo saldo da meta diária, mas pro PERÍODO do relatório (mês/ano
   // da query — pode ser um mês fechado no passado, diferente dos campos
   // acima que são sempre "agora"). Usado só pelo relatório mensal.
   daysWithGoal: number
   daysUnderGoal: number
-  dailyGoalSaved: number
+  dailyGoalBalance: number
   // Dia a dia do período do relatório (mês/ano da query), com meta e detalhe —
   // alimenta o calendário/gráfico do relatório de meses passados.
   dailyDaysForPeriod: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[]
-  previousDailyGoalSaved: number
+  previousDailyGoalBalance: number
   // Mês-calendário ATUAL de verdade, do dia 1 até hoje (pedido do Luiz,
   // 08/09) — antes era um rolling de 14 dias, que no início do mês
   // misturava dias do mês anterior. Poucos pontos no início do mês é
@@ -381,10 +381,13 @@ export interface ProjectsSummary {
   // relacionada ao pagamento total do projeto"). Vazio quando nenhum
   // projeto fechou o contrato nesse mês específico.
   // Projetos que COMEÇARAM no mês, imposto (DAS) pago no mês e dias distintos
-  // trabalhados no mês (pra "quanto ganhei por dia").
+  // ÚTEIS trabalhados no mês.
   startedThisMonth: { id: string; name: string; client: string; contractValue: number; startDate: string }[]
   taxPaidThisMonth: number
   workedDaysThisMonth: number
+  // Valor da diária (01/10): contrato ÷ dias úteis do projeto inteiro, nos
+  // projetos em andamento no mês (média ponderada). null = nenhum projeto com fim.
+  dailyRateThisMonth: number | null
   deliveredThisMonth: { id: string; name: string; client: string; contractValue: number; deliveryDate: string }[]
 }
 
