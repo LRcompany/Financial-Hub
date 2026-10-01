@@ -10,4 +10,15 @@
 .planned {
   color: var(--ink-soft);
   font-weight: 400;
+  /* Mono (01/10): estipulado em outra fonte pra nunca ser confundido com
+     gasto real. Mono parece maior que a sans no mesmo tamanho — 0.92em
+     equilibra a altura visual ao lado do gasto. */
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: -0.01em;
+}
+
+.plannedSuffix {
+  color: var(--ink-soft);
+  font-weight: 400;
 }

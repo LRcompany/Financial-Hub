@@ -38,7 +38,7 @@ import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { TransactionEditModal } from '../components/TransactionEditModal'
 import { Select } from '../components/Select'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
-import { SpentPlannedValue } from '../components/SpentPlannedValue'
+import { SpentPlannedValue, PlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
@@ -761,7 +761,7 @@ export function Orcamento() {
                   <div className={styles.kindSummary}>
                     <div>
                       <span className={styles.kindSummaryLabel}>Previsto</span>
-                      <span className={styles.kindSummaryValue}><Money>R$ {currency(totalPlanned)}</Money></span>
+                      <span className={styles.kindSummaryValue}><PlannedValue value={totalPlanned} /></span>
                     </div>
                     <div>
                       <span className={styles.kindSummaryLabel}>Gasto</span>

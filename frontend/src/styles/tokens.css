@@ -85,6 +85,11 @@
      falta só adicionar o <link> do projeto Adobe Fonts no index.html e confirmar o nome exato
      que o kit expõe, geralmente algo como 'proxima-nova'). Inter é o fallback universal. */
   --font-display: 'proxima-nova', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Valor ESTIPULADO/planejado (01/10, pedido do Luiz: "deixa o valor
+     estipulado em outra fonte, só pra não me confundir quando é o gasto real
+     e o que foi estipulado") — fonte mono do sistema, nunca carregada à parte.
+     Gasto real continua em `--font-display`. Uso só via `PlannedValue`. */
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Peso máximo: Semibold. Nunca Bold/Black, em nenhum tamanho — hierarquia vem de tamanho, não peso. */
   --fw-regular: 400;

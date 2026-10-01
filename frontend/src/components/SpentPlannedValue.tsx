@@ -15,10 +15,20 @@ export function SpentPlannedValue({ spent, planned, suffix }: { spent: number; p
         <Money>R$ {currency(spent)}</Money>
       </span>
       {' / '}
-      <span className={styles.planned}>
-        <Money>R$ {currency(planned)}</Money>
-        {suffix ? ` ${suffix}` : ''}
-      </span>
+      <PlannedValue value={planned} />
+      {suffix ? <span className={styles.plannedSuffix}> {suffix}</span> : ''}
     </>
+  )
+}
+
+/** Valor ESTIPULADO/planejado sozinho (meta de categoria, total previsto,
+ * coluna "Estipulado") — fonte mono + cinza (01/10, pedido do Luiz: "só pra
+ * não me confundir quando é o valor gasto real e o que foi estipulado").
+ * Único jeito de mostrar um valor planejado no app; gasto real nunca usa. */
+export function PlannedValue({ value }: { value: number }) {
+  return (
+    <span className={styles.planned}>
+      <Money>R$ {currency(value)}</Money>
+    </span>
   )
 }

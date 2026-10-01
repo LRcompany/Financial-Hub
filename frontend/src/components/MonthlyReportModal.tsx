@@ -9,7 +9,7 @@ import { ClientPieChart } from './ClientPieChart'
 import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
-import { DailyGoalBalance } from './DailyGoalBalance'
+import { PlannedValue } from './SpentPlannedValue'
 import { ProjectedTag, OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
@@ -367,7 +367,6 @@ export function MonthlyReportModal({
   const dailyGoalItems = budget && budget.daysWithGoal > 0
     ? [
         { label: 'Dias abaixo da meta diária', value: `${budget.daysUnderGoal} de ${budget.daysWithGoal}` },
-        { label: 'Saldo da meta diária', value: <DailyGoalBalance value={budget.dailyGoalBalance} /> },
       ]
     : []
   const budgetHighlights = [
@@ -554,7 +553,7 @@ export function MonthlyReportModal({
                   <Money>R$ {currency(budget!.totalSpent)}</Money>
                 </Stat>
                 <Stat label="Planejado">
-                  <Money>R$ {currency(budget!.totalPlanned)}</Money>
+                  <PlannedValue value={budget!.totalPlanned} />
                 </Stat>
                 <Stat label={withinBudget ? 'Sobrou' : 'Estourou'}>
                   <Money>R$ {currency(Math.abs(diffFromPlanned))}</Money>
@@ -591,17 +590,6 @@ export function MonthlyReportModal({
                   <div className={styles.statGrid}>
                     <Stat label="Dias abaixo da meta">{daysUnder.length}</Stat>
                     <Stat label="Dias acima da meta">{daysOver.length}</Stat>
-                    <Stat
-                      label="Saldo da meta"
-                      note={
-                        budget!.dailyGoalBalance > 0 &&
-                        budget!.previousDailyGoalBalance > 0 && (
-                          <MonthDelta current={budget!.dailyGoalBalance} previous={budget!.previousDailyGoalBalance} higherIsBetter />
-                        )
-                      }
-                    >
-                      <DailyGoalBalance value={budget!.dailyGoalBalance} />
-                    </Stat>
                   </div>
                   {dailyDays.length >= 2 && (
                     <div className={styles.printHide}>
@@ -912,7 +900,7 @@ function GroupRows({ group }: { group: { name: string; spent: number; planned: n
       <tr className={styles.groupRow}>
         <td>{group.name}</td>
         <td><Money>R$ {currency(group.spent)}</Money></td>
-        <td><Money>R$ {currency(group.planned)}</Money></td>
+        <td><PlannedValue value={group.planned} /></td>
         <DiffCell planned={group.planned} spent={group.spent} />
       </tr>
       {group.rows.map((c) => (
@@ -921,7 +909,7 @@ function GroupRows({ group }: { group: { name: string; spent: number; planned: n
             {c.name} {c.spentProjected > 0 && <ProjectedTag />}
           </td>
           <td><Money>R$ {currency(c.spent)}</Money></td>
-          <td>{c.planned > 0 ? <Money>R$ {currency(c.planned)}</Money> : '—'}</td>
+          <td>{c.planned > 0 ? <PlannedValue value={c.planned} /> : '—'}</td>
           <DiffCell planned={c.planned} spent={c.spent} />
         </tr>
       ))}

@@ -2045,6 +2045,13 @@ Luiz, logo depois da entrada anterior: *"vamos repetir na meta deste mês apenas
 
 Verificado com servidor temporário contra `dev.db`: 15 categorias preenchidas, todas parceladas (Nutrição R$ 22,44, Hospedagem R$ 381,59, Itens de Casa R$ 2.316,16). Aluguel, Contador etc. vêm em branco. `tsc` limpo.
 
+### Relatório sem "saldo da meta diária" + valor estipulado em fonte mono (01/10)
+
+- **Saldo da meta diária saiu do relatório** (Destaques e box "Meta diária de gasto"). Luiz: *"por que passei 17k? não faz sentido mostrar."* A meta diária (R$ 150 × 30 = R$ 4.500) é pensada para gasto do dia a dia, mas o "gasto diário" soma TODA despesa do dia (boleto do aluguel, parcelas, contador...). O saldo do mês fica dominado por contas fixas e vira um número sem significado. O box continua com dias abaixo/acima e os chips. O "sobrou/passou R$ X da meta esse mês" dos cards de Dashboard/Orçamento continua por enquanto (mesma conta, oferecido remover).
+- **Valor estipulado em fonte mono**: *"deixa o valor estipulado em itálico ou outra fonte, só para não me confundir quando é o valor gasto real e o que foi estipulado"*. Novo token `--font-mono` (fonte mono do sistema) e componente `PlannedValue` (em `SpentPlannedValue.tsx`), único jeito de mostrar valor planejado. Aplicado em: `SpentPlannedValue` (todo "gasto / planejado" do app), coluna "Estipulado" e stat "Planejado" do relatório, "Previsto" das colunas de categoria do Orçamento.
+
+Verificado com servidor temporário contra `dev.db`: coluna Estipulado em mono cinza, sem "Saldo da meta" no relatório. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

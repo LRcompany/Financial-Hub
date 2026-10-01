@@ -110,6 +110,8 @@ Convenção de qual hover usar, pela cor de fundo em repouso do elemento (não i
 
 - **Saldo que pode ser negativo vira palavra, não sinal (`DailyGoalBalance`, 01/10)**: "sobrou R$X" em `--success` / "passou R$X" em `--danger`, sempre com o valor absoluto. Nunca "−R$ 1.234" solto: o sinal de menos some no meio do texto e "economizou −R$" não faz sentido. `MonthDelta` (variação %) só entre dois valores positivos.
 
+- **Valor estipulado/planejado sempre em `--font-mono` via `PlannedValue` (01/10)**: gasto real em `--font-display` (preto, forte), valor planejado em mono cinza (`--ink-soft`, 0.92em para equilibrar a altura visual). A diferença de fonte é o que separa "o que aconteceu" de "o que eu tinha estipulado" de relance, sem depender de rótulo. Nunca usar mono para gasto real, nem renderizar planejado com `<Money>` solto.
+
 ## Popup / tooltip de detalhe (`HoverCard`)
 
 Componente único (`components/HoverCard.tsx` + `.module.css`) — **é o único jeito de fazer hover-detalhe no projeto**, nunca duplicar esse CSS numa página nova. Usos hoje: nome de ativo na tabela de posição (emissor, taxa, vencimento, ISIN, USD quando aplicável) e rótulo de barra/item agrupado em gráfico (quando um bucket junta mais de uma posição). Generalizar pra qualquer lista nova segue sempre `<HoverCard content={...}><span>{nome}</span></HoverCard>` — `content` null renderiza só o filho, sem popup vazio nem sublinhado tracejado.
