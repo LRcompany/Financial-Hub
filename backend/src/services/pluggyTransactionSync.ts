@@ -50,6 +50,11 @@ interface PluggyTransaction {
     totalInstallments?: number | null;
     installmentNumber?: number | null;
     billForecastDate?: string | null; // "YYYY-MM"
+    // Data em que a parcela entrou na fatura ("YYYY-MM-DD") e data da compra
+    // original (ISO) — confirmado com dado real do C6 (02/10): toda parcela
+    // traz os dois; `billForecastDate` só vem na 1ª parcela de cada compra.
+    billPostDate?: string | null;
+    purchaseDate?: string | null;
   } | null;
   // Só vem em transação de conta BANK (Pix, TED, boleto...) — confirmado com
   // dado real (07/09) que `paymentData.receiver.name` só existe quando o
@@ -200,6 +205,105 @@ function futureDueDate(billForecastDate: string, monthsAhead: number, anchorDay:
   return new Date(y, monthIndex0, day);
 }
 
+/** Parcelas futuras (UpcomingInstallment) de cada compra parcelada do cartão,
+ * sempre derivadas da parcela MAIS RECENTE já lançada — em TODO sync, não só
+ * quando chega transação nova. Reescrito em 02/10 (Bike People Bike Shop e
+ * passagem TAP sem parcela futura nenhuma):
+ * - "Mesma compra" = descrição + final do cartão + data da compra original.
+ *   O valor NÃO entra na chave: varia centavos entre parcelas (Academia
+ *   246,99 x 247,00), e a chave antiga com valor nunca juntava as parcelas.
+ * - `billForecastDate` só vem na 1ª parcela de cada compra; nas seguintes a
+ *   referência é o mês da fatura em que a parcela entrou (`billPostDate`).
+ *   Antes, sem `billForecastDate` a compra simplesmente não ganhava parcela
+ *   futura.
+ * - Projeções antigas da mesma compra (criadas a partir de outra parcela)
+ *   são reaproveitadas pelo número da parcela — atualiza data/valor e mantém
+ *   nota/categoria que o Luiz editou. Projeção de parcela que já foi lançada
+ *   (número <= a mais recente) sai: o gasto real já está na Transaction.
+ * `dryRun` só lista o que faria (usado no backfill de 02/10). */
+export async function reprojectInstallments(
+  transactions: PluggyTransaction[],
+  cardLabel: string,
+  { dryRun = false }: { dryRun?: boolean } = {}
+): Promise<{ created: number; updated: number; deleted: number; log: string[] }> {
+  const log: string[] = [];
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+
+  const groups = new Map<string, PluggyTransaction[]>();
+  for (const tx of transactions) {
+    const meta = tx.creditCardMetadata;
+    if (!meta?.totalInstallments || !meta?.installmentNumber || tx.type === "CREDIT") continue;
+    const key = meta.purchaseDate
+      ? `${tx.description}|${meta.cardNumber ?? ""}|${meta.purchaseDate}`
+      : `${tx.description}|${meta.cardNumber ?? ""}|${tx.amount}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(tx);
+  }
+
+  for (const txs of groups.values()) {
+    const latest = txs.reduce((a, b) => {
+      const na = a.creditCardMetadata!.installmentNumber!;
+      const nb = b.creditCardMetadata!.installmentNumber!;
+      return nb > na || (nb === na && b.date > a.date) ? b : a;
+    });
+    const meta = latest.creditCardMetadata!;
+    const total = meta.totalInstallments!;
+    const current = meta.installmentNumber!;
+    const forecast = meta.billForecastDate ?? (meta.billPostDate ?? latest.date).slice(0, 7);
+    const anchorDay = new Date(latest.date).getDate();
+    const label = `${latest.description.slice(0, 28)} (${current}/${total})`;
+
+    const existing = await prisma.upcomingInstallment.findMany({
+      where: { OR: txs.map((t) => ({ externalId: { startsWith: `pluggy:${t.id}:` } })) },
+    });
+    const byNumber = new Map<number, (typeof existing)[number]>();
+    for (const u of existing) {
+      const n = Number(u.externalId!.split(":")[2]);
+      // Parcela já lançada, ou cópia repetida do mesmo número vinda de outra
+      // parcela-fonte — sai.
+      if (n <= current || byNumber.has(n)) {
+        log.push(`apaga  ${label} parcela ${n} de ${u.dueDate.toISOString().slice(0, 10)} R$${u.amount}`);
+        if (!dryRun) await prisma.upcomingInstallment.delete({ where: { id: u.id } });
+        deleted++;
+        continue;
+      }
+      byNumber.set(n, u);
+    }
+
+    const latestDb = await prisma.transaction.findUnique({ where: { externalId: `pluggy:${latest.id}` }, select: { categoryId: true } });
+    const categoryId = latestDb?.categoryId ?? existing.find((u) => u.categoryId)?.categoryId ?? null;
+    const amount = realAmount(latest);
+    for (let n = current + 1; n <= total; n++) {
+      const dueDate = futureDueDate(forecast, n - current, anchorDay);
+      const old = byNumber.get(n);
+      if (old) {
+        const changed = old.dueDate.getTime() !== dueDate.getTime() || Math.abs(old.amount - amount) > 0.005;
+        if (changed) {
+          log.push(`ajusta ${label} parcela ${n}: ${old.dueDate.toISOString().slice(0, 10)} -> ${dueDate.toISOString().slice(0, 10)} R$${amount}`);
+          if (!dryRun) {
+            await prisma.upcomingInstallment.update({
+              where: { id: old.id },
+              data: { dueDate, amount, description: latest.description, cardLabel, categoryId: old.categoryId ?? categoryId },
+            });
+          }
+          updated++;
+        }
+        continue;
+      }
+      log.push(`cria   ${label} parcela ${n} em ${dueDate.toISOString().slice(0, 10)} R$${amount}`);
+      if (!dryRun) {
+        await prisma.upcomingInstallment.create({
+          data: { externalId: `pluggy:${latest.id}:${n}`, dueDate, description: latest.description, amount, cardLabel, categoryId },
+        });
+      }
+      created++;
+    }
+  }
+  return { created, updated, deleted, log };
+}
+
 export async function syncBrokerCreditCardTransactions(brokerId: string, itemId: string) {
   const broker = await prisma.broker.findUniqueOrThrow({ where: { id: brokerId } });
 
@@ -317,52 +421,9 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       newlyCreated.push({ tx, categoryId });
     }
 
-    // Passo 2: projeta parcela futura só a partir da fatura MAIS RECENTE de
-    // cada compra parcelada. Cada mês de fatura já vem com sua própria
-    // "parcelas restantes a partir daqui" — usar todo mês pra projetar
-    // duplicaria pesado (confirmado com dado real: Usina Solar tinha 21
-    // faturas mensais, cada uma projetando o restante, virando 179 linhas
-    // sobrepostas pra só 19 datas de vencimento distintas). "Mesma compra" =
-    // mesma descrição + valor + últimos dígitos do cartão.
-    const latestByPurchase = new Map<string, { tx: PluggyTransaction; categoryId: string | null }>();
-    for (const entry of newlyCreated) {
-      const meta = entry.tx.creditCardMetadata;
-      if (!meta?.totalInstallments || !meta?.installmentNumber) continue;
-      const key = `${entry.tx.description}|${entry.tx.amount}|${meta.cardNumber ?? ""}`;
-      const current = latestByPurchase.get(key);
-      const currentNumber = current?.tx.creditCardMetadata?.installmentNumber ?? -1;
-      if (meta.installmentNumber > currentNumber) latestByPurchase.set(key, entry);
-    }
-
-    for (const { tx, categoryId } of latestByPurchase.values()) {
-      const meta = tx.creditCardMetadata!;
-      const total = meta.totalInstallments!;
-      const current = meta.installmentNumber!;
-      const forecast = meta.billForecastDate;
-      if (!forecast || total <= current) continue;
-      const anchorDay = new Date(tx.date).getDate();
-      // Projeção usa o valor REAL (convertido) da parcela mais recente como
-      // estimativa das próximas — é a mesma aproximação que já existia,
-      // só que agora com o valor certo em reais (não o valor em dólar).
-      const projectedAmount = realAmount(tx);
-      for (let n = current + 1; n <= total; n++) {
-        const installmentExternalId = `pluggy:${tx.id}:${n}`;
-        const dueDate = futureDueDate(forecast, n - current, anchorDay);
-        await prisma.upcomingInstallment.upsert({
-          where: { externalId: installmentExternalId },
-          update: { dueDate, description: tx.description, amount: projectedAmount, cardLabel: broker.name, categoryId },
-          create: {
-            externalId: installmentExternalId,
-            dueDate,
-            description: tx.description,
-            amount: projectedAmount,
-            cardLabel: broker.name,
-            categoryId,
-          },
-        });
-        installmentsCreated++;
-      }
-    }
+    // Passo 2: parcelas futuras, sempre a partir da parcela MAIS RECENTE de
+    // cada compra (ver `reprojectInstallments`).
+    installmentsCreated += (await reprojectInstallments(transactions, broker.name)).created;
   }
 
   // Pix (07/09, pedido do Luiz: "vamos implementar trazer o pix de todos os
