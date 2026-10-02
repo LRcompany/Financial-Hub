@@ -2067,6 +2067,22 @@ Luiz: *"quando vou em Orçamento e volto pra setembro, o box do gasto diário n�
 
 Verificado com servidor temporário contra `dev.db`: set/out/nov via API (30 dias / 2 dias / vazio) e tela do Orçamento em setembro. `tsc` limpo.
 
+### Patrimônio e Projetos com seletor de mês (02/10)
+
+Luiz: *"pode mostrar o mês anterior em patrimônio e projetos... assim eu consigo ver o que rolou mês anterior. Não podemos perder o histórico das coisas."*
+
+- **`MonthNavigator`** (novo componente, CSS saiu de `Orcamento.module.css`): "‹ out/2026 ›" + "Hoje". A proteção contra dois cliques rápidos (ref síncrona) mudou do Orçamento para dentro do componente; o `periodRef` do Orçamento, que não era lido por mais nada, saiu. `allowFuture={false}` em Patrimônio/Projetos.
+- **Patrimônio**: `/positions` e `/positions/history` aceitam `?month&year` (`queryYm`, nunca passa do snapshot mais recente). `/wealth-overview` já aceitava; o "aportado real no ano" e o gráfico de proventos agora vão de janeiro até o mês consultado (antes, sempre o ano de hoje). A tela inteira (total, evolução, alocação, destaques, proventos, posições) mostra a carteira daquele mês.
+- **Projetos**: `projectsSummary({month, year})`. Mudam com o mês:
+  - "Recebido em <mês>" (+ variação);
+  - "Recebido em <ano>";
+  - média mensal e gráfico "Recebido por mês";
+  - "A receber no fim de <mês>": novo `outstandingAsOf`, que considera só projeto já iniciado e recebimento até o fim do mês; o mês atual continua contando tudo.
+
+  `outstandingLastMonth` virou o saldo de verdade no início do mês (antes era `outstanding + recebido no mês`, aproximação). Totais gerais e a lista de projetos não mudam com o mês.
+
+Verificado com servidor temporário contra `dev.db`: Patrimônio em agosto = R$ 633.922,84 com evolução terminando em ago/26; API de positions/wealth/projects por mês. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

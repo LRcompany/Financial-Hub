@@ -156,7 +156,9 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // mas eu fiz isso?"). Soma só as entradas cujo mês cai no ano corrente —
   // sempre um subconjunto dos últimos 12 meses (jan a dezembro nunca passa
   // de 12 meses atrás de "agora").
-  const currentCalendarYear = new Date().getFullYear();
+  // Ano do MÊS CONSULTADO (02/10, Patrimônio com seletor de mês): olhando
+  // setembro/2026, é 2026 até setembro; sem query, é o ano de agora.
+  const currentCalendarYear = Math.floor((nowYm - 1) / 12);
   const realContributionThisYear = investedByMonthWithYear
     .filter((e) => e.year === currentCalendarYear)
     .reduce((sum, e) => sum + e.value, 0);
@@ -218,9 +220,10 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // passado). Vem de `DividendPayment` (não do snapshot) — cobre um mês
   // mesmo sem `PositionSnapshot` por ticker naquele mês (jan-jul/2026, antes
   // do BTG sincronizar Ação/FII individualmente via Pluggy).
-  const nowReal = new Date();
-  const currentYear = nowReal.getFullYear();
-  const currentMonth = nowReal.getMonth() + 1;
+  // Janeiro até o MÊS CONSULTADO (02/10) — no mês atual é igual a antes;
+  // num mês passado, o gráfico termina naquele mês (não mostra o "futuro").
+  const currentYear = Math.floor((nowYm - 1) / 12);
+  const currentMonth = nowYm - currentYear * 12;
   const dividendPaymentsThisYear = await prisma.dividendPayment.findMany({
     where: { year: currentYear, month: { lte: currentMonth } },
     include: { security: true },

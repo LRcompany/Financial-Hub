@@ -24,14 +24,25 @@ positionsRouter.get("/fx-rate", async (_req, res) => {
 // ver services/activePositions.ts (corretora encerrada some da lista, e um
 // broker que migrou de planilha manual pra Pluggy não conta a mesma posição
 // duas vezes).
-positionsRouter.get("/positions", async (_req, res) => {
+// Mês consultado (02/10, pedido do Luiz: "pode mostrar o mês anterior em
+// patrimônio... não podemos perder o histórico das coisas"): `?month&year`
+// fixa a "foto" da carteira naquele mês (`activeSnapshotsAsOf` já resolve
+// qual snapshot valia em qualquer mês). Sem query = mês do snapshot mais
+// recente, comportamento de sempre — mesma regra de /wealth-overview.
+function queryYm(query: Record<string, unknown>, fallbackYm: number): number {
+  const m = query.month ? Number(query.month) : null;
+  const y = query.year ? Number(query.year) : null;
+  return m && y ? Math.min(yearMonth(y, m), fallbackYm) : fallbackYm;
+}
+
+positionsRouter.get("/positions", async (req, res) => {
   const all = await fetchAllSnapshots();
 
   if (all.length === 0) {
     return res.json({ hasData: false, byType: [] });
   }
 
-  const nowYm = yearMonth(all[0].year, all[0].month);
+  const nowYm = queryYm(req.query, yearMonth(all[0].year, all[0].month));
   const latest = activeSnapshotsAsOf(all, nowYm);
 
   // Mês anterior por (broker, security) — só usado pra "Conta Corrente" (ver
@@ -227,7 +238,9 @@ positionsRouter.get("/positions/history", async (req, res) => {
   const groupSnaps = all.filter((s) => (s.broker.standalone ? s.broker.name : s.security.type).toLowerCase() === group.toLowerCase());
   if (groupSnaps.length === 0) return res.json({ history: [] });
 
-  const nowYm = yearMonth(groupSnaps[0].year, groupSnaps[0].month);
+  // Termina no mês consultado (ver `queryYm`) — o gráfico do grupo não
+  // mostra o "futuro" de quem está olhando um mês passado.
+  const nowYm = queryYm(req.query, yearMonth(groupSnaps[0].year, groupSnaps[0].month));
   const history: { label: string; value: number }[] = [];
   for (let i = 23; i >= 0; i--) {
     const ym = nowYm - i;

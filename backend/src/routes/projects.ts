@@ -491,14 +491,24 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   const monthsWithData = monthlyReceived.filter((m) => m.value > 0).length || 1;
   const avgMonthlyThisYear = monthlyReceived.reduce((sum, m) => sum + m.value, 0) / monthsWithData;
 
-  // saldo a receber = valor de contrato - já recebido, projetos não cancelados
+  // saldo a receber = valor de contrato - já recebido, projetos não cancelados.
+  // `asOf` (02/10, Projetos com seletor de mês): saldo como estava no FIM de
+  // um mês passado — só projeto que já tinha começado e só recebimento até
+  // ali. Sem `asOf` = hoje, contando tudo (inclusive projeto já fechado que
+  // começa mês que vem — é dinheiro a receber de verdade).
   const openProjects = projects.filter((p) => p.status !== "cancelado");
-  const outstanding = openProjects.reduce((sum, p) => {
-    const received = p.receipts.reduce((s, r) => s + r.amount, 0);
-    return sum + Math.max(0, p.contractValue - received);
-  }, 0);
+  function outstandingAsOf(asOf: Date | null): number {
+    return openProjects.reduce((sum, p) => {
+      if (asOf && p.startDate >= asOf) return sum;
+      const received = p.receipts.filter((r) => !asOf || r.paymentDate < asOf).reduce((s, r) => s + r.amount, 0);
+      return sum + Math.max(0, p.contractValue - received);
+    }, 0);
+  }
+  const monthEndReq = new Date(year, month, 1);
+  const isPastMonth = monthEndReq <= now;
+  const outstanding = outstandingAsOf(isPastMonth ? monthEndReq : null);
   const receivedThisMonth = receivedThisMonthAgg._sum.amount ?? 0;
-  const outstandingLastMonth = outstanding + receivedThisMonth;
+  const outstandingLastMonth = outstandingAsOf(new Date(year, month - 1, 1));
 
   // fornecedor: pago vs a pagar (agreedAmount - pago), projetos não cancelados
   const supplierPaid = allSupplierPayments.reduce((s, p) => s + p.amount, 0);

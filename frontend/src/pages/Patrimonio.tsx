@@ -31,6 +31,7 @@ import { ContributionModal } from '../components/ContributionModal'
 import { ManualDividendModal } from '../components/ManualDividendModal'
 import { Money } from '../components/Money'
 import { currency } from '../lib/format'
+import { MonthNavigator } from '../components/MonthNavigator'
 import cards from '../styles/cards.module.css'
 import styles from './Patrimonio.module.css'
 
@@ -169,6 +170,13 @@ function assetHoverContent(p: Position) {
 }
 
 export function Patrimonio() {
+  // Mês consultado (02/10, pedido do Luiz: "pode mostrar o mês anterior em
+  // patrimônio... não podemos perder o histórico das coisas") — a carteira
+  // inteira (total, alocação, posições, proventos, aportes) como estava
+  // naquele mês. Nunca mês futuro (não existe snapshot do que não aconteceu).
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [year, setYear] = useState(now.getFullYear())
   const [wealth, setWealth] = useState<WealthOverview | null>(null)
   const [error, setError] = useState(false)
 
@@ -186,8 +194,9 @@ export function Patrimonio() {
   const [dividendTarget, setDividendTarget] = useState<{ brokerId: string; securityId: string; name: string } | null>(null)
 
   function load() {
+    const period = { month, year }
     api
-      .wealthOverview()
+      .wealthOverview(period)
       .then((w) => {
         setWealth(w)
         setTargetInput(w.wealthGoal ? String(w.wealthGoal.targetAmount) : '')
@@ -195,16 +204,17 @@ export function Patrimonio() {
       })
       .catch(() => setError(true))
     api
-      .positions()
+      .positions(period)
       .then((p) => {
         setPositions(p.byType)
+        setGroupHistories({})
         // Evolução por GRUPO (mesmo agrupamento da tela: tipo, ou corretora
         // quando standalone) — nunca por corretora sozinha, isso misturava
         // tipos (ex: BTG entra em Renda Fixa/FII/Ação/Fundo, a evolução de
         // "Ação" mostrava o BTG inteiro, não só as ações).
         p.byType.forEach((g) => {
           api
-            .positionsHistory(g.type)
+            .positionsHistory(g.type, period)
             .then((h) => setGroupHistories((prev) => ({ ...prev, [g.type]: h.history })))
             .catch(() => {})
         })
@@ -216,7 +226,7 @@ export function Patrimonio() {
       .catch(() => {})
   }
 
-  useEffect(load, [])
+  useEffect(load, [month, year])
 
   async function saveGoal(e: React.FormEvent) {
     e.preventDefault()
@@ -248,7 +258,9 @@ export function Patrimonio() {
   // outra coisa (quanto ainda falta aportar dali até dezembro, pra projeção
   // futura) — comparar `realContribution` com ELE seria comparar períodos
   // diferentes (jan-agora vs. agora-dezembro), por isso a base separada aqui.
-  const monthsElapsedThisYear = new Date().getMonth() + 1
+  // Até o MÊS CONSULTADO (02/10) — o "aportado real" do backend também vai
+  // de janeiro até o mês do seletor.
+  const monthsElapsedThisYear = month
   const plannedContributionSoFarThisYear = wealth.wealthGoal ? wealth.wealthGoal.monthlyContribution * monthsElapsedThisYear : null
 
   // Mesma regra das boxes abaixo: corretora única vira o nome dela em vez do
@@ -263,9 +275,20 @@ export function Patrimonio() {
     <div className={cards.page}>
       <div className={styles.titleRow}>
         <h1 className={cards.pageTitle}>Patrimônio</h1>
-        <button className={styles.addContributionBtn} onClick={() => setShowContributionModal(true)}>
-          + Registrar aporte
-        </button>
+        <div className={styles.titleActions}>
+          <MonthNavigator
+            month={month}
+            year={year}
+            allowFuture={false}
+            onChange={(m, y) => {
+              setMonth(m)
+              setYear(y)
+            }}
+          />
+          <button className={styles.addContributionBtn} onClick={() => setShowContributionModal(true)}>
+            + Registrar aporte
+          </button>
+        </div>
       </div>
 
       {showContributionModal && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Target,
@@ -38,6 +38,7 @@ import { TransactionEditModal } from '../components/TransactionEditModal'
 import { Select } from '../components/Select'
 import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue, PlannedValue } from '../components/SpentPlannedValue'
+import { MonthNavigator } from '../components/MonthNavigator'
 import { Money } from '../components/Money'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
@@ -68,13 +69,6 @@ export function Orcamento() {
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
-  // Espelha month/year sincronamente — changeMonth lê daqui em vez do state
-  // (que só atualiza no próximo render), pra dois cliques em sequência
-  // rápida não computarem os dois a partir do mesmo mês antigo.
-  const periodRef = useRef({ month, year })
-  useEffect(() => {
-    periodRef.current = { month, year }
-  }, [month, year])
 
   const [budget, setBudget] = useState<BudgetSummary | null>(null)
   const [error, setError] = useState(false)
@@ -172,25 +166,9 @@ export function Orcamento() {
   const displayedInstallments = installmentDetail ?? upcoming
   const selectedInstallmentPeriod = installmentMonth ?? { month, year }
 
-  function changeMonth(delta: number) {
-    let m = periodRef.current.month + delta
-    let y = periodRef.current.year
-    if (m < 1) {
-      m = 12
-      y -= 1
-    } else if (m > 12) {
-      m = 1
-      y += 1
-    }
-    periodRef.current = { month: m, year: y }
+  function setPeriod(m: number, y: number) {
     setMonth(m)
     setYear(y)
-  }
-
-  function goToToday() {
-    periodRef.current = { month: now.getMonth() + 1, year: now.getFullYear() }
-    setMonth(now.getMonth() + 1)
-    setYear(now.getFullYear())
   }
 
   async function copyPreviousMonth() {
@@ -249,22 +227,7 @@ export function Orcamento() {
     <div className={cards.page}>
       <div className={styles.header}>
         <h1 className={cards.pageTitle}>Orçamento</h1>
-        <div className={styles.monthNav}>
-          {!isCurrentMonth && (
-            <button className={styles.todayBtn} onClick={goToToday}>
-              Hoje
-            </button>
-          )}
-          <button className={styles.navBtn} onClick={() => changeMonth(-1)} aria-label="Mês anterior">
-            ‹
-          </button>
-          <span className={styles.monthLabel}>
-            {MONTH_NAMES[month - 1]}/{year}
-          </span>
-          <button className={styles.navBtn} onClick={() => changeMonth(1)} aria-label="Próximo mês">
-            ›
-          </button>
-        </div>
+        <MonthNavigator month={month} year={year} onChange={setPeriod} />
       </div>
 
       {showReviewBanner && (

@@ -112,6 +112,8 @@ Convenção de qual hover usar, pela cor de fundo em repouso do elemento (não i
 
 - **Valor estipulado/planejado sempre em `--font-mono` via `PlannedValue` (01/10)**: gasto real em `--font-display` (preto, forte), valor planejado em mono cinza (`--ink-soft`, 0.92em para equilibrar a altura visual). A diferença de fonte é o que separa "o que aconteceu" de "o que eu tinha estipulado" de relance, sem depender de rótulo. Nunca usar mono para gasto real, nem renderizar planejado com `<Money>` solto.
 
+- **Seletor de mês é sempre `MonthNavigator` (02/10)**: qualquer página com histórico por mês (Orçamento, Patrimônio, Projetos) usa o mesmo componente, no canto direito do título. Nunca uma cópia do CSS. Página sem dado de futuro passa `allowFuture={false}`. Rótulos que dizem "este mês"/"hoje" viram o nome do mês quando o mês escolhido não é o atual ("Recebido em setembro", "Gasto do dia 30/09").
+
 ## Popup / tooltip de detalhe (`HoverCard`)
 
 Componente único (`components/HoverCard.tsx` + `.module.css`) — **é o único jeito de fazer hover-detalhe no projeto**, nunca duplicar esse CSS numa página nova. Usos hoje: nome de ativo na tabela de posição (emissor, taxa, vencimento, ISIN, USD quando aplicável) e rótulo de barra/item agrupado em gráfico (quando um bucket junta mais de uma posição). Generalizar pra qualquer lista nova segue sempre `<HoverCard content={...}><span>{nome}</span></HoverCard>` — `content` null renderiza só o filho, sem popup vazio nem sublinhado tracejado.

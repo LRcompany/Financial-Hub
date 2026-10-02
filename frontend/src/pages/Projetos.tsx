@@ -32,6 +32,7 @@ import { IconButton } from '../components/IconButton'
 import { Money } from '../components/Money'
 import { ModalShell } from '../components/ModalShell'
 import { currency } from '../lib/format'
+import { MonthNavigator } from '../components/MonthNavigator'
 import cards from '../styles/cards.module.css'
 import styles from './Projetos.module.css'
 
@@ -49,7 +50,17 @@ const STATUS_LABEL: Record<string, string> = {
 const NEW_CLIENT = '__new__'
 const NEW_SUPPLIER = '__new__'
 
+const MONTH_NAMES_FULL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
 export function Projetos() {
+  // Mês consultado (02/10, pedido do Luiz: "pode mostrar o mês anterior em
+  // projetos... não podemos perder o histórico das coisas"). Muda o que é
+  // do mês/ano (recebido no mês, no ano, média, gráfico por mês, a receber
+  // no fim do mês); os totais gerais e a lista de projetos são de sempre.
+  const now = new Date()
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [year, setYear] = useState(now.getFullYear())
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear()
   const [summary, setSummary] = useState<ProjectsSummary | null>(null)
   const [projects, setProjects] = useState<ProjectListItem[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -61,7 +72,7 @@ export function Projetos() {
   const [showNewTax, setShowNewTax] = useState(false)
 
   function load() {
-    Promise.all([api.projectsSummary(), api.projects(), api.clients(), api.suppliers(), api.taxPayments()])
+    Promise.all([api.projectsSummary({ month, year }), api.projects(), api.clients(), api.suppliers(), api.taxPayments()])
       .then(([s, p, c, sup, tax]) => {
         setSummary(s)
         setProjects(p)
@@ -73,14 +84,25 @@ export function Projetos() {
       .catch(() => setError(true))
   }
 
-  useEffect(load, [])
+  useEffect(load, [month, year])
 
   if (error) return <div className={cards.emptyState}>Não consegui falar com o backend ainda.</div>
   if (!summary) return null
 
   return (
     <div className={cards.page}>
-      <h1 className={cards.pageTitle}>Projetos</h1>
+      <div className={styles.titleRow}>
+        <h1 className={cards.pageTitle}>Projetos</h1>
+        <MonthNavigator
+          month={month}
+          year={year}
+          allowFuture={false}
+          onChange={(m, y) => {
+            setMonth(m)
+            setYear(y)
+          }}
+        />
+      </div>
 
       {/* ---------- Visão Geral ---------- */}
       <section>
@@ -139,18 +161,18 @@ export function Projetos() {
           <div className={cards.card}>
             <CardHeader icon={TrendingUp} title="Total de entradas" />
             <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Recebido este mês</span>
+              <span className={cards.heroLabel}>{isCurrentMonth ? 'Recebido este mês' : `Recebido em ${MONTH_NAMES_FULL[month - 1]}`}</span>
               <span className={styles.statValueWithDelta}>
                 <span className={cards.statValue}><Money>R$ {currency(summary.receivedThisMonth)}</Money></span>
                 <MonthDelta current={summary.receivedThisMonth} previous={summary.receivedLastMonth} />
               </span>
             </div>
             <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Recebido no ano</span>
+              <span className={cards.heroLabel}>Recebido em {year}</span>
               <span className={cards.statValue}><Money>R$ {currency(summary.receivedThisYear)}</Money></span>
             </div>
             <div className={styles.statRow}>
-              <span className={cards.heroLabel}>Total a receber</span>
+              <span className={cards.heroLabel}>{isCurrentMonth ? 'Total a receber' : `A receber no fim de ${MONTH_NAMES_FULL[month - 1]}`}</span>
               <span className={cards.statValue}><Money>R$ {currency(summary.outstanding)}</Money></span>
             </div>
           </div>

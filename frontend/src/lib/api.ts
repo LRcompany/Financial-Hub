@@ -851,7 +851,12 @@ export const api = {
     request<{ totalRevenue: number; alreadyExists: boolean }>(`/tax-payments/preview?month=${month}&year=${year}`),
   createTaxPayment: (input: { competenceMonth: number; competenceYear: number; totalRevenue?: number; amountPaid: number; paymentDate: string }) =>
     postJson<TaxPayment>('/tax-payments', input),
-  positions: () => request<{ hasData: boolean; byType: PositionsByType[] }>('/positions'),
+  // `month/year` (02/10): carteira como estava naquele mês (Patrimônio com
+  // seletor de mês). Sem params = snapshot mais recente.
+  positions: (params?: { month: number; year: number }) =>
+    request<{ hasData: boolean; byType: PositionsByType[] }>(
+      `/positions${params ? `?month=${params.month}&year=${params.year}` : ''}`
+    ),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
   // Lançamento manual de provento (11/09) — botão "+ Rendimento" em posição
   // tipo Fundo (a Pluggy não manda dividendo pra esse tipo, ver pluggySync.ts
@@ -888,6 +893,8 @@ export const api = {
     if (!response.ok) throw new Error(data.error ?? `Falha ao salvar as posições (${response.status})`)
     return data as { saved: true; count: number; month: number; year: number }
   },
-  positionsHistory: (group: string) =>
-    request<{ history: { label: string; value: number }[] }>(`/positions/history?group=${encodeURIComponent(group)}`),
+  positionsHistory: (group: string, params?: { month: number; year: number }) =>
+    request<{ history: { label: string; value: number }[] }>(
+      `/positions/history?group=${encodeURIComponent(group)}${params ? `&month=${params.month}&year=${params.year}` : ''}`
+    ),
 }
