@@ -414,7 +414,9 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         // sem tocar em mais nada — categoria/nota ficam como o Luiz deixou.
         const date = effectiveDate(tx);
         const fields = installmentFields(tx);
-        const dateChanged = Math.abs(existing.date.getTime() - date.getTime()) >= 24 * 60 * 60 * 1000;
+        // Compara o DIA do calendário (UTC), não a diferença em horas — 03/03
+        // 00h e 02/03 12h ficam a menos de 24h e escapavam (Usina, 02/10).
+        const dateChanged = existing.date.toISOString().slice(0, 10) !== date.toISOString().slice(0, 10);
         const installmentMissing = fields.installmentNumber != null && existing.installmentNumber !== fields.installmentNumber;
         if (!existing.pluggyPending && (dateChanged || installmentMissing)) {
           await prisma.transaction.update({ where: { id: existing.id }, data: { date, ...fields } });
