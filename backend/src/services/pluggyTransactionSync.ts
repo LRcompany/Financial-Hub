@@ -231,12 +231,36 @@ export async function reprojectInstallments(
   let updated = 0;
   let deleted = 0;
 
+  const now = new Date();
+  const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // Nunca cria parcela prevista antes do mês PASSADO: o buraco que isso
+  // cobre é a fatura que a Pluggy ainda não entregou (C6 mudou a data da
+  // fatura em set/26); mês mais antigo que isso já tem o dado real, e uma
+  // projeção lá só duplicaria gasto.
+  const oldestDue = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  // Estorno (CREDIT com a mesma descrição e valor, no mesmo dia da compra):
+  // compra cancelada não tem parcela futura. Ex. real: AMAZONMKTPLC*TAXCONFIG
+  // 10x de R$123,72, estornada um mês depois.
+  const refunds = new Set(
+    transactions
+      .filter((t) => t.type === "CREDIT" || t.amount < 0)
+      .map((t) => `${t.description}|${Math.abs(t.amount).toFixed(2)}|${t.date.slice(0, 10)}`)
+  );
+
   const groups = new Map<string, PluggyTransaction[]>();
   for (const tx of transactions) {
     const meta = tx.creditCardMetadata;
-    if (!meta?.totalInstallments || !meta?.installmentNumber || tx.type === "CREDIT") continue;
+    if (!meta?.totalInstallments || !meta?.installmentNumber || tx.type === "CREDIT" || tx.amount < 0) continue;
+    // Parcela de fatura FUTURA: o BTG manda as parcelas ainda não cobradas
+    // como transação datada no dia da compra, com `billForecastDate` no mês
+    // em que vão cair (Usina Solar: parcelas 9 a 21 datadas 03/02). Não é a
+    // "mais recente lançada".
+    if (meta.billForecastDate && meta.billForecastDate > currentYm) continue;
+    // `purchaseDate` varia nos milissegundos entre parcelas da MESMA compra
+    // (BTG, Usina Solar) — compara só até o minuto.
     const key = meta.purchaseDate
-      ? `${tx.description}|${meta.cardNumber ?? ""}|${meta.purchaseDate}`
+      ? `${tx.description}|${meta.cardNumber ?? ""}|${meta.purchaseDate.slice(0, 16)}`
       : `${tx.description}|${meta.cardNumber ?? ""}|${tx.amount}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(tx);
@@ -258,12 +282,25 @@ export async function reprojectInstallments(
     const existing = await prisma.upcomingInstallment.findMany({
       where: { OR: txs.map((t) => ({ externalId: { startsWith: `pluggy:${t.id}:` } })) },
     });
+    const purchaseDay = (meta.purchaseDate ?? latest.date).slice(0, 10);
+    const refunded = refunds.has(`${latest.description}|${Math.abs(latest.amount).toFixed(2)}|${purchaseDay}`);
+    // Parcelas que JÁ estão gravadas como Transaction — só essas autorizam
+    // apagar a projeção do mesmo número (senão o mês fica sem a parcela até
+    // o próximo sync trazer a real).
+    const postedNumbers = new Set(
+      (
+        await prisma.transaction.findMany({
+          where: { externalId: { in: txs.map((t) => `pluggy:${t.id}`) } },
+          select: { installmentNumber: true },
+        })
+      ).map((t) => t.installmentNumber)
+    );
     const byNumber = new Map<number, (typeof existing)[number]>();
     for (const u of existing) {
       const n = Number(u.externalId!.split(":")[2]);
-      // Parcela já lançada, ou cópia repetida do mesmo número vinda de outra
-      // parcela-fonte — sai.
-      if (n <= current || byNumber.has(n)) {
+      // Compra estornada, parcela já lançada (e gravada), ou cópia repetida do
+      // mesmo número vinda de outra parcela-fonte — sai.
+      if (refunded || (n <= current && postedNumbers.has(n)) || byNumber.has(n)) {
         log.push(`apaga  ${label} parcela ${n} de ${u.dueDate.toISOString().slice(0, 10)} R$${u.amount}`);
         if (!dryRun) await prisma.upcomingInstallment.delete({ where: { id: u.id } });
         deleted++;
@@ -272,6 +309,7 @@ export async function reprojectInstallments(
       byNumber.set(n, u);
     }
 
+    if (refunded) continue;
     const latestDb = await prisma.transaction.findUnique({ where: { externalId: `pluggy:${latest.id}` }, select: { categoryId: true } });
     const categoryId = latestDb?.categoryId ?? existing.find((u) => u.categoryId)?.categoryId ?? null;
     const amount = realAmount(latest);
@@ -292,6 +330,7 @@ export async function reprojectInstallments(
         }
         continue;
       }
+      if (dueDate < oldestDue) continue;
       log.push(`cria   ${label} parcela ${n} em ${dueDate.toISOString().slice(0, 10)} R$${amount}`);
       if (!dryRun) {
         await prisma.upcomingInstallment.create({
