@@ -287,14 +287,12 @@ export async function reprojectInstallments(
     // Parcelas que JÁ estão gravadas como Transaction — só essas autorizam
     // apagar a projeção do mesmo número (senão o mês fica sem a parcela até
     // o próximo sync trazer a real).
-    const postedNumbers = new Set(
-      (
-        await prisma.transaction.findMany({
-          where: { externalId: { in: txs.map((t) => `pluggy:${t.id}`) } },
-          select: { installmentNumber: true },
-        })
-      ).map((t) => t.installmentNumber)
-    );
+    const postedRows = await prisma.transaction.findMany({
+      where: { externalId: { in: txs.map((t) => `pluggy:${t.id}`) } },
+      select: { installmentNumber: true, categoryId: true, date: true },
+      orderBy: { date: "desc" },
+    });
+    const postedNumbers = new Set(postedRows.map((t) => t.installmentNumber));
     const byNumber = new Map<number, (typeof existing)[number]>();
     for (const u of existing) {
       const n = Number(u.externalId!.split(":")[2]);
@@ -310,8 +308,11 @@ export async function reprojectInstallments(
     }
 
     if (refunded) continue;
-    const latestDb = await prisma.transaction.findUnique({ where: { externalId: `pluggy:${latest.id}` }, select: { categoryId: true } });
-    const categoryId = latestDb?.categoryId ?? existing.find((u) => u.categoryId)?.categoryId ?? null;
+    // Categoria: a da parcela lançada mais recente que tenha uma (a última
+    // às vezes chega sem — regra de categorização não bateu — mas as
+    // anteriores da MESMA compra já foram categorizadas), senão a de alguma
+    // projeção antiga da compra.
+    const categoryId = postedRows.find((t) => t.categoryId)?.categoryId ?? existing.find((u) => u.categoryId)?.categoryId ?? null;
     const amount = realAmount(latest);
     for (let n = current + 1; n <= total; n++) {
       const dueDate = futureDueDate(forecast, n - current, anchorDay);
