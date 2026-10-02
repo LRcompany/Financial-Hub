@@ -2127,6 +2127,25 @@ Aprovado pelo Luiz depois da entrada anterior.
 
 Resultado: Usina com uma parcela por mês, reais fev–out/26 e previstas nov/26–out/27 (21 no total). Diff contra o backup: só essas mudanças.
 
+### Parcela é parcela: dia da compra, box com todas as parcelas, sem "projetado" (02/10)
+
+Luiz: *"se eu compro algo parcelado em 10x não é previsão. Previsão é algo que pode ou não acontecer... faça chuva ou faça sol ela sempre vai cair. Por que você está tratando como previsão?"* e *"o dia da compra... no cartão mostra o dia da compra e as parcelas."*
+
+- **Data de toda parcela = dia da compra, mês a mês** (`purchaseDayPlusMonths`, meio-dia UTC): parcela N = data da compra + (N−1) meses. Vale para a Transaction real da Pluggy (`effectiveDate`, quando há `purchaseDate`) e para a parcela ainda não lançada (`reprojectInstallments`). `isFutureBilled` passou a ser "parcela de mês futuro" pela mesma data. A correção de data compara o dia do calendário, não ≥ 24h.
+- **Box "Compras parceladas" / "Parcelas de <mês>"**: `/upcoming-installments` junta as parcelas que a Pluggy já lançou no mês (Transaction com `totalInstallments > 1`) às ainda não lançadas, no mesmo formato, e as inclui também no total, no "por cartão", no "terminam em" e no mês atual do "Por mês". Antes, a parcela sumia do box quando a Pluggy confirmava (Usina). Coluna "Vencimento" → "Data"; "N parcela(s) a vencer em…" → "N parcela(s) em…"; "Revisar parcelas futuras" → "Revisar parcelas".
+- **Sem vocabulário de previsão**: saiu o `ProjectedTag` (componente + CSS) de Orçamento, Dashboard e relatório, o "dos quais R$ X projetado" e o aviso "parcela ainda não confirmada pela Pluggy" do gasto diário. `CategoryBreakdownModal` virou uma lista só, sem "Gastos confirmados" × "Parcelas projetadas". Internamente `spentProjected`/`projected` continuam existindo, só para não contar duas vezes.
+
+**Dados (prod, simulação, backup, removido depois):** 51 datas corrigidas. Só 10 lançamentos mudaram de mês (Bike, Tok&Stok, Booking 3x: o banco tinha lançado duas parcelas no mesmo mês). Contagem e soma de transações idênticas ao backup. Segunda rodada do sync: 0 mudanças.
+
+Resultado:
+- Bike: 03/07/26 → 03/04/27 (1–3 reais, 4–10 a lançar).
+- Tok&Stok: dia 5, mar → dez/26.
+- TAP: dia 16, jul/26 → abr/27.
+- Usina: dia 2, fev/26 → out/27.
+- Nenhuma compra com 2 parcelas no mesmo mês.
+
+Box de outubro: 38 parcelas, R$ 11.896,05 (Usina 9/21, Bike 4/10, TAP 4/10 juntas).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

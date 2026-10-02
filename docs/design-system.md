@@ -114,6 +114,8 @@ Convenção de qual hover usar, pela cor de fundo em repouso do elemento (não i
 
 - **Seletor de mês é sempre `MonthNavigator` (02/10)**: qualquer página com histórico por mês (Orçamento, Patrimônio, Projetos) usa o mesmo componente, no canto direito do título. Nunca uma cópia do CSS. Página sem dado de futuro passa `allowFuture={false}`. Rótulos que dizem "este mês"/"hoje" viram o nome do mês quando o mês escolhido não é o atual ("Recebido em setembro", "Gasto do dia 30/09").
 
+- **Parcela nunca é "previsão" (02/10)**: compra parcelada é certa desde o dia da compra. Nenhuma tela usa "projetado", "previsto", "não confirmado" ou "a vencer" para parcela, nem separa parcela lançada pela Pluggy da ainda não lançada (isso é detalhe interno de dedup). A data da parcela é sempre o dia da compra, no mês dela. Lista de parcelas de um mês mostra todas.
+
 ## Popup / tooltip de detalhe (`HoverCard`)
 
 Componente único (`components/HoverCard.tsx` + `.module.css`) — **é o único jeito de fazer hover-detalhe no projeto**, nunca duplicar esse CSS numa página nova. Usos hoje: nome de ativo na tabela de posição (emissor, taxa, vencimento, ISIN, USD quando aplicável) e rótulo de barra/item agrupado em gráfico (quando um bucket junta mais de uma posição). Generalizar pra qualquer lista nova segue sempre `<HoverCard content={...}><span>{nome}</span></HoverCard>` — `content` null renderiza só o filho, sem popup vazio nem sublinhado tracejado.
