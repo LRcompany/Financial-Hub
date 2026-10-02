@@ -25,7 +25,7 @@ async function runSync() {
     console.log(
       `[scheduler] sync de transação de cartão em ${startedAt}: ${result.transactionsSynced} nova(s), ` +
         `${result.transactionsReconciled} reconciliada(s) (pendente virou confirmada), ` +
-        `${result.installmentsCreated} parcela(s) futura(s), ${result.categorizedCount} categorizada(s) sozinha(s).`
+        `${result.installmentsCreated} parcela(s) futura(s), ${result.datesUpdated} data(s) corrigida(s), ${result.futureBilledRemoved} parcela(s) de fatura futura removida(s), ${result.categorizedCount} categorizada(s) sozinha(s).`
     );
   } catch (err) {
     // Nunca deixa o agendador matar o processo por causa de uma falha de

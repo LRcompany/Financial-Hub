@@ -205,6 +205,39 @@ function futureDueDate(billForecastDate: string, monthsAhead: number, anchorDay:
   return new Date(y, monthIndex0, day);
 }
 
+const ymIndex = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return y * 12 + (m - 1);
+};
+const dateYmIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
+
+/** Parcela de fatura FUTURA (02/10): o BTG manda as parcelas ainda não
+ * cobradas como transação datada no dia da compra, com `billForecastDate` no
+ * mês da fatura em que vão cair (Usina Solar: parcelas 9 a 21 datadas
+ * 03/02/2026). A fatura de mês M é a do gasto de M−1, então "futura" = fatura
+ * depois da do mês que vem. Não é gasto ainda: nunca vira Transaction (já
+ * aparece como parcela prevista). */
+function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
+  const forecast = tx.creditCardMetadata?.billForecastDate;
+  return !!forecast && ymIndex(forecast) > dateYmIndex(now) + 1;
+}
+
+/** Data que conta pro gasto. Normalmente a da Pluggy; mas parcela que já
+ * caiu na fatura às vezes continua com a data da compra original (Usina
+ * Solar, parcelas 2–4: datadas 03/02 com fatura em abr/mai/jun) — aí usa o
+ * mês anterior ao da fatura, mesmo dia, que é como as outras parcelas da
+ * mesma compra vêm datadas. */
+function effectiveDate(tx: PluggyTransaction): Date {
+  const d = new Date(tx.date);
+  const meta = tx.creditCardMetadata;
+  if (!meta?.billForecastDate || !meta.installmentNumber || meta.installmentNumber <= 1) return d;
+  const billMonth = ymIndex(meta.billForecastDate) - 1;
+  if (dateYmIndex(d) >= billMonth) return d;
+  const y = Math.floor(billMonth / 12);
+  const m0 = billMonth % 12;
+  return new Date(y, m0, Math.min(d.getDate(), lastDayOfMonth(y, m0)), d.getHours(), d.getMinutes());
+}
+
 /** Parcelas futuras (UpcomingInstallment) de cada compra parcelada do cartão,
  * sempre derivadas da parcela MAIS RECENTE já lançada — em TODO sync, não só
  * quando chega transação nova. Reescrito em 02/10 (Bike People Bike Shop e
@@ -212,10 +245,9 @@ function futureDueDate(billForecastDate: string, monthsAhead: number, anchorDay:
  * - "Mesma compra" = descrição + final do cartão + data da compra original.
  *   O valor NÃO entra na chave: varia centavos entre parcelas (Academia
  *   246,99 x 247,00), e a chave antiga com valor nunca juntava as parcelas.
- * - `billForecastDate` só vem na 1ª parcela de cada compra; nas seguintes a
- *   referência é o mês da fatura em que a parcela entrou (`billPostDate`).
- *   Antes, sem `billForecastDate` a compra simplesmente não ganhava parcela
- *   futura.
+ * - Referência = mês da data da parcela mais recente. Antes dependia de
+ *   `billForecastDate`, que só vem na 1ª parcela de cada compra — sem ele a
+ *   compra simplesmente não ganhava parcela futura.
  * - Projeções antigas da mesma compra (criadas a partir de outra parcela)
  *   são reaproveitadas pelo número da parcela — atualiza data/valor e mantém
  *   nota/categoria que o Luiz editou. Projeção de parcela que já foi lançada
@@ -232,7 +264,6 @@ export async function reprojectInstallments(
   let deleted = 0;
 
   const now = new Date();
-  const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   // Nunca cria parcela prevista antes do mês PASSADO: o buraco que isso
   // cobre é a fatura que a Pluggy ainda não entregou (C6 mudou a data da
   // fatura em set/26); mês mais antigo que isso já tem o dado real, e uma
@@ -252,11 +283,8 @@ export async function reprojectInstallments(
   for (const tx of transactions) {
     const meta = tx.creditCardMetadata;
     if (!meta?.totalInstallments || !meta?.installmentNumber || tx.type === "CREDIT" || tx.amount < 0) continue;
-    // Parcela de fatura FUTURA: o BTG manda as parcelas ainda não cobradas
-    // como transação datada no dia da compra, com `billForecastDate` no mês
-    // em que vão cair (Usina Solar: parcelas 9 a 21 datadas 03/02). Não é a
-    // "mais recente lançada".
-    if (meta.billForecastDate && meta.billForecastDate > currentYm) continue;
+    // Parcela de fatura futura não é "a mais recente lançada".
+    if (isFutureBilled(tx, now)) continue;
     // `purchaseDate` varia nos milissegundos entre parcelas da MESMA compra
     // (BTG, Usina Solar) — compara só até o minuto.
     const key = meta.purchaseDate
@@ -275,8 +303,14 @@ export async function reprojectInstallments(
     const meta = latest.creditCardMetadata!;
     const total = meta.totalInstallments!;
     const current = meta.installmentNumber!;
-    const forecast = meta.billForecastDate ?? (meta.billPostDate ?? latest.date).slice(0, 7);
-    const anchorDay = new Date(latest.date).getDate();
+    // Base = mês da DATA da parcela mais recente (02/10), não o mês da fatura:
+    // o app conta gasto pela data da transação, e no BTG a fatura é sempre o
+    // mês seguinte ao da data — usar `billForecastDate` jogava toda projeção
+    // um mês pra frente (Usina: projeção da 7ª em set, real da 7ª em ago,
+    // contando 2x). No C6 os dois coincidem, nada muda lá.
+    const latestDate = effectiveDate(latest);
+    const forecast = `${latestDate.getFullYear()}-${String(latestDate.getMonth() + 1).padStart(2, "0")}`;
+    const anchorDay = latestDate.getDate();
     const label = `${latest.description.slice(0, 28)} (${current}/${total})`;
 
     const existing = await prisma.upcomingInstallment.findMany({
@@ -355,6 +389,8 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
   let transactionsSkipped = 0;
   let transactionsReconciled = 0;
   let installmentsCreated = 0;
+  let datesUpdated = 0; // data corrigida porque a Pluggy mudou (ver effectiveDate)
+  let futureBilledRemoved = 0; // parcela de fatura futura gravada por versão antiga
   let categorizedCount = 0;
   let pixSynced = 0;
   let pixIgnored = 0; // recebido, ou pra mim mesmo, ou sem documento do destinatário
@@ -369,8 +405,31 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
     const newlyCreated: { tx: PluggyTransaction; categoryId: string | null }[] = [];
     for (const tx of transactions) {
       const externalId = `pluggy:${tx.id}`;
-      const existing = await prisma.transaction.findUnique({ where: { externalId } });
+      const existing = await prisma.transaction.findUnique({ where: { externalId }, include: { splits: { select: { id: true } } } });
+      // Parcela de fatura futura (ver `isFutureBilled`) nunca é gasto ainda —
+      // e se uma versão antiga do sync já gravou (Usina Solar: 13 parcelas
+      // futuras gravadas como gasto de fev/26), sai. Ela volta sozinha como
+      // Transaction quando a fatura dela chegar.
+      if (isFutureBilled(tx)) {
+        if (existing && existing.splits.length === 0) {
+          await prisma.transaction.delete({ where: { id: existing.id } });
+          futureBilledRemoved++;
+        }
+        continue;
+      }
       if (existing) {
+        // A Pluggy muda a data de uma parcela quando ela entra na fatura (Usina
+        // Solar, parcela 8: 03/02 → 21/09), e antes o sync nunca revisitava
+        // transação já gravada. Corrige a data (e marca a parcela, se faltar)
+        // sem tocar em mais nada — categoria/nota ficam como o Luiz deixou.
+        const date = effectiveDate(tx);
+        const fields = installmentFields(tx);
+        const dateChanged = Math.abs(existing.date.getTime() - date.getTime()) >= 24 * 60 * 60 * 1000;
+        const installmentMissing = fields.installmentNumber != null && existing.installmentNumber !== fields.installmentNumber;
+        if (!existing.pluggyPending && (dateChanged || installmentMissing)) {
+          await prisma.transaction.update({ where: { id: existing.id }, data: { date, ...fields } });
+          datesUpdated++;
+        }
         // Transação "PENDING" entra com dado provisório (compra
         // internacional costuma chegar como "MASTERCARD INTERNACIONAL"
         // genérico até o banco confirmar o lojista real). Só revisita
@@ -388,7 +447,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           await prisma.transaction.update({
             where: { id: existing.id },
             data: {
-              date: new Date(tx.date),
+              date: effectiveDate(tx),
               description: tx.description,
               amount: realAmount(tx),
               isTransfer,
@@ -398,7 +457,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
             },
           });
           transactionsReconciled++;
-        } else {
+        } else if (!existing.pluggyPending) {
           transactionsSkipped++;
         }
         continue;
@@ -421,7 +480,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         await prisma.transaction.update({
           where: { id: manualMatch.id },
           data: {
-            date: new Date(tx.date),
+            date: effectiveDate(tx),
             description: tx.description,
             amount: realAmount(tx),
             isTransfer,
@@ -444,7 +503,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
       await prisma.transaction.create({
         data: {
-          date: new Date(tx.date),
+          date: effectiveDate(tx),
           type: "expense",
           description: tx.description,
           amount: realAmount(tx),
@@ -537,7 +596,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
 
-  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, categorizedCount, pixSynced, pixIgnored, utilityBoletoSynced };
+  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, datesUpdated, futureBilledRemoved, categorizedCount, pixSynced, pixIgnored, utilityBoletoSynced };
 }
 
 /**
@@ -554,6 +613,8 @@ export async function syncAllBrokersCreditCardTransactions() {
     transactionsSkipped: number;
     transactionsReconciled: number;
     installmentsCreated: number;
+    datesUpdated: number;
+    futureBilledRemoved: number;
     categorizedCount: number;
     pixSynced: number;
     pixIgnored: number;
@@ -572,6 +633,8 @@ export async function syncAllBrokersCreditCardTransactions() {
         transactionsSkipped: 0,
         transactionsReconciled: 0,
         installmentsCreated: 0,
+        datesUpdated: 0,
+        futureBilledRemoved: 0,
         categorizedCount: 0,
         pixSynced: 0,
         pixIgnored: 0,
@@ -587,6 +650,8 @@ export async function syncAllBrokersCreditCardTransactions() {
       transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
       transactionsReconciled: acc.transactionsReconciled + r.transactionsReconciled,
       installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
+      datesUpdated: acc.datesUpdated + r.datesUpdated,
+      futureBilledRemoved: acc.futureBilledRemoved + r.futureBilledRemoved,
       categorizedCount: acc.categorizedCount + r.categorizedCount,
       pixSynced: acc.pixSynced + r.pixSynced,
       pixIgnored: acc.pixIgnored + r.pixIgnored,
@@ -597,6 +662,8 @@ export async function syncAllBrokersCreditCardTransactions() {
       transactionsSkipped: 0,
       transactionsReconciled: 0,
       installmentsCreated: 0,
+      datesUpdated: 0,
+      futureBilledRemoved: 0,
       categorizedCount: 0,
       pixSynced: 0,
       pixIgnored: 0,
