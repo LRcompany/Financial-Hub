@@ -12,6 +12,29 @@
   flex-shrink: 0;
 }
 
+.svgBox svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Tela estreita (pedido do Luiz, 07/09): legenda embaixo, não espremida do
+   lado — e o gráfico cresce, já que sobra a largura toda pra ele sozinho. */
+@media (max-width: 480px) {
+  .wrap {
+    flex-direction: column;
+    align-items: center;
+  }
+  .svgBox {
+    width: 220px;
+    height: 220px;
+  }
+  .legend {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .slice {
   cursor: pointer;
   transition: opacity 0.1s;
