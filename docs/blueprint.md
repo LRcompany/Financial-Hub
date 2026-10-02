@@ -2083,6 +2083,31 @@ Luiz: *"pode mostrar o mês anterior em patrimônio e projetos... assim eu consi
 
 Verificado com servidor temporário contra `dev.db`: Patrimônio em agosto = R$ 633.922,84 com evolução terminando em ago/26; API de positions/wealth/projects por mês. `tsc` limpo.
 
+### Parcelas futuras do cartão a partir da parcela mais recente + correção C6 (02/10)
+
+Luiz: Bike (People Bike Shop, 10x R$ 1.159 no C6) sem as parcelas certas no box "Parcelas de outubro"; *"houve uma mudança na data da fatura do C6"*.
+
+**Causa:** `syncBrokerCreditCardTransactions` só projetava parcela futura quando a Pluggy mandava `billForecastDate`, e a Pluggy só manda isso na 1ª parcela de cada compra. Dado real do C6: a 3ª parcela da Bike e a 2ª da TAP (R$ 1.334,27, 10x) chegaram em 01/10 sem esse campo, e nenhuma das duas tinha parcela futura (a Bike só tinha 4 criadas à mão, dia 03, set–dez). Além disso, a fatura nova do C6 ainda não trouxe as parcelas de compras antigas (só as compras novas de setembro).
+
+**Código** (`reprojectInstallments`, roda em todo sync):
+- Projeção sempre a partir da parcela MAIS RECENTE da compra.
+- "Mesma compra" = descrição + final do cartão + data da compra até o minuto (sem valor, que varia centavos; o BTG varia os milissegundos da data).
+- Sem `billForecastDate`, usa o mês de `billPostDate`.
+- Ignora parcela de fatura futura (`billForecastDate` > mês atual) e compra estornada (CREDIT com mesma descrição, valor e dia).
+- Reaproveita a projeção antiga do mesmo número (mantém nota/categoria).
+- Só apaga projeção de parcela já lançada quando a Transaction real dela está gravada.
+- Nunca cria parcela antes do mês passado.
+- Categoria herdada da parcela anterior categorizada da mesma compra.
+
+**Dados (prod, com backup antes, removido depois):**
+- Simulação revisada duas vezes. A 1ª pegou duplicação em massa da Usina Solar (BTG) e parcelas de uma compra estornada (Amazon TAXCONFIG).
+- Aplicado: 48 parcelas criadas, 24 ajustadas (datas dia 15 → 17 no C6, 22 → 21 na Usina), 4 apagadas (projeções de agosto/setembro que duplicavam a parcela real).
+- 11 parcelas de agosto (chegadas em 01/10) herdaram a categoria da parcela anterior da compra (MASTERCARD genérico e Amazon sem categoria anterior ficaram de fora). Mercado Livre recebeu Acessórios.
+- 11 parcelas criadas à mão no C6 que viraram duplicadas foram apagadas (Bike 4, Mercado Livre R$ 34,03 3, Tok&Stok R$ 387,79 3, airbnb x3 1). As notas Bike, Capacete e Tokstok foram copiadas para as parcelas novas.
+- Resultado: Bike parcelas 4–10 (17/09/26 → 17/03/27), TAP 3–10 (até 17/04/27).
+
+**Achado, não corrigido (aguarda o Luiz):** o BTG manda as parcelas futuras da Usina Solar como transação datada no dia da compra (03/02/2026) com `billForecastDate` futuro, e o sync gravou tudo como gasto de fevereiro (17 linhas, cerca de R$ 65 mil). Quando a parcela entra na fatura, a Pluggy muda a data (parcela 8 → 21/09), mas o sync não atualiza transação já existente.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
