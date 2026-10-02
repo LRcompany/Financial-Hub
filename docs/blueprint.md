@@ -2106,7 +2106,26 @@ Luiz: Bike (People Bike Shop, 10x R$ 1.159 no C6) sem as parcelas certas no box 
 - 11 parcelas criadas à mão no C6 que viraram duplicadas foram apagadas (Bike 4, Mercado Livre R$ 34,03 3, Tok&Stok R$ 387,79 3, airbnb x3 1). As notas Bike, Capacete e Tokstok foram copiadas para as parcelas novas.
 - Resultado: Bike parcelas 4–10 (17/09/26 → 17/03/27), TAP 3–10 (até 17/04/27).
 
-**Achado, não corrigido (aguarda o Luiz):** o BTG manda as parcelas futuras da Usina Solar como transação datada no dia da compra (03/02/2026) com `billForecastDate` futuro, e o sync gravou tudo como gasto de fevereiro (17 linhas, cerca de R$ 65 mil). Quando a parcela entra na fatura, a Pluggy muda a data (parcela 8 → 21/09), mas o sync não atualiza transação já existente.
+**Achado de carona:** o BTG manda as parcelas futuras da Usina Solar como transação datada no dia da compra (03/02/2026), e o sync gravou tudo como gasto de fevereiro (17 linhas). Corrigido na entrada seguinte.
+
+### Sync não grava parcela de fatura futura + corrige data quando a Pluggy muda (02/10)
+
+Aprovado pelo Luiz depois da entrada anterior.
+
+**Código** (`pluggyTransactionSync.ts`):
+- `isFutureBilled`: parcela com fatura depois da do mês que vem nunca vira Transaction (ela já aparece como parcela prevista). Se uma versão antiga já gravou, o sync apaga, desde que não tenha split.
+- `effectiveDate`: usa a data da Pluggy, exceto quando a parcela já caiu na fatura mas continua com a data da compra original (Usina, parcelas 2–4). Nesse caso usa o mês anterior ao da fatura, mesmo dia.
+- Transação já gravada agora é revisitada: se a data mudou na Pluggy (≥ 1 dia) ou o número da parcela falta/está errado, atualiza só data e parcela (categoria/nota intactas).
+- `reprojectInstallments` passou a usar o mês da DATA da parcela mais recente como base, não `billForecastDate`. No BTG a fatura é sempre o mês seguinte, e isso jogava as projeções um mês pra frente: Usina com projeção da 7ª em setembro e real da 7ª em agosto, contando duas vezes.
+- Contadores novos no log do scheduler: datas corrigidas e parcelas de fatura futura removidas.
+
+**Dados (prod, simulação antes, backup, removido depois):**
+- 12 transações da Usina de 03/02/2026 apagadas (parcelas 10–21, R$ 46.165,20).
+- Parcelas 2/3/4 redatadas para mar/abr/mai; 8 → 21/09; 9 → 03/10.
+- 55 transações com número de parcela preenchido ou corrigido (sem mudar data/valor).
+- 5 projeções duplicadas saíram: Usina 7–9, agora reais, e Booking jul/ago.
+
+Resultado: Usina com uma parcela por mês, reais fev–out/26 e previstas nov/26–out/27 (21 no total). Diff contra o backup: só essas mudanças.
 
 ## Decisões de navegação/IA
 
