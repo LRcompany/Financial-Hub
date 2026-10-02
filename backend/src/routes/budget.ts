@@ -224,39 +224,49 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     incomeByMonth.push({ label: bucketStart.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), value });
   }
 
-  // Gasto de hoje e série do mês corrente — todas as despesas do período,
-  // não só as categorizadas no orçamento (reflete o gasto real do dia a
-  // dia). Pedido do Luiz (08/09): esse gráfico é mês a mês, então trava no
-  // mês-calendário ATUAL de verdade (dia 1 até hoje) — antes era um rolling
-  // de 14 dias, que no início do mês misturava dias do mês ANTERIOR junto
-  // (mesmo problema já corrigido em "Recebido no ano"/"Média mensal" de
-  // Projetos). No dia 1-2 do mês o gráfico fica com poucos pontos mesmo —
-  // aceito, é melhor que misturar mês.
+  // Gasto diário DO MÊS NAVEGADO (02/10, pedido do Luiz: "quando vou em
+  // Orçamento e volto pra setembro, o box do gasto diário não atualiza...
+  // você precisa deixar as informações certinhas por cada mês"). Até 02/10
+  // isso era travado no mês-calendário ATUAL, qualquer que fosse o mês
+  // navegado. Agora a janela é o mês da query: mês atual = dia 1 até HOJE
+  // (dia futuro nunca entra — não é "abaixo" nem "acima" de nada); mês
+  // passado = mês inteiro; mês futuro = janela vazia. Todas as despesas do
+  // período, não só as categorizadas no orçamento (gasto real do dia a dia).
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-  const realMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const dailyPrevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const isCurrentMonth = monthStart <= now && now < monthEnd;
+  const windowEnd = monthEnd < todayEnd ? monthEnd : todayEnd;
 
-  const [monthToDateTransactions, monthToDateInstallments] = await Promise.all([
-    // Busca desde o início do MÊS ANTERIOR de uma vez só — cobre a série do
-    // mês corrente e os dias alinhados do mês anterior (comparação abaixo),
-    // sem precisar de 2 queries.
+  const [windowTransactions, windowInstallments] = await Promise.all([
+    // Desde o início do MÊS ANTERIOR de uma vez só — cobre a série do mês
+    // navegado e os dias alinhados do mês anterior (comparação abaixo).
     prisma.transaction.findMany({
-      where: { type: "expense", isTransfer: false, date: { gte: dailyPrevMonthStart, lt: todayEnd } },
+      where: { type: "expense", isTransfer: false, date: { gte: prevMonthStart, lt: windowEnd } },
       select: { date: true, amount: true, description: true },
     }),
     // Parcela futura comprometida com vencimento no mesmo período — mesma
     // lógica de merge/dedup de projectedSpendByCategory, só que por DIA em
-    // vez de por categoria (pro gráfico "gasto diário" mostrar o dia real em
-    // que ela cai, ex: "dia 03, parcela da bike").
+    // vez de por categoria (o gráfico mostra o dia real em que ela cai).
     prisma.upcomingInstallment.findMany({
-      where: { dueDate: { gte: dailyPrevMonthStart, lt: todayEnd } },
+      where: { dueDate: { gte: prevMonthStart, lt: windowEnd } },
       select: { dueDate: true, amount: true, description: true },
     }),
   ]);
-  const postedKeysDaily = new Set(monthToDateTransactions.map((t) => `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`));
-  const projectedInstallmentsDaily = monthToDateInstallments.filter(
-    (i) => !postedKeysDaily.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
+  // Dedup "parcela já virou transação real" SEMPRE dentro do mesmo mês
+  // (mesma regra de `getPostedPurchaseKeys`/`projectedSpendByCategory`).
+  // Bug achado em 02/10: a busca cobre 2 meses (mês anterior + navegado) e
+  // o dedup usava as chaves dos dois juntos — a parcela 4 de setembro sumia
+  // do gráfico só porque a parcela 3 (mesma descrição + valor) foi lançada
+  // em agosto.
+  const ymKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+  const postedKeysByMonth = new Map<string, Set<string>>();
+  for (const t of windowTransactions) {
+    const k = ymKey(t.date);
+    if (!postedKeysByMonth.has(k)) postedKeysByMonth.set(k, new Set());
+    postedKeysByMonth.get(k)!.add(`${purchaseBase(t.description)}|${t.amount.toFixed(2)}`);
+  }
+  const projectedInstallmentsDaily = windowInstallments.filter(
+    (i) => !postedKeysByMonth.get(ymKey(i.dueDate))?.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
   );
 
   function projectedOnDay(day: Date): number {
@@ -268,22 +278,18 @@ budgetRouter.get("/budget-summary", async (req, res) => {
 
   function sumOnDay(day: Date): number {
     const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const real = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
+    const real = windowTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
     return real + projectedOnDay(day);
   }
 
   // De onde veio o gasto daquele dia (pedido do Luiz, 15/09: "só existe o
   // valor total, mas não mostra o que foi gasto... eu quero essa lista") —
-  // agrupado por compra (`purchaseBase`, mesma regra já usada pra deduplicar
-  // parcela projetada x transação real: tira o sufixo " xN" pra "bike x3" e
-  // "bike x4" contarem como a mesma compra) em vez de listar cada linha de
-  // transação solta. Parcela futura comprometida (ainda sem confirmação da
-  // Pluggy) entra junto, marcada `projected: true` — mesmo dado que já
-  // soma no total via `projectedOnDay`, só que agora com o rótulo. Maior
-  // primeiro, pra dia com muita compra pequena não esconder a que pesou.
+  // agrupado por compra (`purchaseBase`: "bike x3" e "bike x4" contam como a
+  // mesma compra). Parcela comprometida ainda sem confirmação da Pluggy
+  // entra junto, marcada `projected: true`. Maior primeiro.
   function breakdownOnDay(day: Date): { label: string; value: number; projected: boolean }[] {
     const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const real = monthToDateTransactions.filter((t) => t.date >= day && t.date < dayEnd);
+    const real = windowTransactions.filter((t) => t.date >= day && t.date < dayEnd);
     const projected = projectedInstallmentsDaily.filter((i) => i.dueDate >= day && i.dueDate < dayEnd);
     const map = new Map<string, { value: number; projected: boolean }>();
     for (const t of real) {
@@ -301,15 +307,15 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       .sort((a, b) => b.value - a.value);
   }
 
-  const daysThisMonth: {
+  const dailyDays: {
     date: string;
     amount: number;
     projected: number;
     goal: number | null;
     breakdown: { label: string; value: number; projected: boolean }[];
   }[] = [];
-  for (let day = new Date(realMonthStart); day <= todayStart; day.setDate(day.getDate() + 1)) {
-    daysThisMonth.push({
+  for (let day = new Date(monthStart); day < windowEnd; day.setDate(day.getDate() + 1)) {
+    dailyDays.push({
       date: day.toISOString().slice(0, 10),
       amount: sumOnDay(day),
       projected: projectedOnDay(day),
@@ -317,165 +323,62 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       breakdown: breakdownOnDay(day),
     });
   }
-  // Comparação "vs. mês anterior" mês-a-mês-corrido: mesmo NÚMERO de dias
-  // (dia 1 ao dia 1, dia 2 ao dia 2...), não o mês anterior inteiro — senão
-  // um mês em andamento (poucos dias) compararia contra um mês fechado
-  // (todos os dias), sempre parecendo "abaixo" só pela metade do tempo.
-  // Guarda a meta de cada dia junto (não só o valor) — usado logo abaixo pra
-  // "quanto economizei" do mês anterior, na mesma janela alinhada.
-  const previousMonthAligned: { amount: number; goal: number | null }[] = [];
-  for (let i = 0; i < daysThisMonth.length; i++) {
-    const day = new Date(dailyPrevMonthStart);
+  // Comparação "vs. mês anterior": mesmo NÚMERO de dias (dia 1 ao dia 1, dia
+  // 2 ao dia 2...), não o mês anterior inteiro — senão um mês em andamento
+  // compararia contra um mês fechado, sempre parecendo "abaixo".
+  const previousMonthAligned: number[] = [];
+  for (let i = 0; i < dailyDays.length; i++) {
+    const day = new Date(prevMonthStart);
     day.setDate(day.getDate() + i);
-    previousMonthAligned.push({ amount: sumOnDay(day), goal: goalAt(dailyGoals, day) });
+    if (day >= prevMonthEnd) break;
+    previousMonthAligned.push(sumOnDay(day));
   }
 
-  const monthlyAvgDailySpend = daysThisMonth.reduce((sum, d) => sum + d.amount, 0) / daysThisMonth.length;
-  const previousMonthlyAvgDailySpend = previousMonthAligned.reduce((sum, d) => sum + d.amount, 0) / previousMonthAligned.length;
+  const monthlyAvgDailySpend = dailyDays.length > 0 ? dailyDays.reduce((sum, d) => sum + d.amount, 0) / dailyDays.length : 0;
+  const previousMonthlyAvgDailySpend =
+    previousMonthAligned.length > 0 ? previousMonthAligned.reduce((sum, v) => sum + v, 0) / previousMonthAligned.length : 0;
 
-  // A Pluggy sincroniza com atraso — "hoje" (e às vezes ontem também) quase
-  // sempre aparece com R$0 só porque a transação de verdade ainda não
-  // chegou, não porque o dia foi de gasto zero de verdade. Pedido do Luiz
-  // (04/09): em vez de mostrar "gasto de hoje" (quase sempre R$0, engana),
-  // mostra o ÚLTIMO DIA que realmente tem gasto lançado — varre de trás pra
-  // frente dentro do mês corrente e para no primeiro com amount > 0. `null`
-  // só no caso raro de nenhum gasto o mês inteiro (ex: dia 1 do mês).
+  // A Pluggy sincroniza com atraso — "hoje" quase sempre aparece com R$0 só
+  // porque a transação ainda não chegou. Pedido do Luiz (04/09): mostra o
+  // ÚLTIMO DIA com gasto lançado dentro da janela (no mês passado, o último
+  // dia com gasto daquele mês). `null` só se não houve gasto nenhum.
   let lastDayWithSpend: { date: string; amount: number } | null = null;
-  for (let i = daysThisMonth.length - 1; i >= 0; i--) {
-    if (daysThisMonth[i].amount > 0) {
-      lastDayWithSpend = { date: daysThisMonth[i].date, amount: daysThisMonth[i].amount };
+  for (let i = dailyDays.length - 1; i >= 0; i--) {
+    if (dailyDays[i].amount > 0) {
+      lastDayWithSpend = { date: dailyDays[i].date, amount: dailyDays[i].amount };
       break;
     }
   }
 
-  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
-  // mês-calendário ATUAL de verdade (`now`), não o mês navegado em Orçamento.
-  // Reaproveita `daysThisMonth` (já tem `amount`+`goal` por dia, dia 1 até
-  // HOJE) em vez de rodar `sumOnDay` de novo pros mesmos dias. Dia sem meta
-  // cadastrada (goal null) fica de fora — não dá pra avaliar cumprimento sem
-  // meta. `dailyGoalBalanceThisMonth` = saldo da meta diária: soma de
-  // `meta - gasto` em TODO dia com meta, positivo ou negativo. Até 01/10
-  // somava só os dias abaixo e ignorava os acima (Luiz: "não faz sentido,
-  // esse saldo que sobrou foi usado em outros dias") — agora dia acima da
-  // meta desconta, e o saldo pode ficar negativo.
-  let daysUnderGoalThisMonth = 0;
-  let daysWithGoalThisMonth = 0;
-  let dailyGoalBalanceThisMonth = 0;
-  for (const d of daysThisMonth) {
+  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — dentro da
+  // janela do mês navegado. Dia sem meta cadastrada (goal null) fica de fora
+  // — não dá pra avaliar cumprimento sem meta. (O "saldo da meta" saiu em
+  // 02/10: somava toda despesa do dia, inclusive aluguel e parcelas, e o
+  // número não dizia nada — "por que passei 17k?".)
+  let daysUnderGoal = 0;
+  let daysWithGoal = 0;
+  for (const d of dailyDays) {
     if (d.goal == null) continue;
-    daysWithGoalThisMonth++;
-    dailyGoalBalanceThisMonth += d.goal - d.amount;
-    if (d.amount <= d.goal) daysUnderGoalThisMonth++;
+    daysWithGoal++;
+    if (d.amount <= d.goal) daysUnderGoal++;
   }
-  // Mesma conta pro mês anterior (janela alinhada, ver `previousMonthAligned`
-  // acima) — só pra comparação (`MonthDelta`) do card ao vivo, nunca exibida
-  // sozinha.
-  let dailyGoalBalanceLastMonth = 0;
-  for (const d of previousMonthAligned) {
-    if (d.goal != null) dailyGoalBalanceLastMonth += d.goal - d.amount;
-  }
-
-  // ---- economia da meta diária, mas pro PERÍODO do relatório (mês/ano da
-  // query, pode ser um mês fechado no passado — diferente de tudo acima,
-  // que é sempre "agora") — pedido do Luiz, 15/09: "esses valores com
-  // certeza têm que aparecer no meu relatório mensal". Não precisa de
-  // tabela nova: já temos Transaction + DailyGoal histórico, dá pra
-  // recalcular pra qualquer mês sob demanda, igual o resto do relatório. ----
-  async function dailyGoalBalanceForRange(
-    start: Date,
-    end: Date,
-    goals: { amount: number; effectiveFrom: Date }[]
-  ): Promise<{
-    daysWithGoal: number;
-    daysUnder: number;
-    balance: number;
-    days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[];
-  }> {
-    // Nunca conta dia futuro (ainda não aconteceu, não é "abaixo" nem
-    // "acima") — cap no dia de hoje quando o período pedido inclui o futuro
-    // (ex: relatório do mês corrente, ainda em andamento).
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const effectiveEnd = end < tomorrow ? end : tomorrow;
-    if (effectiveEnd <= start) return { daysWithGoal: 0, daysUnder: 0, balance: 0, days: [] };
-    const [rangeTransactions, rangeInstallments, rangePostedKeys] = await Promise.all([
-      prisma.transaction.findMany({
-        where: { type: "expense", isTransfer: false, date: { gte: start, lt: effectiveEnd } },
-        select: { date: true, amount: true, description: true },
-      }),
-      prisma.upcomingInstallment.findMany({
-        where: { dueDate: { gte: start, lt: effectiveEnd } },
-        select: { dueDate: true, amount: true, description: true },
-      }),
-      getPostedPurchaseKeys(start, effectiveEnd),
-    ]);
-    const rangeProjected = rangeInstallments.filter(
-      (i) => !rangePostedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
-    );
-    function spentOnDay(day: Date): number {
-      const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-      const real = rangeTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
-      const proj = rangeProjected.filter((i) => i.dueDate >= day && i.dueDate < dayEnd).reduce((sum, i) => sum + i.amount, 0);
-      return real + proj;
-    }
-    let daysWithGoal = 0;
-    let daysUnder = 0;
-    let balance = 0;
-    const days: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[] = [];
-    for (let day = new Date(start); day < effectiveEnd; day = new Date(day.getTime() + 24 * 60 * 60 * 1000)) {
-      const goal = goalAt(goals, day);
-      const spent = spentOnDay(day);
-      // Detalhe do dia (relatório: calendário com hover), agrupado por compra.
-      const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-      const groups = new Map<string, number>();
-      for (const t of rangeTransactions) {
-        if (t.date >= day && t.date < dayEnd) groups.set(purchaseBase(t.description), (groups.get(purchaseBase(t.description)) ?? 0) + t.amount);
-      }
-      // Parcela futura comprometida daquele dia entra na lista também (mesmo
-      // dado que já soma em `spent`), senão o total não bate com os itens.
-      for (const i of rangeProjected) {
-        if (i.dueDate >= day && i.dueDate < dayEnd) groups.set(purchaseBase(i.description), (groups.get(purchaseBase(i.description)) ?? 0) + i.amount);
-      }
-      days.push({
-        date: day.toISOString().slice(0, 10),
-        amount: spent,
-        goal,
-        breakdown: [...groups.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
-      });
-      if (goal == null) continue;
-      daysWithGoal++;
-      // Saldo: dia acima da meta desconta (ver `dailyGoalBalanceThisMonth`).
-      balance += goal - spent;
-      if (spent <= goal) daysUnder++;
-    }
-    return { daysWithGoal, daysUnder, balance, days };
-  }
-  const [dailyGoalForPeriod, dailyGoalForPreviousPeriod] = await Promise.all([
-    dailyGoalBalanceForRange(monthStart, monthEnd, dailyGoals),
-    dailyGoalBalanceForRange(prevMonthStart, prevMonthEnd, dailyGoals),
-  ]);
+  // Meta vigente no fim da janela: hoje no mês atual, último dia no mês
+  // passado (mostra a meta que valia naquele mês, não a de hoje).
+  const dailyGoal = goalAt(dailyGoals, new Date(windowEnd.getTime() - 1));
 
   res.json({
     month,
     year,
-    dailyGoal: goalAt(dailyGoals, now),
-    todaySpent: sumOnDay(todayStart),
+    // Tudo do gasto diário é do MÊS DA QUERY (02/10) — nome sem "ThisMonth"
+    // de propósito, mesma convenção de `totalSpent`/`totalPlanned`.
+    isCurrentMonth,
+    dailyGoal,
     lastDayWithSpend,
     monthlyAvgDailySpend,
     previousMonthlyAvgDailySpend,
-    daysUnderGoalThisMonth,
-    daysWithGoalThisMonth,
-    dailyGoalBalanceThisMonth,
-    dailyGoalBalanceLastMonth,
-    // Saldo da meta diária DO PERÍODO do relatório (mês/ano da query,
-    // não "agora" — ver `dailyGoalBalanceForRange` acima). Nome sem
-    // "ThisMonth" de propósito, mesma convenção já usada em `totalSpent`/
-    // `totalPlanned` (campo escopado pela query, não hardcoded em `now`).
-    daysWithGoal: dailyGoalForPeriod.daysWithGoal,
-    daysUnderGoal: dailyGoalForPeriod.daysUnder,
-    dailyGoalBalance: dailyGoalForPeriod.balance,
-    dailyDaysForPeriod: dailyGoalForPeriod.days,
-    previousDailyGoalBalance: dailyGoalForPreviousPeriod.balance,
-    daysThisMonth,
+    daysUnderGoal,
+    daysWithGoal,
+    dailyDays,
     totalPlanned,
     totalSpent,
     totalProjected,

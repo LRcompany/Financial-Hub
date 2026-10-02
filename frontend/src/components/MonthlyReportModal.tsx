@@ -337,7 +337,7 @@ export function MonthlyReportModal({
     .sort((a, b) => b.spent - b.planned - (a.spent - a.planned))
   const totalProjected = budget?.totalProjected ?? 0
   const groups = budget ? groupedCategories(budget.categories) : []
-  const dailyDays = budget?.dailyDaysForPeriod ?? []
+  const dailyDays = budget?.dailyDays ?? []
   const daysAvgSpend = dailyDays.length > 0 ? dailyDays.reduce((s, d) => s + d.amount, 0) / dailyDays.length : 0
   // Dias abaixo x acima da meta (só dia com meta em vigor) — no lugar do
   // calendário (pedido do Luiz: "não precisa mostrar o calendário, mas podemos

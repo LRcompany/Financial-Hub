@@ -2052,6 +2052,21 @@ Verificado com servidor temporário contra `dev.db`: 15 categorias preenchidas, 
 
 Verificado com servidor temporário contra `dev.db`: coluna Estipulado em mono cinza, sem "Saldo da meta" no relatório. `tsc` limpo.
 
+### Gasto diário segue o mês navegado + saldo da meta fora dos cards (02/10)
+
+Luiz: *"quando vou em Orçamento e volto pra setembro, o box do gasto diário não atualiza... você precisa deixar as informações certinhas por cada mês."* E aprovou tirar o "passou R$ X da meta" dos cards.
+
+- **`/budget-summary`**: o bloco de gasto diário era travado no mês-calendário ATUAL (pedido de 08/09), qualquer que fosse o mês da query. Agora a janela é o mês da query:
+  - mês atual = dia 1 até hoje;
+  - mês passado = mês inteiro;
+  - mês futuro = vazio.
+
+  Campos renomeados sem "ThisMonth" (`dailyDays`, `daysUnderGoal`, `daysWithGoal`), novo `isCurrentMonth`, e `dailyGoal` passa a ser a meta vigente no fim da janela. A função separada do relatório (`dailyGoalBalanceForRange`) saiu: o relatório usa o mesmo `dailyDays`. Saíram todos os campos de saldo (`dailyGoalBalance*`), `todaySpent` (não usado) e o componente `DailyGoalBalance`.
+- **Orçamento**: em mês passado o rótulo vira "Gasto do dia DD/MM" (nunca "hoje"), o gráfico "Em setembro" e a contagem "N de M dias abaixo da meta em setembro". Mês futuro mostra "Esse mês ainda não começou". Dashboard continua sempre no mês atual (não tem seletor de mês).
+- **Bug achado de carona**: o gráfico diário deduplicava "parcela prevista × transação lançada" com as chaves dos 2 meses buscados juntos (mês anterior + navegado). A parcela 4 de setembro sumia porque a 3 (mesma descrição + valor) foi lançada em agosto. Agora o dedup é sempre dentro do mesmo mês, mesma regra de `getPostedPurchaseKeys`. Média diária de setembro (dev.db) passou de R$ 629,28 para R$ 649,79, batendo com o relatório.
+
+Verificado com servidor temporário contra `dev.db`: set/out/nov via API (30 dias / 2 dias / vazio) e tela do Orçamento em setembro. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

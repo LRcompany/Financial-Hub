@@ -28,7 +28,6 @@ import {
 import { SmoothLineChart } from '../components/SmoothLineChart'
 import { DailySpendCalendar } from '../components/DailySpendCalendar'
 import { MonthDelta } from '../components/MonthDelta'
-import { DailyGoalBalance } from '../components/DailyGoalBalance'
 import { ClientPieChart } from '../components/ClientPieChart'
 import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
@@ -148,18 +147,18 @@ export function Dashboard() {
   // dia foi de gasto zero de verdade). Mostra o ÚLTIMO DIA com gasto real
   // lançado em vez disso (pedido do Luiz, 04/09) — só volta a rotular como
   // "hoje" no dia em que o dado de hoje já chegou de verdade.
-  const todayBucket = budget?.daysThisMonth[budget.daysThisMonth.length - 1]
+  const todayBucket = budget?.dailyDays[budget.dailyDays.length - 1]
   const lastSpendDay = budget?.lastDayWithSpend ?? null
   const displaySpend = lastSpendDay?.amount ?? todayBucket?.amount ?? 0
   const isShowingToday = !lastSpendDay || lastSpendDay.date === todayBucket?.date
   const dailySpendLabel = isShowingToday ? 'Gasto de hoje' : `Gasto do dia ${lastSpendDay ? formatDayLabel(lastSpendDay.date) : ''}`
   const diff = budget?.dailyGoal != null ? budget.dailyGoal - displaySpend : null
-  // Posição do "último dia com gasto" dentro de daysThisMonth — pra desenhar a
+  // Posição do "último dia com gasto" dentro de dailyDays — pra desenhar a
   // bolinha fixa no gráfico marcando "a gente se encontra ali" (pedido do
   // Luiz, 04/09). undefined quando é literalmente hoje (a bolinha do último
   // ponto já cobre esse caso, não precisa duplicar).
   const lastSpendDayIndex =
-    !isShowingToday && lastSpendDay ? budget?.daysThisMonth.findIndex((d) => d.date === lastSpendDay.date) : undefined
+    !isShowingToday && lastSpendDay ? budget?.dailyDays.findIndex((d) => d.date === lastSpendDay.date) : undefined
   const markedDayIndex = lastSpendDayIndex != null && lastSpendDayIndex >= 0 ? lastSpendDayIndex : undefined
 
   const wealthGoal = wealth?.wealthGoal ?? null
@@ -285,7 +284,7 @@ export function Dashboard() {
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
-                  {/* Duas formas de ver o MESMO `daysThisMonth` (15/09, mesmo
+                  {/* Duas formas de ver o MESMO `dailyDays` (15/09, mesmo
                       toggle de Orçamento — "isso tem que aparecer no
                       Dashboard também"). Sem `<h4>` rótulo aqui do lado
                       (esse card não tinha um "Neste mês" acima do gráfico,
@@ -314,16 +313,16 @@ export function Dashboard() {
                 </div>
                 {dailyView === 'chart' ? (
                   <SmoothLineChart
-                    values={budget.daysThisMonth.map((d) => d.amount)}
-                    labels={budget.daysThisMonth.map((d) => formatDayLabel(d.date))}
+                    values={budget.dailyDays.map((d) => d.amount)}
+                    labels={budget.dailyDays.map((d) => formatDayLabel(d.date))}
                     threshold={budget.dailyGoal ?? undefined}
                     gradientId="dailySpendGradient"
                     className={styles.evolutionChart}
                     markedIndex={markedDayIndex}
-                    breakdowns={budget.daysThisMonth.map((d) => d.breakdown)}
+                    breakdowns={budget.dailyDays.map((d) => d.breakdown)}
                   />
                 ) : (
-                  <DailySpendCalendar days={budget.daysThisMonth} />
+                  <DailySpendCalendar days={budget.dailyDays} />
                 )}
                 <div className={styles.chartMeta}>
                   <span>neste mês</span>
@@ -336,22 +335,12 @@ export function Dashboard() {
                     </span>
                   )}
                 </div>
-                {budget.daysWithGoalThisMonth > 0 && (
+                {budget.daysWithGoal > 0 && (
                   <div className={styles.chartMeta}>
                     <span>
-                      {budget.daysUnderGoalThisMonth} de {budget.daysWithGoalThisMonth} dia
-                      {budget.daysWithGoalThisMonth === 1 ? '' : 's'} abaixo da meta esse mês
+                      {budget.daysUnderGoal} de {budget.daysWithGoal} dia
+                      {budget.daysWithGoal === 1 ? '' : 's'} abaixo da meta esse mês
                     </span>
-                  </div>
-                )}
-                {/* Saldo da meta diária (01/10, mesmo de Orçamento): dia acima
-                    da meta desconta, então pode dar "passou R$X". */}
-                {budget.daysWithGoalThisMonth > 0 && (
-                  <div className={styles.chartMeta}>
-                    <DailyGoalBalance value={budget.dailyGoalBalanceThisMonth} suffix="da meta esse mês" />
-                    {budget.dailyGoalBalanceThisMonth > 0 && budget.dailyGoalBalanceLastMonth > 0 && (
-                      <MonthDelta current={budget.dailyGoalBalanceThisMonth} previous={budget.dailyGoalBalanceLastMonth} higherIsBetter />
-                    )}
                   </div>
                 )}
               </>

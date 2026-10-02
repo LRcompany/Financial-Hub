@@ -143,47 +143,26 @@ export interface BudgetReviewCategory {
 export interface BudgetSummary {
   month: number
   year: number
+  // Todo o bloco de gasto diário é do MÊS DA QUERY (02/10, pedido do Luiz:
+  // "volto pra setembro e o box do gasto diário não atualiza"). Mês atual =
+  // dia 1 até hoje; mês passado = mês inteiro; mês futuro = vazio.
+  isCurrentMonth: boolean
+  // Meta vigente no fim da janela (hoje, ou último dia do mês passado).
   dailyGoal: number | null
-  todaySpent: number
-  // Último dia (dentro do mês corrente) com gasto de verdade lançado — a
-  // Pluggy sincroniza com atraso, então "hoje" quase sempre aparece R$0
-  // sem ser gasto zero de verdade. Null só se não teve gasto nenhum ainda
-  // esse mês (ex: dia 1).
+  // Último dia da janela com gasto de verdade lançado — a Pluggy sincroniza
+  // com atraso, então "hoje" quase sempre aparece R$0 sem ser gasto zero de
+  // verdade. Null se não teve gasto nenhum no período.
   lastDayWithSpend: { date: string; amount: number } | null
   monthlyAvgDailySpend: number
   previousMonthlyAvgDailySpend: number
-  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — SEMPRE o
-  // mês-calendário atual de verdade, do dia 1 até hoje. daysWithGoalThisMonth
-  // é o denominador (dia sem meta cadastrada não entra em nenhum dos dois).
-  daysUnderGoalThisMonth: number
-  daysWithGoalThisMonth: number
-  // Saldo da meta diária (01/10): soma de `meta - gasto` em TODO dia com
-  // meta — dia acima desconta, pode ficar negativo. SEMPRE o mês-calendário
-  // atual de verdade (mesmo critério de daysUnderGoalThisMonth acima).
-  // `dailyGoalBalanceLastMonth` é a mesma conta na janela alinhada do mês
-  // anterior, só pra comparação (MonthDelta).
-  dailyGoalBalanceThisMonth: number
-  dailyGoalBalanceLastMonth: number
-  // Mesmo saldo da meta diária, mas pro PERÍODO do relatório (mês/ano
-  // da query — pode ser um mês fechado no passado, diferente dos campos
-  // acima que são sempre "agora"). Usado só pelo relatório mensal.
-  daysWithGoal: number
+  // "Quantos dias fiquei abaixo da meta" (07/09) — daysWithGoal é o
+  // denominador (dia sem meta cadastrada não entra em nenhum dos dois).
   daysUnderGoal: number
-  dailyGoalBalance: number
-  // Dia a dia do período do relatório (mês/ano da query), com meta e detalhe —
-  // alimenta o calendário/gráfico do relatório de meses passados.
-  dailyDaysForPeriod: { date: string; amount: number; goal: number | null; breakdown: { label: string; value: number }[] }[]
-  previousDailyGoalBalance: number
-  // Mês-calendário ATUAL de verdade, do dia 1 até hoje (pedido do Luiz,
-  // 08/09) — antes era um rolling de 14 dias, que no início do mês
-  // misturava dias do mês anterior. Poucos pontos no início do mês é
-  // esperado (dia 2 do mês = só 2 pontos), não é bug.
-  // `breakdown` = de onde veio o gasto daquele dia, maior primeiro (pedido
-  // do Luiz, 15/09: "só existe o valor total, mas não mostra o que foi
-  // gasto... eu quero essa lista") — agrupado por compra, `projected: true`
-  // quando é parcela futura ainda não confirmada pela Pluggy (mesmo dado que
-  // já soma no `amount`, só que detalhado).
-  daysThisMonth: {
+  daysWithGoal: number
+  // Um item por dia da janela. `breakdown` = de onde veio o gasto daquele
+  // dia, maior primeiro (15/09), agrupado por compra; `projected: true`
+  // quando é parcela ainda não confirmada pela Pluggy (já soma no `amount`).
+  dailyDays: {
     date: string
     amount: number
     projected: number

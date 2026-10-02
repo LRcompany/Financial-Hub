@@ -5,8 +5,8 @@ import { goalIntensity } from '../lib/dailyGoal'
 import styles from './DailySpendCalendar.module.css'
 
 interface DaySpend {
-  /** "AAAA-MM-DD", sempre dia do mês-calendário ATUAL (mesmo período de
-   * `daysThisMonth` em `budget.ts` — nunca o mês navegado em Orçamento). */
+  /** "AAAA-MM-DD", dia do mês da consulta (`dailyDays` em `budget.ts` —
+   * desde 02/10 segue o mês navegado em Orçamento). */
   date: string
   amount: number
   /** null = nenhuma meta diária estava em vigor nesse dia — dia fica neutro
@@ -20,9 +20,9 @@ const WEEKDAY_LABELS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 /** Segunda forma de ver "gasto diário" (pedido do Luiz, 15/09: "quero ver
  * quais dias fiquei abaixo da meta e quais fiquei fora, visualmente... pode
  * ser no mesmo box, duas formas de visualizar"). Mesmo dado do
- * `SmoothLineChart` ao lado (`daysThisMonth`) — só muda a forma de olhar:
+ * `SmoothLineChart` ao lado (`dailyDays`) — só muda a forma de olhar:
  * aqui a pergunta é "que DIAS estouraram", não "qual foi o valor exato".
- * Grade de calendário completa do mês-calendário atual (com célula vazia
+ * Grade de calendário completa do mês (com célula vazia
  * antes do dia 1 pra alinhar o dia da semana, e depois do último dia real
  * até o fim do mês — dia futuro não tem dado, fica sem cor de propósito,
  * nunca inventa "abaixo da meta" pra um dia que ainda nem aconteceu). */
