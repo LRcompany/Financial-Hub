@@ -217,7 +217,7 @@ const dateYmIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
  * 03/02/2026). A fatura de mês M é a do gasto de M−1, então "futura" = fatura
  * depois da do mês que vem. Não é gasto ainda: nunca vira Transaction (já
  * aparece como parcela prevista). */
-function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
+export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
   const forecast = tx.creditCardMetadata?.billForecastDate;
   return !!forecast && ymIndex(forecast) > dateYmIndex(now) + 1;
 }
@@ -227,7 +227,7 @@ function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
  * Solar, parcelas 2–4: datadas 03/02 com fatura em abr/mai/jun) — aí usa o
  * mês anterior ao da fatura, mesmo dia, que é como as outras parcelas da
  * mesma compra vêm datadas. */
-function effectiveDate(tx: PluggyTransaction): Date {
+export function effectiveDate(tx: PluggyTransaction): Date {
   const d = new Date(tx.date);
   const meta = tx.creditCardMetadata;
   if (!meta?.billForecastDate || !meta.installmentNumber || meta.installmentNumber <= 1) return d;
