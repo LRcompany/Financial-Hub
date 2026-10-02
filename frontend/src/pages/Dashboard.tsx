@@ -33,7 +33,7 @@ import { CardHeader } from '../components/CardHeader'
 import { TransactionReviewModal } from '../components/TransactionReviewModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { TransactionEditModal } from '../components/TransactionEditModal'
-import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
+import { InstallmentBadge, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
 import { currency } from '../lib/format'
@@ -398,7 +398,6 @@ export function Dashboard() {
                       <div className={styles.progressLabel}>
                         <span>
                           {group.parentName}
-                          {group.spentProjected > 0 && <ProjectedTag />}
                           {isOver && <OverBudgetIcon />}
                         </span>
                         <span>

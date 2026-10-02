@@ -10,7 +10,7 @@ import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
 import { PlannedValue } from './SpentPlannedValue'
-import { ProjectedTag, OverBudgetIcon } from './Badge'
+import { OverBudgetIcon } from './Badge'
 import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
 
@@ -335,7 +335,6 @@ export function MonthlyReportModal({
   const overBudgetCategories = (budget?.categories ?? [])
     .filter((c) => c.spent > c.planned)
     .sort((a, b) => b.spent - b.planned - (a.spent - a.planned))
-  const totalProjected = budget?.totalProjected ?? 0
   const groups = budget ? groupedCategories(budget.categories) : []
   const dailyDays = budget?.dailyDays ?? []
   const daysAvgSpend = dailyDays.length > 0 ? dailyDays.reduce((s, d) => s + d.amount, 0) / dailyDays.length : 0
@@ -541,11 +540,6 @@ export function MonthlyReportModal({
                   label="Total gasto"
                   note={
                     <>
-                      {totalProjected > 0 && (
-                        <span className={styles.projectedNote}>
-                          dos quais <Money>R$ {currency(totalProjected)}</Money> <ProjectedTag />
-                        </span>
-                      )}
                       {previousTotalSpent > 0 && <MonthDelta current={budget!.totalSpent} previous={previousTotalSpent} higherIsBetter={false} />}
                     </>
                   }
@@ -906,7 +900,7 @@ function GroupRows({ group }: { group: { name: string; spent: number; planned: n
       {group.rows.map((c) => (
         <tr key={c.categoryId} className={styles.leafRow}>
           <td>
-            {c.name} {c.spentProjected > 0 && <ProjectedTag />}
+            {c.name}
           </td>
           <td><Money>R$ {currency(c.spent)}</Money></td>
           <td>{c.planned > 0 ? <PlannedValue value={c.planned} /> : '—'}</td>

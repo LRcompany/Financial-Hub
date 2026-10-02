@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type CategoryBreakdown, type CategoryBreakdownRow } from '../lib/api'
 import { currency } from '../lib/format'
 import { Money } from './Money'
-import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from './Badge'
+import { InstallmentBadge, OverBudgetIcon } from './Badge'
 import { SpentPlannedValue } from './SpentPlannedValue'
 import { ModalShell } from './ModalShell'
 import styles from './CategoryBreakdownModal.module.css'
@@ -13,7 +13,8 @@ function formatDate(iso: string): string {
 
 /** "O que está incluso nesse montante" (pedido do Luiz, 10/09) — abre ao
  * clicar numa categoria (folha) ou num grupo-mãe do Orçamento e lista as
- * transações reais + parcelas projetadas que somam aquele valor. `title` é o
+ * lançamentos e parcelas que somam aquele valor — numa lista só (02/10:
+ * parcela é parcela, nunca "projetada", lançada pela Pluggy ou não). `title` é o
  * nome da categoria/grupo clicado; `categoryIds` são as folhas resolvidas
  * pelo chamador (as que TÊM meta no mês), pra o total bater com a barra. */
 export function CategoryBreakdownModal({
@@ -43,9 +44,8 @@ export function CategoryBreakdownModal({
       .catch(() => setError(true))
   }, [categoryIds, month, year])
 
-  const realTotal = data?.transactions.reduce((s, r) => s + r.amount, 0) ?? 0
-  const projectedTotal = data?.projected.reduce((s, r) => s + r.amount, 0) ?? 0
-  const total = realTotal + projectedTotal
+  const rows = data ? [...data.transactions, ...data.projected].sort((a, b) => b.date.localeCompare(a.date)) : []
+  const total = rows.reduce((s, r) => s + r.amount, 0)
   // Sem `planned > 0` no gate (11/09, achado pelo Luiz): meta de R$0,00 pra
   // essa categoria e gasto real > 0 já é estouro (a meta EXISTE, é zero de
   // propósito) — só `planned == null` (sem meta nenhuma cadastrada) é que
@@ -79,33 +79,15 @@ export function CategoryBreakdownModal({
 
       {data && (
         <>
-          {data.transactions.length > 0 && (
+          {rows.length > 0 && (
             <div className={styles.block}>
-              <div className={styles.blockHead}>
-                <span>Gastos confirmados</span>
-                <span className={styles.blockHeadValueReal}><Money>R$ {currency(realTotal)}</Money></span>
-              </div>
-              {data.transactions.map((r) => (
+              {rows.map((r) => (
                 <Row key={r.id} row={r} />
               ))}
             </div>
           )}
 
-          {data.projected.length > 0 && (
-            <div className={styles.block}>
-              <div className={styles.blockHead}>
-                <span>
-                  Parcelas projetadas <ProjectedTag />
-                </span>
-                <span className={styles.blockHeadValueProjected}><Money>R$ {currency(projectedTotal)}</Money></span>
-              </div>
-              {data.projected.map((r) => (
-                <Row key={r.id} row={r} projected />
-              ))}
-            </div>
-          )}
-
-          {data.transactions.length === 0 && data.projected.length === 0 && (
+          {rows.length === 0 && (
             <div className={styles.empty}>Nada lançado nessa categoria em {month}/{year}.</div>
           )}
         </>
@@ -114,7 +96,7 @@ export function CategoryBreakdownModal({
   )
 }
 
-function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolean }) {
+function Row({ row }: { row: CategoryBreakdownRow }) {
   return (
     <div className={styles.row}>
       <div className={styles.rowMain}>
@@ -126,12 +108,11 @@ function Row({ row, projected }: { row: CategoryBreakdownRow; projected?: boolea
         </span>
         {row.rawDescription && <span className={styles.rowRaw}>{row.rawDescription}</span>}
         <span className={styles.rowMeta}>
-          {projected ? 'vence ' : ''}
           {formatDate(row.date)}
           {row.category ? ` · ${row.category}` : ''}
         </span>
       </div>
-      <span className={`${styles.rowValue} ${projected ? styles.rowValueProjected : ''}`}><Money>R$ {currency(row.amount)}</Money></span>
+      <span className={styles.rowValue}><Money>R$ {currency(row.amount)}</Money></span>
     </div>
   )
 }

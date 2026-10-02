@@ -34,33 +34,6 @@
   margin-bottom: 0;
 }
 
-.blockHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: var(--space-3);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Gastos confirmados = preto/forte (é o que de fato aconteceu); parcela
-   projetada = cinza/fino (ainda não é dado real) — mesma hierarquia de
-   `SpentPlannedValue`, pedido do Luiz (11/09) pra diferenciar os valores. */
-.blockHeadValueReal {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.blockHeadValueProjected {
-  color: var(--ink-soft);
-  font-weight: 400;
-}
-
 .row {
   display: flex;
   align-items: flex-start;
@@ -99,9 +72,4 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-.rowValueProjected {
-  font-weight: 400;
-  color: var(--ink-soft);
 }

@@ -11,13 +11,6 @@ export function InstallmentBadge({ number, total }: { number?: number | null; to
   return <span className={styles.installment}>{number}/{total}</span>
 }
 
-/** Pill cinza "projetado" — estilo FIXO, nunca muda de cor (pedido do Luiz,
- * 11/09: "a tag projetado precisa ser padrão em todo o site, não mude de
- * cor. É um estilo fixo. Trabalhe em cinza."). Usar em qualquer lugar que
- * mostre um valor com fatia de UpcomingInstallment ainda não confirmada. */
-export function ProjectedTag() {
-  return <span className={styles.projected}>projetado</span>
-}
 
 /** Ícone "estourou" — círculo vermelho-claro com o `AlertTriangle` dentro,
  * ÚNICO jeito de marcar "isso passou do planejado" em todo o app (pedido do

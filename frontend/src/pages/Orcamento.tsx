@@ -36,7 +36,7 @@ import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { TransactionEditModal } from '../components/TransactionEditModal'
 import { Select } from '../components/Select'
-import { InstallmentBadge, ProjectedTag, OverBudgetIcon } from '../components/Badge'
+import { InstallmentBadge, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue, PlannedValue } from '../components/SpentPlannedValue'
 import { MonthNavigator } from '../components/MonthNavigator'
 import { Money } from '../components/Money'
@@ -309,12 +309,6 @@ export function Orcamento() {
           <div className={cards.chartMeta}>
             <span>
               {budget.categories.length} categorias com meta
-              {budget.totalProjected > 0 && (
-                <>
-                  {' · dos quais '}
-                  <Money>R$ {currency(budget.totalProjected)}</Money> <ProjectedTag />
-                </>
-              )}
             </span>
           </div>
           {pieData.length > 0 ? (
@@ -427,15 +421,6 @@ export function Orcamento() {
               <DailySpendCalendar days={budget.dailyDays} />
             )}
           </div>
-          {/* Dia com parcela futura comprometida (ainda não confirmada pela
-              Pluggy) já entra na barra do dia certo — marca aqui pra não
-              parecer gasto "do nada" (pedido do Luiz, 09/09: "no dia 3 tem
-              a parcela da bike pra cair"). */}
-          {budget.dailyDays.some((d) => d.projected > 0) && (
-            <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
-              <span>Inclui parcela(s) de cartão já comprometida(s), ainda não confirmada(s) pela Pluggy</span>
-            </div>
-          )}
           {budget.daysWithGoal > 0 && (
             <div className={cards.chartMeta} style={{ marginTop: 'var(--space-2)' }}>
               <span>
@@ -505,7 +490,7 @@ export function Orcamento() {
           <div className={`${cards.card} ${cards.fullWidth}`}>
             <CardHeader
               icon={CalendarClock}
-              title="Comprometido em parcelas futuras"
+              title="Compras parceladas"
               action={
                 <button className={styles.reviewBtn} onClick={() => setShowInstallmentReview(true)}>
                   <ListChecks size={13} strokeWidth={2} />
@@ -518,9 +503,8 @@ export function Orcamento() {
             </div>
             <div className={cards.chartMeta}>
               <span>
-                {displayedInstallments.installments.length} parcela(s) a vencer em{' '}
-                {formatMonthLabel(selectedInstallmentPeriod.month, selectedInstallmentPeriod.year)}, de compras já
-                feitas
+                {displayedInstallments.installments.length} parcela(s) em{' '}
+                {formatMonthLabel(selectedInstallmentPeriod.month, selectedInstallmentPeriod.year)}
               </span>
             </div>
             <p className={styles.upcomingDisclaimer}>
@@ -624,7 +608,7 @@ export function Orcamento() {
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Vencimento</th>
+                    <th>Data</th>
                     <th>Descrição</th>
                     <th>Parcela</th>
                     <th>Cartão</th>
@@ -671,7 +655,7 @@ export function Orcamento() {
                   </div>
                   {i.note && <div className={styles.installmentRawName}>{i.description}</div>}
                   <div className={styles.installmentCardRow}>
-                    <span className={styles.installmentCardLabel}>Vencimento</span>
+                    <span className={styles.installmentCardLabel}>Data</span>
                     <span>{new Date(i.dueDate).toLocaleDateString('pt-BR')}</span>
                   </div>
                   <div className={styles.installmentCardRow}>
@@ -911,7 +895,6 @@ function ParentAccordion({
   const [open, setOpen] = useState(false)
   const planned = items.reduce((s, c) => s + c.planned, 0)
   const spent = items.reduce((s, c) => s + c.spent, 0)
-  const spentProjected = items.reduce((s, c) => s + c.spentProjected, 0)
   // Sem `planned > 0` no gate (11/09, achado pelo Luiz): categoria com meta
   // planejada de R$0,00 e gasto real > 0 estourou tanto quanto (ou mais que)
   // uma com meta positiva — "planned" aqui já vem de um `BudgetTarget`
@@ -926,7 +909,6 @@ function ParentAccordion({
         <span className={styles.accordionToggle}>{open ? <Minus size={13} strokeWidth={2.5} /> : <Plus size={13} strokeWidth={2.5} />}</span>
         <span className={styles.accordionName}>
           {parentName}
-          {spentProjected > 0 && <ProjectedTag />}
           {isOver && <OverBudgetIcon />}
         </span>
         <span className={styles.categoryRowValues}>
@@ -965,10 +947,6 @@ function CategoryRow({
       <div className={styles.categoryRowTop}>
         <span className={styles.categoryRowName}>
           {item.name}
-          {/* Parcela futura já comprometida, contando no gasto sem a Pluggy
-              ter confirmado ainda (09/09) — marca visualmente que uma fatia
-              desse valor ainda não é dado real. */}
-          {item.spentProjected > 0 && <ProjectedTag />}
           {isOver && <OverBudgetIcon />}
         </span>
         <span className={styles.categoryRowValues}>

@@ -192,50 +192,41 @@ function lastDayOfMonth(year: number, monthIndex0: number): number {
   return new Date(year, monthIndex0 + 1, 0).getDate();
 }
 
-/** dueDate N meses depois de billForecastDate ("YYYY-MM"), no MESMO dia do
- * mês da parcela mais recente (`anchorDay`) — não sempre dia 1. Confirmado
- * com dado real (04/09): a parcela da Usina Solar vence sempre por volta do
- * dia 21-22, nunca no dia 1; "dia 1 sempre" foi o bug que fazia toda parcela
- * futura de qualquer compra aparecer com o mesmo vencimento errado em
- * "Comprometido em parcelas futuras". */
-function futureDueDate(billForecastDate: string, monthsAhead: number, anchorDay: number): Date {
-  const [y, m] = billForecastDate.split("-").map(Number);
+const dateYmIndex = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
+
+/** Dia da compra, N meses depois (meio-dia UTC, pra nunca virar o dia
+ * vizinho por fuso). Regra do Luiz (02/10): "parcela não é previsão... no
+ * cartão mostra o dia da compra e as parcelas" — a parcela N de uma compra
+ * feita em 03/07 cai SEMPRE em 03 do mês N−1 depois (1ª 03/07, 2ª 03/08…),
+ * não no dia em que o banco lança na fatura (C6 dia 17, BTG dia 21). */
+export function purchaseDayPlusMonths(purchaseDate: string, monthsAhead: number): Date {
+  const [y, m, d] = purchaseDate.slice(0, 10).split("-").map(Number);
   const monthIndex0 = m - 1 + monthsAhead;
-  const day = Math.min(anchorDay, lastDayOfMonth(y, monthIndex0));
-  return new Date(y, monthIndex0, day);
+  const yy = y + Math.floor(monthIndex0 / 12);
+  const mm = ((monthIndex0 % 12) + 12) % 12;
+  return new Date(Date.UTC(yy, mm, Math.min(d, lastDayOfMonth(yy, mm)), 12));
 }
 
-const ymIndex = (ym: string) => {
-  const [y, m] = ym.split("-").map(Number);
-  return y * 12 + (m - 1);
-};
-const dateYmIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
-
-/** Parcela de fatura FUTURA (02/10): o BTG manda as parcelas ainda não
- * cobradas como transação datada no dia da compra, com `billForecastDate` no
- * mês da fatura em que vão cair (Usina Solar: parcelas 9 a 21 datadas
- * 03/02/2026). A fatura de mês M é a do gasto de M−1, então "futura" = fatura
- * depois da do mês que vem. Não é gasto ainda: nunca vira Transaction (já
- * aparece como parcela prevista). */
-export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
-  const forecast = tx.creditCardMetadata?.billForecastDate;
-  return !!forecast && ymIndex(forecast) > dateYmIndex(now) + 1;
-}
-
-/** Data que conta pro gasto. Normalmente a da Pluggy; mas parcela que já
- * caiu na fatura às vezes continua com a data da compra original (Usina
- * Solar, parcelas 2–4: datadas 03/02 com fatura em abr/mai/jun) — aí usa o
- * mês anterior ao da fatura, mesmo dia, que é como as outras parcelas da
- * mesma compra vêm datadas. */
+/** Data que conta pro gasto. Parcela de compra parcelada (com a data da
+ * compra original) = dia da compra no mês da parcela (ver
+ * `purchaseDayPlusMonths`); o resto = a data da Pluggy. Cobre de quebra o
+ * BTG mandando parcela já cobrada com a data da compra (Usina Solar,
+ * parcelas 2–4 datadas 03/02/2026). */
 export function effectiveDate(tx: PluggyTransaction): Date {
-  const d = new Date(tx.date);
   const meta = tx.creditCardMetadata;
-  if (!meta?.billForecastDate || !meta.installmentNumber || meta.installmentNumber <= 1) return d;
-  const billMonth = ymIndex(meta.billForecastDate) - 1;
-  if (dateYmIndex(d) >= billMonth) return d;
-  const y = Math.floor(billMonth / 12);
-  const m0 = billMonth % 12;
-  return new Date(y, m0, Math.min(d.getDate(), lastDayOfMonth(y, m0)), d.getHours(), d.getMinutes());
+  if (meta?.purchaseDate && meta.installmentNumber && meta.totalInstallments && meta.totalInstallments > 1) {
+    return purchaseDayPlusMonths(meta.purchaseDate, meta.installmentNumber - 1);
+  }
+  return new Date(tx.date);
+}
+
+/** Parcela de mês FUTURO (02/10): o BTG manda as parcelas ainda não
+ * cobradas como transação (Usina Solar: parcelas 10 a 21 já existem na
+ * Pluggy). Gasto de mês que ainda não chegou não vira Transaction — já
+ * aparece como parcela do mês dela (UpcomingInstallment). Vira Transaction
+ * no mês em que cai. */
+export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean {
+  return dateYmIndex(effectiveDate(tx)) > now.getUTCFullYear() * 12 + now.getUTCMonth();
 }
 
 /** Parcelas futuras (UpcomingInstallment) de cada compra parcelada do cartão,
@@ -303,14 +294,13 @@ export async function reprojectInstallments(
     const meta = latest.creditCardMetadata!;
     const total = meta.totalInstallments!;
     const current = meta.installmentNumber!;
-    // Base = mês da DATA da parcela mais recente (02/10), não o mês da fatura:
-    // o app conta gasto pela data da transação, e no BTG a fatura é sempre o
-    // mês seguinte ao da data — usar `billForecastDate` jogava toda projeção
-    // um mês pra frente (Usina: projeção da 7ª em set, real da 7ª em ago,
-    // contando 2x). No C6 os dois coincidem, nada muda lá.
+    // Data da parcela n: dia da compra, n−1 meses depois (regra do Luiz,
+    // 02/10). Sem a data da compra, cai no mesmo dia da mais recente.
     const latestDate = effectiveDate(latest);
-    const forecast = `${latestDate.getFullYear()}-${String(latestDate.getMonth() + 1).padStart(2, "0")}`;
-    const anchorDay = latestDate.getDate();
+    const dueDateOf = (n: number) =>
+      meta.purchaseDate
+        ? purchaseDayPlusMonths(meta.purchaseDate, n - 1)
+        : purchaseDayPlusMonths(latestDate.toISOString(), n - current);
     const label = `${latest.description.slice(0, 28)} (${current}/${total})`;
 
     const existing = await prisma.upcomingInstallment.findMany({
@@ -349,7 +339,7 @@ export async function reprojectInstallments(
     const categoryId = postedRows.find((t) => t.categoryId)?.categoryId ?? existing.find((u) => u.categoryId)?.categoryId ?? null;
     const amount = realAmount(latest);
     for (let n = current + 1; n <= total; n++) {
-      const dueDate = futureDueDate(forecast, n - current, anchorDay);
+      const dueDate = dueDateOf(n);
       const old = byNumber.get(n);
       if (old) {
         const changed = old.dueDate.getTime() !== dueDate.getTime() || Math.abs(old.amount - amount) > 0.005;

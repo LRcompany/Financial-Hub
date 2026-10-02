@@ -657,15 +657,54 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const installments = installmentsRaw.filter(
     (i) => !postedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
   );
-  const total = installments.reduce((sum, i) => sum + i.amount, 0);
+
+  // Parcela é parcela (02/10, Luiz: "se eu compro algo parcelado em 10x não
+  // é previsão... faça chuva ou faça sol ela sempre vai cair"). As parcelas
+  // do mês que a Pluggy JÁ lançou (Transaction com totalInstallments > 1)
+  // entram na lista junto das ainda não lançadas, do mesmo jeito — antes uma
+  // parcela sumia do box no dia em que a Pluggy confirmava (Usina Solar).
+  async function postedInstallmentsIn(start: Date, end: Date) {
+    return prisma.transaction.findMany({
+      where: { type: "expense", isTransfer: false, totalInstallments: { gt: 1 }, date: { gte: start, lt: end } },
+      include: { category: { include: { parent: { include: { parent: true } } } }, broker: { select: { name: true } } },
+    });
+  }
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const [postedThisMonth, postedCurrentMonth] = await Promise.all([
+    postedInstallmentsIn(monthStart, monthEnd),
+    postedInstallmentsIn(currentMonthStart, currentMonthEnd),
+  ]);
+  const postedRows = postedThisMonth.map((t) => ({
+    id: t.id,
+    dueDate: t.date,
+    description: t.description,
+    note: t.note,
+    amount: t.amount,
+    category: categoryPath(t.category),
+    cardLabel: t.broker?.name ?? null,
+    installmentNumber: t.installmentNumber,
+    totalInstallments: t.totalInstallments,
+  }));
+
+  const total = installments.reduce((sum, i) => sum + i.amount, 0) + postedRows.reduce((sum, r) => sum + r.amount, 0);
 
   const byCard = new Map<string, number>();
-  for (const i of installments) {
+  for (const i of [...installments, ...postedRows]) {
     const cardKey = i.cardLabel ?? "Outros (sem cartão identificado)";
     byCard.set(cardKey, (byCard.get(cardKey) ?? 0) + i.amount);
   }
 
   const byMonthMap = new Map<string, { month: number; year: number; amount: number }>();
+  // Mês atual inclui as parcelas que já foram lançadas nele (mesma regra da
+  // lista acima); meses seguintes só têm as ainda não lançadas, por natureza.
+  if (postedCurrentMonth.length > 0) {
+    byMonthMap.set(`${now.getFullYear()}-${now.getMonth() + 1}`, {
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+      amount: postedCurrentMonth.reduce((sum, t) => sum + t.amount, 0),
+    });
+  }
   for (const i of allFuture) {
     const d = new Date(i.dueDate);
     const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
@@ -693,7 +732,9 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const ending = installmentsRaw
     .filter((i) => lastDueByPurchase.get(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`) === i.dueDate.getTime())
     .sort((a, b) => b.amount - a.amount);
-  const endingTotal = ending.reduce((sum, i) => sum + i.amount, 0);
+  // Parcela lançada que é a ÚLTIMA da compra também termina no mês.
+  const endingPosted = postedRows.filter((r) => r.installmentNumber != null && r.installmentNumber === r.totalInstallments);
+  const endingTotal = ending.reduce((sum, i) => sum + i.amount, 0) + endingPosted.reduce((sum, r) => sum + r.amount, 0);
 
   function toRow(i: (typeof installmentsRaw)[number]) {
     const position = positions.get(i.id);
@@ -712,11 +753,11 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
 
   res.json({
     total,
-    ending: ending.map(toRow),
+    ending: [...ending.map(toRow), ...endingPosted].sort((a, b) => b.amount - a.amount),
     endingTotal,
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     byMonth,
-    installments: installments.map(toRow),
+    installments: [...installments.map(toRow), ...postedRows].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()),
   });
 });
 

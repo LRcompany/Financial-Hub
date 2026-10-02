@@ -345,7 +345,7 @@ export function InstallmentReviewModal({ onClose }: { onClose: () => void }) {
 
   return (
     <ModalShell
-      title="Revisar parcelas futuras"
+      title="Revisar parcelas"
       subtitle={
         groups && (
           <>
