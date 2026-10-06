@@ -133,6 +133,68 @@ function computeProjectTax(
   return { amount: total, estimated };
 }
 
+// ---------- Fechamento do projeto (06/10) ----------
+// Pedido do Luiz: "tem projetos que recebo em dólares... recebi o que foi
+// acordado mas a variação pro real não está igual, e isso tudo bem".
+// - Contrato em moeda estrangeira (`currency` + `contractValueForeign`) fecha
+//   quando o BRUTO recebido NA MOEDA DO CONTRATO chega ao combinado — nunca
+//   pelo BRL (estimativa do dia do cadastro; câmbio e tarifa nunca batem).
+//   Também não fecha pelo BRL antes da hora (câmbio subiu, 80% pago).
+// - Contrato em BRL fecha quando o recebido chega ao contrato.
+// - `closedManuallyAt` fecha à mão (cliente pagou a menos ou a mais).
+// Fechado → o valor do projeto em BRL vira o que REALMENTE caiu na conta
+// (`effectiveValue`): receita bruta/líquida, DAS estimado e "a receber" usam
+// esse, e a diferença pro contrato vira `difference` (variação cambial,
+// diferença acordada ou recebido a mais) — informativa, nunca dívida.
+// `asOf`: fechamento como estava no fim de um mês passado.
+type ClosureProject = {
+  contractValue: number;
+  contractValueForeign: number | null;
+  currency: string | null;
+  status: string;
+  closedManuallyAt: Date | null;
+  receipts: { amount: number; paymentDate: Date; grossAmountForeign: number | null }[];
+};
+function projectClosure(p: ClosureProject, asOf: Date | null = null) {
+  const receipts = (asOf ? p.receipts.filter((r) => r.paymentDate < asOf) : [...p.receipts]).sort(
+    (a, b) => a.paymentDate.getTime() - b.paymentDate.getTime()
+  );
+  const received = receipts.reduce((s, r) => s + r.amount, 0);
+  const isForeign = !!p.currency && p.contractValueForeign != null;
+  const receivedForeign = isForeign ? receipts.reduce((s, r) => s + (r.grossAmountForeign ?? 0), 0) : null;
+  const target = isForeign ? p.contractValueForeign! : p.contractValue;
+  const active = p.status !== "cancelado" && p.status !== "pausado";
+
+  let autoClosedAt: Date | null = null;
+  let cumulative = 0;
+  for (const r of receipts) {
+    cumulative += isForeign ? (r.grossAmountForeign ?? 0) : r.amount;
+    if (cumulative >= target - 0.005) {
+      autoClosedAt = r.paymentDate;
+      break;
+    }
+  }
+  const manualClosedAt = p.closedManuallyAt && (!asOf || p.closedManuallyAt < asOf) ? p.closedManuallyAt : null;
+  const closed = active && (autoClosedAt != null || manualClosedAt != null);
+  const closedBy: "currency" | "received" | "manual" | null = !closed
+    ? null
+    : autoClosedAt
+      ? isForeign
+        ? "currency"
+        : "received"
+      : "manual";
+  const effectiveValue = closed ? received : p.contractValue;
+  return {
+    received,
+    receivedForeign,
+    closed,
+    closedBy,
+    closedAt: closed ? (autoClosedAt ?? manualClosedAt) : null,
+    effectiveValue,
+    difference: closed ? received - p.contractValue : 0,
+  };
+}
+
 // ---------- Projetos ----------
 
 projectsRouter.get("/projects", async (_req, res) => {
@@ -145,22 +207,22 @@ projectsRouter.get("/projects", async (_req, res) => {
   ]);
 
   const result = projects.map((p) => {
-    const received = p.receipts.reduce((s, r) => s + r.amount, 0);
-    const remaining = Math.max(0, p.contractValue - received);
-    // Progresso em moeda estrangeira (07/09) — soma bruto recebido contra o
-    // valor combinado, os dois na MESMA moeda do contrato. Só existe quando
-    // `currency` está setado; não entra em nenhum cálculo de BRL acima (DAS,
-    // receita, "a receber" continuam só com contractValue/amount em BRL).
-    const receivedForeign = p.currency ? p.receipts.reduce((s, r) => s + (r.grossAmountForeign ?? 0), 0) : null;
+    // Fechamento e valor real do projeto — ver `projectClosure`.
+    const closure = projectClosure(p);
+    const received = closure.received;
+    const remaining = Math.max(0, closure.effectiveValue - received);
+    // Progresso na moeda do contrato (07/09) — bruto recebido contra o
+    // combinado, os dois na MESMA moeda. Desde 06/10 é ele que decide se um
+    // contrato estrangeiro fechou.
+    const receivedForeign = closure.receivedForeign;
     const remainingForeign = p.currency && p.contractValueForeign != null ? Math.max(0, p.contractValueForeign - (receivedForeign ?? 0)) : null;
     const supplierCost = p.supplierCosts.reduce((s, c) => s + c.agreedAmount, 0);
     const supplierPaid = p.supplierCosts.reduce((s, c) => s + c.payments.reduce((ps, pay) => ps + pay.amount, 0), 0);
-    const tax = computeProjectTax(p, p.client, p.receipts, taxPayments);
-    const net = p.contractValue - tax.amount - supplierCost;
+    const tax = computeProjectTax({ contractValue: closure.effectiveValue, hasInvoice: p.hasInvoice }, p.client, p.receipts, taxPayments);
+    const net = closure.effectiveValue - tax.amount - supplierCost;
     const daysTotal = p.endDate ? Math.round((p.endDate.getTime() - p.startDate.getTime()) / 86400000) : null;
     const yieldPerDay = daysTotal ? net / daysTotal : null;
-    const finalized = p.status !== "cancelado" && p.status !== "pausado" && received >= p.contractValue;
-    const effectiveStatus = p.status === "cancelado" || p.status === "pausado" ? p.status : finalized ? "finalizado" : "em_andamento";
+    const effectiveStatus = p.status === "cancelado" || p.status === "pausado" ? p.status : closure.closed ? "finalizado" : "em_andamento";
 
     return {
       id: p.id,
@@ -174,6 +236,13 @@ projectsRouter.get("/projects", async (_req, res) => {
       hasInvoice: p.hasInvoice,
       installmentCount: p.installmentCount,
       status: effectiveStatus,
+      // Fechamento (06/10): como fechou, valor real em BRL e diferença pro
+      // contrato (variação cambial / diferença acordada / recebido a mais).
+      closedBy: closure.closedBy,
+      closedAt: closure.closedAt,
+      closedManually: p.closedManuallyAt != null,
+      effectiveValue: closure.effectiveValue,
+      difference: closure.difference,
       daysTotal,
       received,
       remaining,
@@ -246,8 +315,10 @@ projectsRouter.post("/projects", async (req, res) => {
 });
 
 projectsRouter.put("/projects/:id", async (req, res) => {
-  const { name, startDate, endDate, contractValue, hasInvoice, installmentCount, status, contractValueForeign, currency } = req.body ?? {};
+  const { name, startDate, endDate, contractValue, hasInvoice, installmentCount, status, contractValueForeign, currency, closedManually } = req.body ?? {};
   const data: Record<string, unknown> = {};
+  // Finalizar/reabrir à mão (06/10) — ver `projectClosure`.
+  if (closedManually !== undefined) data.closedManuallyAt = closedManually ? new Date() : null;
   if (name !== undefined) data.name = name;
   if (startDate !== undefined) data.startDate = new Date(startDate);
   if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
@@ -452,16 +523,20 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   // (quando conhecido — projeto de cliente estrangeiro sem DAS do mês ainda
   // não entra na conta, pra não inventar) e custo de fornecedor.
   const notCancelled = projects.filter((p) => p.status !== "cancelado");
-  const grossRevenue = notCancelled.reduce((sum, p) => sum + p.contractValue, 0);
+  // Valor real do projeto: contrato enquanto aberto, recebido quando fechado
+  // (06/10 — ver `projectClosure`).
+  const closureOf = new Map(projects.map((p) => [p.id, projectClosure(p)]));
+  const valueOf = (p: { id: string }) => closureOf.get(p.id)!.effectiveValue;
+  const grossRevenue = notCancelled.reduce((sum, p) => sum + valueOf(p), 0);
   let netRevenue = 0;
   let taxEstimatedTotal = 0;
   let hasEstimatedTax = false;
   for (const p of notCancelled) {
     const supplierCost = p.supplierCosts.reduce((s, c) => s + c.agreedAmount, 0);
-    const tax = computeProjectTax(p, p.client, p.receipts, taxPayments);
+    const tax = computeProjectTax({ contractValue: valueOf(p), hasInvoice: p.hasInvoice }, p.client, p.receipts, taxPayments);
     if (tax.estimated) hasEstimatedTax = true;
     taxEstimatedTotal += tax.amount;
-    netRevenue += p.contractValue - tax.amount - supplierCost;
+    netRevenue += valueOf(p) - tax.amount - supplierCost;
   }
   // imposto pago de verdade (o que já virou Transaction real na categoria
   // "Imposto" do Orçamento) — todo-tempo, não só o ano corrente, pra bater
@@ -472,7 +547,7 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   // contratado, não recebido), é o que a pizza da Visão Geral mostra.
   const clientContractMap = new Map<string, number>();
   for (const p of notCancelled) {
-    clientContractMap.set(p.client.name, (clientContractMap.get(p.client.name) ?? 0) + p.contractValue);
+    clientContractMap.set(p.client.name, (clientContractMap.get(p.client.name) ?? 0) + valueOf(p));
   }
   const clientContractValue = [...clientContractMap.entries()].map(([label, value]) => ({ label, value }));
 
@@ -500,8 +575,8 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   function outstandingAsOf(asOf: Date | null): number {
     return openProjects.reduce((sum, p) => {
       if (asOf && p.startDate >= asOf) return sum;
-      const received = p.receipts.filter((r) => !asOf || r.paymentDate < asOf).reduce((s, r) => s + r.amount, 0);
-      return sum + Math.max(0, p.contractValue - received);
+      const c = projectClosure(p, asOf);
+      return sum + Math.max(0, c.effectiveValue - c.received);
     }, 0);
   }
   const monthEndReq = new Date(year, month, 1);
@@ -524,10 +599,8 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   let openCount = 0;
   for (const p of projects) {
     if (p.endDate) totalDays += Math.round((p.endDate.getTime() - p.startDate.getTime()) / 86400000);
-    const received = p.receipts.reduce((s, r) => s + r.amount, 0);
-    const finalized = p.status !== "cancelado" && p.status !== "pausado" && received >= p.contractValue;
     if (p.status === "cancelado") continue;
-    if (finalized) finalizedCount++;
+    if (closureOf.get(p.id)!.closed) finalizedCount++;
     else openCount++;
   }
 
@@ -547,8 +620,7 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   const activeProjects = projects
     .filter((p) => {
       if (p.status === "cancelado") return false;
-      const received = p.receipts.reduce((s, r) => s + r.amount, 0);
-      return received < p.contractValue;
+      return !closureOf.get(p.id)!.closed;
     })
     .map((p) => ({
       id: p.id,
@@ -582,17 +654,11 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   // lá, não agora).
   const deliveredThisMonth = notCancelled
     .map((p) => {
-      const sorted = [...p.receipts].sort((a, b) => a.paymentDate.getTime() - b.paymentDate.getTime());
-      let cumulative = 0;
-      let deliveryDate: Date | null = null;
-      for (const r of sorted) {
-        cumulative += r.amount;
-        if (cumulative >= p.contractValue) {
-          deliveryDate = r.paymentDate;
-          break;
-        }
-      }
-      return deliveryDate ? { id: p.id, name: p.name, client: p.client.name, contractValue: p.contractValue, deliveryDate } : null;
+      // Data de fechamento (06/10): recebimento que completou o contrato na
+      // moeda dele, ou a data em que foi finalizado à mão.
+      const c = closureOf.get(p.id)!;
+      const deliveryDate = c.closedAt;
+      return deliveryDate ? { id: p.id, name: p.name, client: p.client.name, contractValue: c.effectiveValue, deliveryDate } : null;
     })
     .filter(
       (x): x is { id: string; name: string; client: string; contractValue: number; deliveryDate: Date } =>
@@ -647,7 +713,7 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     let days = 0;
     for (let t = p.startDate.getTime(); t <= p.endDate.getTime(); t += DAY_MS) if (isWeekday(t)) days++;
     if (days === 0) continue;
-    rateContract += p.contractValue;
+    rateContract += valueOf(p);
     rateDays += days;
   }
   const dailyRateThisMonth = rateDays > 0 ? rateContract / rateDays : null;

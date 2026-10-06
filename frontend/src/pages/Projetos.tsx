@@ -12,6 +12,8 @@ import {
   LineChart,
   Pause,
   Play,
+  CheckCircle2,
+  RotateCcw,
 } from 'lucide-react'
 import {
   api,
@@ -33,6 +35,7 @@ import { Money } from '../components/Money'
 import { ModalShell } from '../components/ModalShell'
 import { currency } from '../lib/format'
 import { MonthNavigator } from '../components/MonthNavigator'
+import { PlannedValue } from '../components/SpentPlannedValue'
 import cards from '../styles/cards.module.css'
 import styles from './Projetos.module.css'
 
@@ -488,6 +491,21 @@ function ProjectCard({
     onChanged()
   }
 
+  // Finalizar/reabrir à mão (06/10, pedido do Luiz: "deixa o botão manual
+  // caso aconteça do cliente pagar a menos ou a mais"). Contrato em dólar
+  // não precisa: fecha sozinho quando o recebido em dólar bate o combinado.
+  async function setClosedManually(closed: boolean) {
+    await api.updateProject(project.id, { closedManually: closed })
+    onChanged()
+  }
+
+  // Diferença entre o que caiu na conta e o contrato em BRL, quando fechado
+  // — informativa, nunca "falta receber".
+  const hasDifference = project.status === 'finalizado' && Math.abs(project.difference) >= 0.01
+  const differenceLabel =
+    project.closedBy === 'currency' ? 'variação cambial' : project.closedBy === 'manual' ? 'diferença acordada' : 'recebido a mais'
+  const differenceValue = `${project.difference < 0 ? '−' : '+'}R$ ${currency(Math.abs(project.difference))}`
+
   const statusClass =
     project.status === 'finalizado' ? styles.statusFinalizado : project.status === 'cancelado' ? styles.statusCancelado : project.status === 'pausado' ? styles.statusPausado : styles.statusAndamento
 
@@ -508,8 +526,37 @@ function ProjectCard({
             </span>
             <div className={styles.projectHeaderActions} onClick={(e) => e.stopPropagation()}>
               <span className={`${styles.statusChip} ${statusClass}`}>{STATUS_LABEL[project.status]}</span>
+              {project.status === 'finalizado' && project.closedManually && (
+                <IconButton
+                  variant="ghost"
+                  onClick={() => {
+                    if (confirm(`Reabrir "${project.name}"? Ele volta a contar o que falta receber.`)) setClosedManually(false)
+                  }}
+                  aria-label="Reabrir projeto"
+                  title="Reabrir projeto"
+                >
+                  <RotateCcw size={14} strokeWidth={2} />
+                </IconButton>
+              )}
               {isActive && (
                 <>
+                  {project.received > 0 && (
+                    <IconButton
+                      variant="ghost"
+                      onClick={() => {
+                        const diff = project.received - project.contractValue
+                        const diffText =
+                          Math.abs(diff) < 0.01
+                            ? ''
+                            : ` A diferença de ${diff < 0 ? '−' : '+'}R$ ${currency(Math.abs(diff))} fica registrada como diferença acordada, não como valor a receber.`
+                        if (confirm(`Finalizar "${project.name}" com R$ ${currency(project.received)} recebido?${diffText}`)) setClosedManually(true)
+                      }}
+                      aria-label="Finalizar projeto"
+                      title="Finalizar projeto"
+                    >
+                      <CheckCircle2 size={14} strokeWidth={2} />
+                    </IconButton>
+                  )}
                   {project.status === 'em_andamento' ? (
                     <IconButton variant="ghost" onClick={() => changeStatus('pausado')} aria-label="Pausar projeto" title="Pausar projeto">
                       <Pause size={14} strokeWidth={2} />
@@ -538,10 +585,18 @@ function ProjectCard({
               {formatDate(project.startDate)} {project.endDate ? `— ${formatDate(project.endDate)}` : ''}
             </span>
             <div className={styles.projectHeaderValues}>
-              <span className={styles.projectValue}><Money>R$ {currency(project.contractValue)}</Money></span>
-              <span className={styles.projectSub}>
-                recebido <Money>R$ {currency(project.received)}</Money> · falta <Money>R$ {currency(project.remaining)}</Money>
-              </span>
+              {/* Fechado: o valor do projeto é o que caiu na conta, e o contrato
+                  vira referência (06/10). Aberto: contrato + quanto falta. */}
+              <span className={styles.projectValue}><Money>R$ {currency(project.status === 'finalizado' ? project.effectiveValue : project.contractValue)}</Money></span>
+              {hasDifference ? (
+                <span className={styles.projectSub}>
+                  contrato <PlannedValue value={project.contractValue} /> · {differenceLabel} <Money>{differenceValue}</Money>
+                </span>
+              ) : project.status === 'finalizado' ? null : (
+                <span className={styles.projectSub}>
+                  recebido <Money>R$ {currency(project.received)}</Money> · falta <Money>R$ {currency(project.remaining)}</Money>
+                </span>
+              )}
               {project.currency && project.contractValueForeign != null && (
                 <span className={styles.projectSub}>
                   progresso do contrato:{' '}
@@ -577,6 +632,12 @@ function ProjectCard({
               <span className={cards.heroLabel}>Líquido</span>
               <span className={cards.statValue}><Money>R$ {currency(project.net)}</Money></span>
             </div>
+            {hasDifference && (
+              <div className={styles.detailStat}>
+                <span className={cards.heroLabel}>{differenceLabel.charAt(0).toUpperCase() + differenceLabel.slice(1)}</span>
+                <span className={cards.statValue}><Money>{differenceValue}</Money></span>
+              </div>
+            )}
             <div className={styles.detailStat}>
               <span className={cards.heroLabel}>Rendimento/dia</span>
               <span className={cards.statValue}>{project.yieldPerDay !== null ? <Money>{`R$ ${currency(project.yieldPerDay)}`}</Money> : '—'}</span>

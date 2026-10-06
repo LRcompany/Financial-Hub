@@ -2146,6 +2146,31 @@ Resultado:
 
 Box de outubro: 38 parcelas, R$ 11.896,05 (Usina 9/21, Bike 4/10, TAP 4/10 juntas).
 
+### Projeto em dólar fecha pela moeda do contrato + botão "Finalizar" manual (06/10)
+
+Luiz: *"tem projetos que recebo em dólares... a variação do câmbio e aí o projeto não fecha. Eu recebi o que foi acordado mas a variação pro real não está igual, e isso tudo bem."* Aprovou a proposta e pediu *"deixa o botão manual caso aconteça do cliente pagar a menos ou a mais"*.
+
+**Antes:** finalizado = recebido em BRL ≥ `contractValue` (BRL). Num contrato em dólar esse BRL é a estimativa do dia do cadastro, então o projeto nunca fechava e a diferença aparecia como "a receber" (DESIGN FEE: US$ 4.500 de US$ 4.500 recebidos, mas R$ 22.527,50 de R$ 23.500).
+
+**`projectClosure`** (`projects.ts`), fonte única do fechamento:
+- Contrato estrangeiro (`currency` + `contractValueForeign`) fecha quando o BRUTO recebido na moeda do contrato (`grossAmountForeign`) chega ao combinado. Nunca pelo BRL, nem antes da hora.
+- Contrato em BRL fecha quando o recebido chega ao contrato.
+- Novo campo `closedManuallyAt` (migração `add_project_closed_manually`) fecha à mão.
+- Fechado → `effectiveValue` = recebido real em BRL. Receita bruta/líquida, DAS estimado (6%), "a receber" (inclusive `outstandingAsOf`), ganhos por cliente, valor da diária, contagem finalizados/abertos e "entregues no mês" (`closedAt`) usam esse valor. `difference` = recebido − contrato.
+
+**API**: `PUT /projects/:id { closedManually: true|false }`. `GET /projects` devolve `closedBy` (currency | received | manual), `closedAt`, `closedManually`, `effectiveValue` e `difference`.
+
+**Tela (Projetos)**:
+- Botão ✓ "Finalizar projeto" em projeto em aberto que já recebeu algo. O confirm diz a diferença que fica registrada como "diferença acordada".
+- ↺ "Reabrir" em projeto finalizado à mão.
+- Fechado mostra o valor real e "contrato R$ X (mono, `PlannedValue`) · variação cambial / diferença acordada / recebido a mais ±R$ Y", e a mesma linha nos números do detalhe. Some o "falta".
+
+Verificado com uma cópia local do `prod.db` migrada (apagada depois):
+- DESIGN FEE e KASHAN fecharam (variação −R$ 972,50 e −R$ 26,84).
+- "A receber" caiu esses valores; finalizados 20 / abertos 4.
+- Finalizar/reabrir testado no BOOK (só na cópia).
+- `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

@@ -408,6 +408,15 @@ export interface ProjectListItem {
   hasInvoice: boolean
   installmentCount: number
   status: 'em_andamento' | 'pausado' | 'cancelado' | 'finalizado'
+  // Fechamento (06/10): contrato estrangeiro fecha pelo recebido na moeda
+  // dele ("currency"), BRL pelo recebido ("received"), ou à mão ("manual").
+  // Fechado → `effectiveValue` = o que caiu na conta, e `difference` =
+  // recebido − contrato em BRL (variação cambial, diferença acordada...).
+  closedBy: 'currency' | 'received' | 'manual' | null
+  closedAt: string | null
+  closedManually: boolean
+  effectiveValue: number
+  difference: number
   daysTotal: number | null
   received: number
   remaining: number
@@ -830,6 +839,8 @@ export const api = {
       status: 'em_andamento' | 'pausado' | 'cancelado'
       contractValueForeign: number | null
       currency: string | null
+      // Finalizar (true) ou reabrir (false) à mão — cliente pagou a menos ou a mais.
+      closedManually: boolean
     }>
   ) => putJson<{ id: string }>(`/projects/${id}`, input),
   createProjectReceipt: (input: {

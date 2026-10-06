@@ -441,6 +441,11 @@ model Project {
   hasInvoice       Boolean   @default(true)
   installmentCount Int       @default(1)
   status           String    @default("em_andamento") // em_andamento | pausado | finalizado | cancelado
+  // Finalizado À MÃO (06/10, pedido do Luiz: "deixa o botão manual caso o
+  // cliente pague a menos ou a mais") — fecha o projeto mesmo sem o
+  // recebido bater com o contrato. Null = fecha só pela regra automática
+  // (recebido >= contrato, na moeda do contrato). Ver `projectClosure`.
+  closedManuallyAt DateTime?
 
   recurrenceId String?
   recurrence   Recurrence? @relation(fields: [recurrenceId], references: [id])
