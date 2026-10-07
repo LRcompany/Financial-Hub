@@ -247,6 +247,13 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
       });
       investedAmount = previous?.investedAmount ?? marketValue;
     }
+    // Título zerado não tem dinheiro dentro (07/10): em out/26 o BTG juntou as
+    // 8 compras de Tesouro Selic numa posição só, e as antigas continuaram
+    // vindo com valor ZERO mas `amountOriginal` cheio — o investido delas
+    // somava de novo por cima da posição nova (LFT com R$90 mil "investidos"
+    // pra R$58 mil de mercado, e um "aporte" fantasma de R$67 mil no mês).
+    // Valor de mercado zero = resgatado/trocado → investido zero.
+    if (marketValue <= 0) investedAmount = 0;
     const monthlyRatePct = inv.lastMonthRate ?? null;
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
     const quantity = inv.quantity ?? null;
