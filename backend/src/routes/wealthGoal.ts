@@ -3,46 +3,36 @@ import { prisma } from "../prisma.js";
 
 export const wealthGoalRouter = Router();
 
-// GET /api/wealth-goal — meta geral (valor alvo) + tabela ano a ano
+// GET /api/wealth-goal — meta geral: valor alvo + aporte mensal pretendido.
+// Simplificado (01/09): antes existia uma tabela ano a ano com "retorno
+// assumido" chutado — o retorno agora vem calculado de verdade a partir do
+// histórico real (ver /wealth-overview), só o aporte mensal continua sendo
+// informado por ele (é intenção futura, não tem como derivar do passado).
 wealthGoalRouter.get("/wealth-goal", async (_req, res) => {
-  const [goal, yearly] = await Promise.all([
-    prisma.wealthGoal.findFirst(),
-    prisma.wealthGoalYearly.findMany({ orderBy: { year: "asc" } }),
-  ]);
-  res.json({ targetAmount: goal?.targetAmount ?? null, yearly });
+  const goal = await prisma.wealthGoal.findFirst();
+  res.json({ targetAmount: goal?.targetAmount ?? null, monthlyContribution: goal?.monthlyContribution ?? 0 });
 });
 
-// PUT /api/wealth-goal — define/atualiza o valor alvo (singleton)
+// PUT /api/wealth-goal — define/atualiza a meta (singleton). Os dois campos
+// são opcionais individualmente — mandar só um não apaga o outro.
 wealthGoalRouter.put("/wealth-goal", async (req, res) => {
-  const { targetAmount } = req.body ?? {};
-  if (typeof targetAmount !== "number" || targetAmount <= 0) {
+  const { targetAmount, monthlyContribution } = req.body ?? {};
+  if (targetAmount !== undefined && (typeof targetAmount !== "number" || targetAmount <= 0)) {
     return res.status(400).json({ error: "targetAmount precisa ser um número positivo" });
   }
-  const existing = await prisma.wealthGoal.findFirst();
-  const goal = existing
-    ? await prisma.wealthGoal.update({ where: { id: existing.id }, data: { targetAmount } })
-    : await prisma.wealthGoal.create({ data: { targetAmount } });
-  res.json(goal);
-});
-
-// PUT /api/wealth-goal/yearly/:year — cria/atualiza a meta de um ano específico
-wealthGoalRouter.put("/wealth-goal/yearly/:year", async (req, res) => {
-  const year = Number(req.params.year);
-  const { savingsTarget, annualReturnAssumptionPct } = req.body ?? {};
-  if (!Number.isInteger(year) || typeof savingsTarget !== "number" || typeof annualReturnAssumptionPct !== "number") {
-    return res.status(400).json({ error: "Campos obrigatórios: savingsTarget, annualReturnAssumptionPct (year na URL)" });
+  if (monthlyContribution !== undefined && (typeof monthlyContribution !== "number" || monthlyContribution < 0)) {
+    return res.status(400).json({ error: "monthlyContribution precisa ser um número >= 0" });
   }
-  const row = await prisma.wealthGoalYearly.upsert({
-    where: { year },
-    update: { savingsTarget, annualReturnAssumptionPct },
-    create: { year, savingsTarget, annualReturnAssumptionPct },
-  });
-  res.json(row);
-});
 
-// DELETE /api/wealth-goal/yearly/:year
-wealthGoalRouter.delete("/wealth-goal/yearly/:year", async (req, res) => {
-  const year = Number(req.params.year);
-  await prisma.wealthGoalYearly.deleteMany({ where: { year } });
-  res.status(204).end();
+  const existing = await prisma.wealthGoal.findFirst();
+  const data = {
+    ...(targetAmount !== undefined ? { targetAmount } : {}),
+    ...(monthlyContribution !== undefined ? { monthlyContribution } : {}),
+  };
+  const goal = existing
+    ? await prisma.wealthGoal.update({ where: { id: existing.id }, data })
+    : await prisma.wealthGoal.create({
+        data: { targetAmount: targetAmount ?? 1000000, monthlyContribution: monthlyContribution ?? 0 },
+      });
+  res.json(goal);
 });

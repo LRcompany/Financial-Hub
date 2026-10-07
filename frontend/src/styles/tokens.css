@@ -36,6 +36,15 @@
   --danger: #E0645A;
   --danger-soft: #FBE6E4;
 
+  /* Gráfico "proventos por mês" (Patrimônio, 11/09) — Ação usa `--accent`
+     direto (mesma cor azul de sempre); FII precisa de uma segunda cor FIXA
+     pra empilhar ao lado dela na mesma barra — mesmo teal já usado como um
+     dos stops do `--grad` abaixo, então não introduz um tom novo no app.
+     Fundo (mesmo dia, lançamento manual pro VALORA) é a terceira série —
+     reaproveita o laranja, outro stop já existente do mesmo `--grad`. */
+  --dividends-fii: #3FB6A8;
+  --dividends-fundo: #F2934A;
+
   /* ---------- gradiente — assinatura visual dos gráficos ---------- */
   --grad: linear-gradient(90deg, #F0605A 0%, #F2934A 22%, #F0C24B 42%, #7FC96B 62%, #3FB6A8 80%, #3E5BFA 100%);
 
@@ -50,6 +59,13 @@
   --r-md: 20px;  /* cards */
   --r-lg: 28px;  /* blocos grandes */
   --r-full: 999px; /* botões, pills, toggle */
+  /* Todo gráfico de barra (progresso, cartão de crédito, ranking por ativo)
+     — pedido do Luiz (11/09): "diminuir o border-radius, pelo menos metade
+     menor... isso tem que ser replicado em todos os gráficos de barra". Um
+     radius tão grande quanto a própria altura da barra (--r-full/--r-lg)
+     faz toda barra curta virar uma pílula arredondada igual às outras,
+     escondendo a diferença de proporção entre elas. */
+  --r-bar: 4px;
 
   /* ---------- elevação — leve, só quando necessário ---------- */
   --shadow-sm: 0 2px 10px rgba(21, 23, 28, 0.05);
@@ -69,6 +85,11 @@
      falta só adicionar o <link> do projeto Adobe Fonts no index.html e confirmar o nome exato
      que o kit expõe, geralmente algo como 'proxima-nova'). Inter é o fallback universal. */
   --font-display: 'proxima-nova', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Valor ESTIPULADO/planejado (01/10, pedido do Luiz: "deixa o valor
+     estipulado em outra fonte, só pra não me confundir quando é o gasto real
+     e o que foi estipulado") — fonte mono do sistema, nunca carregada à parte.
+     Gasto real continua em `--font-display`. Uso só via `PlannedValue`. */
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Peso máximo: Semibold. Nunca Bold/Black, em nenhum tamanho — hierarquia vem de tamanho, não peso. */
   --fw-regular: 400;
@@ -98,6 +119,8 @@
     --warning-soft: #362A11;
     --danger: #F08A80;
     --danger-soft: #3A1D1B;
+    --dividends-fii: #5CCFC1;
+    --dividends-fundo: #FFAB6B;
 
     --glass-bg: rgba(25, 28, 33, 0.55);
     --glass-border: rgba(255, 255, 255, 0.08);
@@ -128,6 +151,8 @@
   --warning-soft: #362A11;
   --danger: #F08A80;
   --danger-soft: #3A1D1B;
+  --dividends-fii: #5CCFC1;
+  --dividends-fundo: #FFAB6B;
 
   --glass-bg: rgba(25, 28, 33, 0.55);
   --glass-border: rgba(255, 255, 255, 0.08);
