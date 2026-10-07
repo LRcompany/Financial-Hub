@@ -2171,6 +2171,27 @@ Verificado com uma cópia local do `prod.db` migrada (apagada depois):
 - Finalizar/reabrir testado no BOOK (só na cópia).
 - `tsc` limpo.
 
+### Investido fantasma no Tesouro do BTG (07/10)
+
+Luiz: *"eu não investi 90k no LFT, por que esse valor?"*
+
+**Causa:** em out/26 o BTG passou a mandar as 8 compras de Tesouro Selic (LFT) juntadas numa posição só. As compras antigas continuaram vindo com valor de mercado ZERO, mas com `amountOriginal` cheio, e o sync gravava esse investido. Resultado:
+- LFT com R$ 90.417 + R$ 16.123 investidos para R$ 66,7 mil de mercado (certo: R$ 45.363 + R$ 8.109);
+- NTN-B com R$ 60.042 (certo: R$ 29.585);
+- "aportado em outubro" de +R$ 67.242, que não existiu.
+
+O valor de mercado sempre esteve certo; o total do patrimônio não estava inflado.
+
+**Código** (`pluggySync.ts`): valor de mercado ≤ 0 → investido 0 (título resgatado/trocado).
+
+**Dados (prod, backup, removido depois):**
+- 18 linhas zeradas: 14 de out/26, 3 de set/26 e a XP de jul/2019 (R$ 0,01).
+- Nexoos set/2018 (R$ 6.000 investidos, valor zero) ficou de fora: pode ser um calote real da plataforma, aguarda o Luiz.
+
+**Depois:** aportado set/26 = R$ 6.740,18 (antes R$ 7.402,21; os R$ 662 eram títulos zerados). Aportado out/26 = −R$ 16.282,71, que é real: resgate Sofisa de 01/10 (−R$ 9.369) + saldo da 99 que saiu (−R$ 6.543) + ajustes pequenos.
+
+Também conferido: aporte de R$ 2.571,44 no Tesouro Selic (BTG) em set/26 aparece certo; resgate Sofisa de 01/10 aparece em outubro.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
