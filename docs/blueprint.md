@@ -2192,6 +2192,18 @@ O valor de mercado sempre esteve certo; o total do patrimônio não estava infla
 
 Também conferido: aporte de R$ 2.571,44 no Tesouro Selic (BTG) em set/26 aparece certo; resgate Sofisa de 01/10 aparece em outubro.
 
+### "Investido por mês": sem conta corrente e com detalhe no hover (13/10)
+
+Luiz perguntou se o "investido por mês" estava funcionando. A auditoria mês a mês por corretora mostrou que a conta estava certa (variação do investido, sem o mês de migração de cada corretora+tipo), mas que o saldo de conta corrente (99, Wise) entrava como aporte/resgate todo mês (out/26: −R$ 6.543 só da 99). Aprovado:
+- **`wealth.ts`**: `investedByKey` ignora `security.type === "Conta Corrente"` (mesma regra de `positionMovers`). Vale para `investedByMonth`, `investedThisMonth`/`investedLastMonth` e "Aportado real".
+- **`investedByMonth[].breakdown`**: variação por "Corretora · Tipo" no mês (≥ R$ 1, maior primeiro; positivo = aporte, negativo = resgate). O gráfico do Dashboard passa como `breakdowns` ao `SmoothLineChart`.
+- **`SmoothLineChart`**: `signedValue()` escreve "−R$ 9.369,27", não "R$ -9.369,27".
+- **Card "Investido por mês"** (Dashboard): valor negativo vira "Resgatado este mês (saiu mais do que entrou)". `MonthDelta` só entre dois meses positivos.
+
+Série nova (prod): set/26 +R$ 2.687 (Tesouro +R$ 2.571); out/26 −R$ 9.742 (resgate Sofisa −R$ 9.369).
+
+Em aberto, aguardando o Luiz: INCO +R$ 29.072 em ago/26 e −R$ 40.000 em fev/26; BTG Renda Fixa +R$ 24.795 em dez/25 e −R$ 24.795 em mar/26 (dados da planilha antiga).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
