@@ -14,6 +14,7 @@ import {
   Play,
   CheckCircle2,
   RotateCcw,
+  Ban,
 } from 'lucide-react'
 import {
   api,
@@ -494,6 +495,15 @@ function ProjectCard({
   // Finalizar/reabrir à mão (06/10, pedido do Luiz: "deixa o botão manual
   // caso aconteça do cliente pagar a menos ou a mais"). Contrato em dólar
   // não precisa: fecha sozinho quando o recebido em dólar bate o combinado.
+  // Excluir de vez (13/10) — só sem recebimento e sem pagamento a
+  // fornecedor; com histórico, o projeto só pode ser cancelado.
+  const canDelete = project.received === 0 && project.supplierPaid === 0
+  async function deleteProject() {
+    if (!confirm(`Excluir "${project.name}" de vez? Não dá pra desfazer.`)) return
+    await api.deleteProject(project.id)
+    onChanged()
+  }
+
   async function setClosedManually(closed: boolean) {
     await api.updateProject(project.id, { closedManually: closed })
     onChanged()
@@ -566,17 +576,24 @@ function ProjectCard({
                       <Play size={14} strokeWidth={2} />
                     </IconButton>
                   )}
+                  {/* Cancelar = ícone "proibido" (13/10): a lixeira agora é só
+                      pra excluir de vez, nunca duas ações com o mesmo ícone. */}
                   <IconButton
-                    variant="danger"
+                    variant="ghost"
                     onClick={() => {
                       if (confirm(`Cancelar "${project.name}"? Isso não apaga recebimentos já lançados.`)) changeStatus('cancelado')
                     }}
                     aria-label="Cancelar projeto"
                     title="Cancelar projeto"
                   >
-                    <Trash2 size={14} strokeWidth={2} />
+                    <Ban size={14} strokeWidth={2} />
                   </IconButton>
                 </>
+              )}
+              {canDelete && (
+                <IconButton variant="danger" onClick={deleteProject} aria-label="Excluir projeto" title="Excluir projeto">
+                  <Trash2 size={14} strokeWidth={2} />
+                </IconButton>
               )}
             </div>
           </div>

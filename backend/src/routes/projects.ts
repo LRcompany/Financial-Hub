@@ -337,6 +337,29 @@ projectsRouter.put("/projects/:id", async (req, res) => {
   res.json(project);
 });
 
+// DELETE /projects/:id (13/10, pedido do Luiz: "por que não consigo excluir
+// o projeto MAAC - MKT COLLATERALS?") — só projeto SEM recebimento e SEM
+// pagamento a fornecedor. Recebimento vira Transaction de entrada (Orçamento,
+// DAS) e pagamento a fornecedor vira saída: apagar o projeto apagaria esse
+// histórico junto, então esses só podem ser cancelados. Custo de fornecedor
+// combinado mas nunca pago sai junto com o projeto.
+projectsRouter.delete("/projects/:id", async (req, res) => {
+  const project = await prisma.project.findUnique({
+    where: { id: req.params.id },
+    include: { receipts: { select: { id: true } }, supplierCosts: { include: { payments: { select: { id: true } } } } },
+  });
+  if (!project) return res.status(404).json({ error: "Projeto não encontrado" });
+  const hasSupplierPayment = project.supplierCosts.some((c) => c.payments.length > 0);
+  if (project.receipts.length > 0 || hasSupplierPayment) {
+    return res.status(409).json({ error: "Projeto com recebimento ou pagamento a fornecedor não pode ser excluído — só cancelado." });
+  }
+  await prisma.$transaction([
+    prisma.projectSupplierCost.deleteMany({ where: { projectId: project.id } }),
+    prisma.project.delete({ where: { id: project.id } }),
+  ]);
+  res.json({ deleted: true });
+});
+
 // ---------- Recebimentos ----------
 
 projectsRouter.post("/project-receipts", async (req, res) => {

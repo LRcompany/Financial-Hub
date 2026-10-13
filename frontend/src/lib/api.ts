@@ -855,6 +855,9 @@ export const api = {
     iofAmount?: number | null
   }) => postJson<ProjectReceipt>('/project-receipts', input),
   deleteProjectReceipt: (id: string) => request<{ deleted: true }>(`/project-receipts/${id}`, { method: 'DELETE' }),
+  // Só projeto sem recebimento e sem pagamento a fornecedor (13/10) — o
+  // backend recusa (409) os outros, que só podem ser cancelados.
+  deleteProject: (id: string) => request<{ deleted: true }>(`/projects/${id}`, { method: 'DELETE' }),
   createProjectSupplierCost: (input: { projectId: string; supplierId: string; agreedAmount: number; installmentCount?: number }) =>
     postJson<{ id: string }>('/project-supplier-costs', input),
   createSupplierPayment: (input: { projectSupplierCostId: string; installmentNumber?: number; amount: number; paymentDate: string }) =>

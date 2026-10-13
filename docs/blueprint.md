@@ -2204,6 +2204,15 @@ Série nova (prod): set/26 +R$ 2.687 (Tesouro +R$ 2.571); out/26 −R$ 9.742 (re
 
 Em aberto, aguardando o Luiz: INCO +R$ 29.072 em ago/26 e −R$ 40.000 em fev/26; BTG Renda Fixa +R$ 24.795 em dez/25 e −R$ 24.795 em mar/26 (dados da planilha antiga).
 
+### Excluir projeto sem histórico (13/10)
+
+Luiz: *"por que não consigo excluir o projeto MAAC - MKT COLLATERALS?"* Não existia exclusão: a lixeira só cancelava, e projeto já cancelado (caso do MAAC: R$ 10.800, sem recebimento nem fornecedor) não tinha ação nenhuma.
+
+- **`DELETE /projects/:id`**: só sem recebimento e sem pagamento a fornecedor; os outros recebem 409 ("só cancelado"), porque recebimento/pagamento viram Transaction (Orçamento, DAS). Custo de fornecedor combinado e nunca pago sai junto (`$transaction`).
+- **Tela**: lixeira (vermelha) = excluir de vez, em qualquer status, com confirmação. Cancelar ganhou o ícone `Ban`, para nunca existirem duas ações com o mesmo ícone.
+
+Verificado numa cópia do `dev.db`: com recebimento → 409; sem → excluído. `tsc` limpo.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
