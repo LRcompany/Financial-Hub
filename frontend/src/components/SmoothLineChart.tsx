@@ -39,6 +39,13 @@ function pickTickIndices(count: number, max = 14): number[] {
   return indices
 }
 
+/** Valor com o sinal ANTES do prefixo ("−R$ 9.369,27", nunca "R$ -9.369,27")
+ * — gráfico com valor negativo (resgate no "Investido por mês", 13/10). */
+function signedValue(value: number, prefix: string): string {
+  const abs = Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${value < 0 ? '−' : ''}${prefix}${abs}`
+}
+
 /** Catmull-Rom → cúbica de Bézier — curva suave passando por todos os pontos. */
 function smoothPath(points: [number, number][]): string {
   if (points.length < 2) return ''
@@ -242,10 +249,7 @@ export function SmoothLineChart({
           >
             <div className={styles.tooltipLabel}>{labels?.[hoverIndex] ?? `Ponto ${hoverIndex + 1}`}</div>
             <div className={styles.tooltipValue}>
-              <Money>
-                {valuePrefix}
-                {values[hoverIndex].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Money>
+              <Money>{signedValue(values[hoverIndex], valuePrefix)}</Money>
             </div>
             {/* Lista de onde veio o gasto daquele dia (15/09, pedido do Luiz:
                 "só existe o valor total, mas não mostra o que foi gasto...
@@ -257,18 +261,9 @@ export function SmoothLineChart({
               <div className={styles.tooltipBreakdown}>
                 {items.map((item, i) => (
                   <div key={i} className={styles.tooltipBreakdownRow}>
-                    {/* Sem `<ProjectedTag/>` aqui de propósito (15/09,
-                        pedido do Luiz: "tira a tag projetado, assim não tem
-                        espaço pra ler o nome direito") — a tag comia largura
-                        que o nome da compra precisa, num tooltip já estreito
-                        (max 260px). O dado (`item.projected`) continua
-                        existindo, só não vira badge nessa lista específica. */}
                     <span className={styles.tooltipBreakdownLabel}>{item.label}</span>
                     <span className={styles.tooltipBreakdownValue}>
-                      <Money>
-                        {valuePrefix}
-                        {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </Money>
+                      <Money>{signedValue(item.value, valuePrefix)}</Money>
                     </span>
                   </div>
                 ))}

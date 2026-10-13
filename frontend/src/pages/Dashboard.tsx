@@ -539,11 +539,13 @@ export function Dashboard() {
               <div className={`${styles.card} ${styles.fullWidth}`}>
                 <CardHeader icon={Coins} title="Investido por mês" href="/patrimonio" />
                 <div className={styles.heroValue} style={{ fontSize: '1.6rem' }}>
-                  <Money>R$ {currency(wealth.investedThisMonth ?? 0)}</Money>
+                  <Money>{`${(wealth.investedThisMonth ?? 0) < 0 ? '−' : ''}R$ ${currency(Math.abs(wealth.investedThisMonth ?? 0))}`}</Money>
                 </div>
                 <div className={styles.chartMeta}>
-                  <span>Investido este mês</span>
-                  {wealth.investedLastMonth != null && (
+                  <span>{(wealth.investedThisMonth ?? 0) < 0 ? 'Resgatado este mês (saiu mais do que entrou)' : 'Investido este mês'}</span>
+                  {/* Variação % só entre dois meses positivos — com resgate
+                      (valor negativo) a porcentagem não quer dizer nada. */}
+                  {wealth.investedLastMonth != null && wealth.investedLastMonth > 0 && (wealth.investedThisMonth ?? 0) > 0 && (
                     <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
                   )}
                 </div>
@@ -551,6 +553,7 @@ export function Dashboard() {
                   <SmoothLineChart
                     values={wealth.investedByMonth.map((e) => e.value)}
                     labels={wealth.investedByMonth.map((e) => e.label)}
+                    breakdowns={wealth.investedByMonth.map((e) => e.breakdown)}
                     gradientId="investedByMonthGradient"
                     className={styles.evolutionChart}
                   />

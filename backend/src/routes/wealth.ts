@@ -75,10 +75,17 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // mês a mês, quanto cada broker+tipo tinha investido, pra excluir da conta
   // de "aporte" o mês exato em que um broker+tipo migra de manual pra
   // automático (ver mais abaixo).
+  // Conta corrente fica FORA de "investido" (13/10, pedido do Luiz): saldo da
+  // 99/Wise sobe e desce todo mês com o dia a dia (out/26: −R$6.543 só da 99)
+  // e aparecia como aporte/resgate. Mesma regra já usada em `positionMovers`.
+  // `keyLabel` guarda "Corretora · Tipo" pra explicar cada mês no hover.
+  const keyLabel = new Map<string, string>();
   function investedByKey(snaps: typeof all) {
     const map = new Map<string, number>();
     for (const s of snaps) {
+      if (s.security.type === "Conta Corrente") continue;
       const key = `${s.brokerId}:${s.security.type}`;
+      keyLabel.set(key, `${s.broker.name} · ${s.security.type}`);
       map.set(key, (map.get(key) ?? 0) + s.investedAmount);
     }
     return map;
@@ -132,7 +139,10 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // fora do `investedByMonth` (não dá pra calcular delta sem "antes"), então
   // os índices dos dois arrays NÃO alinham 1:1 nesse caso — não dá pra
   // recuperar o ano depois só pelo índice, precisa vir junto aqui.
-  const investedByMonthWithYear: { label: string; value: number; year: number }[] = [];
+  // `breakdown` (13/10): de onde veio o valor do mês, por corretora+tipo —
+  // hover do gráfico "Investido por mês" (positivo = aporte, negativo =
+  // resgate), maior primeiro. Só entra variação de pelo menos R$1.
+  const investedByMonthWithYear: { label: string; value: number; year: number; breakdown: { label: string; value: number }[] }[] = [];
   let prevInvestedByKey = baselineInvestedByKey;
   for (let idx = 0; idx < monthlyTotals.length; idx++) {
     const curByKey = investedByKeyByMonth[idx];
@@ -140,15 +150,19 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     if (prevInvestedByKey !== null) {
       const keys = new Set([...prevInvestedByKey.keys(), ...curByKey.keys()]);
       let delta = 0;
+      const breakdown: { label: string; value: number }[] = [];
       for (const key of keys) {
         if (automatedStartYm.get(key) === curYm) continue; // mês da migração — artefato, não aporte
-        delta += (curByKey.get(key) ?? 0) - (prevInvestedByKey.get(key) ?? 0);
+        const d = (curByKey.get(key) ?? 0) - (prevInvestedByKey.get(key) ?? 0);
+        delta += d;
+        if (Math.abs(d) >= 1) breakdown.push({ label: keyLabel.get(key) ?? key, value: d });
       }
-      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx] });
+      breakdown.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx], breakdown });
     }
     prevInvestedByKey = curByKey;
   }
-  const investedByMonth = investedByMonthWithYear.map(({ label, value }) => ({ label, value }));
+  const investedByMonth = investedByMonthWithYear.map(({ label, value, breakdown }) => ({ label, value, breakdown }));
 
   // ---- aportado REAL no ano corrente até agora — comparação com a coluna
   // "contribution" (planejada) do yearlyBreakdown da "Primeira Milhão"

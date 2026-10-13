@@ -287,7 +287,9 @@ export interface WealthOverview {
   // Histórico mês a mês de quanto entrou de aporte novo (não é o total
   // investido acumulado, é a variação de cada mês) — alimenta o gráfico
   // "Investido por mês" no Dashboard.
-  investedByMonth: { label: string; value: number }[]
+  // `breakdown` (13/10): de onde veio o valor do mês, por "Corretora · Tipo"
+  // (positivo = aporte, negativo = resgate). Conta corrente fica de fora.
+  investedByMonth: { label: string; value: number; breakdown: { label: string; value: number }[] }[]
   // Proventos (dividendo/JCP/rendimento) recebidos no período — dado real
   // via GET /investments/{id}/transactions (11/09), só existe pra Ação/FII;
   // null = "não se aplica" ou "ainda não sincronizado", nunca 0 fake.
