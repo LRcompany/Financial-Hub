@@ -572,7 +572,9 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   for (const p of notCancelled) {
     clientContractMap.set(p.client.name, (clientContractMap.get(p.client.name) ?? 0) + valueOf(p));
   }
-  const clientContractValue = [...clientContractMap.entries()].map(([label, value]) => ({ label, value }));
+  // Maior primeiro (16/10, pedido do Luiz: "ordene por valor do maior pro
+  // menor") — vale pra pizza+legenda em Projetos, Início e relatório.
+  const clientContractValue = [...clientContractMap.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
 
   // Média mensal e série pro gráfico — SÓ o ano corrente, de janeiro até o
   // mês atual (pedido do Luiz, 08/09: antes era rolling 12 meses, que
@@ -634,7 +636,7 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     const name = r.project.client.name;
     clientRevenueMap.set(name, (clientRevenueMap.get(name) ?? 0) + r.amount);
   }
-  const clientRevenue = [...clientRevenueMap.entries()].map(([label, value]) => ({ label, value }));
+  const clientRevenue = [...clientRevenueMap.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
 
   // "ativo" de verdade: status manual em_andamento/pausado E ainda não
   // recebeu tudo — mesma regra derivada usada em finalizedCount/openCount

@@ -2213,6 +2213,10 @@ Luiz: *"por que não consigo excluir o projeto MAAC - MKT COLLATERALS?"* Não ex
 
 Verificado numa cópia do `dev.db`: com recebimento → 409; sem → excluído. `tsc` limpo.
 
+### Receita por cliente do maior pro menor (16/10)
+
+Luiz: *"nos box de receita por cliente, tanto no início quanto em projetos, ordene por valor do maior pro menor"*. `clientContractValue` (Projetos, "Ganhos totais por cliente") e `clientRevenue` (Início e relatório mensal) saem ordenados desc direto de `/projects-summary`. O `ClientPieChart` mantém a ordem recebida (fatias e legenda).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
