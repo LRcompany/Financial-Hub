@@ -5,32 +5,49 @@
   border-bottom: 1px dashed var(--border);
 }
 
+/* `position: fixed` (11/09) — o popup agora é renderizado num PORTAL pra
+   `document.body` (ver HoverCard.tsx), `left`/`bottom` calculados em JS a
+   partir do gatilho e aplicados via `style` inline. Isso escapa de QUALQUER
+   ancestral com overflow cortando o popup (era exatamente esse o bug real:
+   `.tableWrap { overflow-x: auto }` também vira `overflow-y: auto` por
+   regra do CSS, cortando o popup que tentava escapar pra cima). */
 .popup {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 5;
+  position: fixed;
+  z-index: 15;
   min-width: 220px;
   max-width: 280px;
+  /* Trava a altura (11/09) — o hover de "de onde veio a grana" em Patrimônio
+     pode listar 40+ ativos num mês só (uma corretora com Ação/FII cheia de
+     posição), sem isso o popup esticava pra fora da tela. Rola dentro dele
+     em vez de crescer sem limite. */
+  max-height: 320px;
+  overflow-y: auto;
   white-space: normal;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  /* Fundo 100% opaco (11/09, pedido do Luiz) — não glass aqui. Esse popup
+     flutua por cima de listas/tabelas DENSAS de texto (posições, breakdown
+     de proventos); o glass translúcido deixava o conteúdo de trás vazando
+     através, ilegível. Diferente do tooltip de VALOR de gráfico (um número
+     sozinho sobre área vazia do SVG), que continua glass — aqui é uma
+     lista inteira de linhas, precisa de contraste sólido. */
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: var(--space-3);
   box-shadow: var(--shadow-md);
   opacity: 0;
-  visibility: hidden;
   transform: translateY(4px);
   transition: opacity 0.12s ease, transform 0.12s ease;
   pointer-events: none;
 }
 
-.trigger:hover .popup {
+/* Classe aplicada via JS (não `:hover`, 11/09) — o popup não é mais
+   descendente do gatilho no DOM (portal), `.trigger:hover .popup` nunca
+   bateria. `HoverCard.tsx` controla o mostrar/esconder no próprio
+   mouseenter/mouseleave do gatilho. */
+.popupVisible {
   opacity: 1;
-  visibility: visible;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .row {

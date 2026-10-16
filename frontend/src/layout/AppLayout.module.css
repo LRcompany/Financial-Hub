@@ -13,9 +13,6 @@
   top: 0;
   z-index: 10;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
   padding: var(--space-4) var(--space-4);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -23,9 +20,35 @@
   border-bottom: 1px solid var(--border);
 }
 
+.headerLogo {
+  display: block;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Logo do lado da saudação, não empilhado (pedido do Luiz, 07/09 — estava
+   em cima e cortando). Só aparece no mobile — a sidebar já tem o logo no
+   desktop, ver media query abaixo. */
 .greeting {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.greeting > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .greeting .hello {
@@ -39,17 +62,32 @@
   gap: var(--space-2);
 }
 
-.iconBtn {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  background: var(--fill-muted);
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink);
-  cursor: pointer;
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Ponto vermelho do sino (pedido do Luiz, 11/09: "o sino precisa ficar com
+   um pontinho vermelho caso haja algo que eu preciso fazer") — `position:
+   relative` no botão só existe pra ancorar esse ponto absoluto. */
+.bellButton {
+  position: relative;
+}
+
+.bellDot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--danger);
+  border: 1.5px solid var(--surface);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .content {
@@ -86,6 +124,8 @@
   color: var(--ink-faint);
   text-decoration: none;
   padding: 6px 10px;
+  border-radius: var(--r-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .navItem span {
@@ -93,7 +133,25 @@
   font-weight: 500;
 }
 
+/* Navegação principal (bottom nav + sidebar, ver .sidebarItem abaixo) tinha
+   zero feedback de hover — achado 11/09 numa segunda passada: a varredura
+   original só pegou arquivo com `cursor: pointer` no CSS, e link (<NavLink>)
+   já é pointer por padrão do navegador, então nunca precisou dessa
+   declaração e escapou da varredura por texto. */
+.navItem:hover {
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+}
+
 .navItemActive {
+  color: var(--accent);
+}
+
+/* Mesma especificidade de `.navItem:hover` (classe + pseudo) — só ganha por
+   vir depois no arquivo. Item ativo continua destacado ao passar o mouse,
+   só um pouco mais intenso, em vez de virar cinza como um item comum. */
+.navItemActive:hover {
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -101,6 +159,21 @@
 @media (min-width: 900px) {
   .shell {
     flex-direction: row;
+  }
+
+  /* Desktop volta pro header de 1 linha só — o logo já mora na sidebar, não
+   * precisa duplicar aqui. */
+  .header {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .headerLogo {
+    display: none;
+  }
+
+  .headerTop {
+    flex: 1;
   }
 
   .sidebar {
@@ -111,6 +184,16 @@
     padding: var(--space-5) var(--space-4);
     flex-direction: column;
     gap: var(--space-1);
+    /* Fixa ao rolar (pedido do Luiz, 11/09: "hoje ele move junto com a
+       página") — sem isso, `.shell` (flex row) estica a sidebar pra ter a
+       mesma altura de `.main`, que cresce com o conteúdo da página, então a
+       sidebar inteira rolava junto. `align-self: flex-start` tira do stretch
+       padrão do flexbox, `height: 100svh` trava na altura da viewport. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100svh;
+    overflow-y: auto;
   }
 
   .sidebarBrand {
@@ -133,11 +216,24 @@
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .sidebarItem:hover {
+    background: var(--fill-muted);
+    color: var(--ink);
   }
 
   .sidebarItemActive {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /* Mesma especificidade de `.sidebarItem:hover` — vem depois no arquivo de
+     propósito, pra ganhar. Sem isso o hover cinza "genérico" pisava no azul
+     do item já selecionado. */
+  .sidebarItemActive:hover {
+    background: color-mix(in srgb, var(--accent-soft) 85%, var(--accent) 15%);
   }
 
   .bottomNav {

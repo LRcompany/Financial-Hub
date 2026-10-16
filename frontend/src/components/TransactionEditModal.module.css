@@ -1,0 +1,129 @@
+.amountRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.amountValue {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pendingPill {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+}
+
+.staticNote {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--danger);
+  margin: 0;
+}
+
+.cancelBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.saveBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.saveBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Excluir só existe pra lançamento manual (14/09) — fica na ponta OPOSTA de
+   Cancelar/Salvar dentro do mesmo footer (`justify-content: flex-end` no
+   ModalShell). `margin-right: auto` tira esse botão do agrupamento à
+   direita sem precisar de um footer customizado. Clique armado (1º clique
+   vira `.deleteConfirmBtn` vermelho de verdade, 2º clique confirma) — mesmo
+   padrão de 2 passos já usado em CategoryManager pra excluir categoria. */
+.deleteBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  margin-right: auto;
+  background: var(--fill-muted);
+  color: var(--danger);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.deleteConfirmBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  margin-right: auto;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.deleteConfirmBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, black 15%);
+}
+
+.deleteBtn:disabled,
+.deleteConfirmBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* "Dividir em categorias" — UI compartilhada com TransactionReviewModal,
+   mora em SplitEditor.module.css (14/09). Só o espaçamento do botão de
+   convite (colado embaixo do <Select> normal) é específico deste host —
+   combinado com `splitStyles.splitStartBtn` no TSX. */
+.splitStartBtnSpacing {
+  margin-top: -4px;
+}
