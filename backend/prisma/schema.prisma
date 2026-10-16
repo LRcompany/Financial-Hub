@@ -554,3 +554,39 @@ model FxRateCache {
   rate      Float
   fetchedAt DateTime
 }
+
+// ---------- Conector do Claude (MCP) — login OAuth 2.1 (16/10) ----------
+// Pedido do Luiz: "quero falar com o Claude no iPhone e ele ver minhas
+// informações no Command OS". Mesmo desenho do conector do toDo: registro
+// dinâmico de cliente (só apps do Claude), código com PKCE S256, refresh
+// token rotativo. Consentimento = a senha de 6 dígitos do app. Token só
+// guardado como hash SHA-256. O conector é SÓ LEITURA.
+model OAuthClient {
+  clientId     String       @id
+  secretHash   String?
+  name         String
+  redirectUris String // JSON array
+  createdAt    DateTime     @default(now())
+  tokens       OAuthToken[]
+}
+
+model OAuthCode {
+  codeHash    String   @id
+  clientId    String
+  redirectUri String
+  challenge   String
+  scope       String?
+  resource    String?
+  expiresAt   DateTime
+}
+
+model OAuthToken {
+  tokenHash String      @id
+  kind      String // access | refresh
+  clientId  String
+  client    OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  scope     String?
+  resource  String?
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+}

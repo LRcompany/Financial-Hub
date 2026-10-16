@@ -2221,6 +2221,20 @@ Luiz: *"nos box de receita por cliente, tanto no início quanto em projetos, ord
 
 Luiz: *"para os gráficos de pizza está repetindo muito as cores, aumente mais as opções. Adicione um roxo, rosa e suas variações. Visualmente estou me confundindo."* `ClientPieChart.PALETTE` passou de 8 cores (dois roxos e dois azuis quase iguais) para 14: azul, laranja, teal, roxo, rosa, âmbar, azul-céu, violeta escuro, rosa claro, teal escuro, lilás, framboesa, amarelo, cinza. A ordem alterna família, porque as fatias vêm do maior pro menor e cores vizinhas na lista são fatias vizinhas. Sem verde/vermelho (status). Vale para toda pizza do app (Projetos, Início, Orçamento, relatório). Regra no design-system.
 
+### Conector do Claude + skill "command-os" (16/10)
+
+Luiz: *"quero criar uma skill para conseguir falar com o Claude no iPhone, que veja minhas informações no Command OS e me traga dicas para melhorar minha economia, onde investir melhor, onde investir meus rendimentos."* Aprovado o plano: conector só de leitura, mesmo desenho do conector do toDo.
+
+- **OAuth 2.1** (`services/oauth.ts`): discovery (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), registro dinâmico só para `claude.ai`/`claude.com`/`localhost`, código com PKCE S256, refresh rotativo, tokens só como hash SHA-256 (tabelas `OAuthClient`/`OAuthCode`/`OAuthToken`, migração `add_oauth_mcp_connector`). O consentimento usa a senha de 6 dígitos com o mesmo freio de tentativas do login; quem já está logado no app só clica "Permitir".
+- **MCP** (`mcp/server.ts`, `POST /mcp` sem estado, `@modelcontextprotocol/sdk` + `zod`): 7 ferramentas só leitura (`resumo_financeiro`, `orcamento`, `gastos`, `parcelas`, `patrimonio`, `projetos`, `historico_mensal`). Chamam por dentro os endpoints da tela com uma sessão interna de uso único, então os números são os mesmos do app. Acesso por `MCP_TOKEN` (Claude Code) ou token OAuth (apps do Claude); o 401 aponta pro discovery.
+- **Skill** `skill/SKILL.md` → `dist-skill/command-os-skill.zip`: papel de analista financeiro pessoal, sempre com dados reais. Roteiros de economia, reserva de emergência (6–12 meses de gasto, renda variável), carteira (concentração, liquidez, rentabilidade, dólar, ritmo da meta) e proventos. Limite explícito: não é consultor CVM e não manda comprar ativo específico; fala em classes e prós/contras.
+- **Instalação e operação:** `docs/claude-connector.md`.
+
+Verificado localmente (servidor completo contra `dev.db`):
+- 401 sem token, apontando pro discovery;
+- `initialize`/`tools/list`/`tools/call` das 7 ferramentas;
+- fluxo OAuth inteiro: site estranho recusado, senha errada recusada, código → token → `/mcp` com 7 ferramentas, refresh rotativo (o antigo dá 400).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
