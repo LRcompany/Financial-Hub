@@ -2217,6 +2217,10 @@ Verificado numa cópia do `dev.db`: com recebimento → 409; sem → excluído. 
 
 Luiz: *"nos box de receita por cliente, tanto no início quanto em projetos, ordene por valor do maior pro menor"*. `clientContractValue` (Projetos, "Ganhos totais por cliente") e `clientRevenue` (Início e relatório mensal) saem ordenados desc direto de `/projects-summary`. O `ClientPieChart` mantém a ordem recebida (fatias e legenda).
 
+### Pizza com 14 cores, incluindo roxos e rosas (16/10)
+
+Luiz: *"para os gráficos de pizza está repetindo muito as cores, aumente mais as opções. Adicione um roxo, rosa e suas variações. Visualmente estou me confundindo."* `ClientPieChart.PALETTE` passou de 8 cores (dois roxos e dois azuis quase iguais) para 14: azul, laranja, teal, roxo, rosa, âmbar, azul-céu, violeta escuro, rosa claro, teal escuro, lilás, framboesa, amarelo, cinza. A ordem alterna família, porque as fatias vêm do maior pro menor e cores vizinhas na lista são fatias vizinhas. Sem verde/vermelho (status). Vale para toda pizza do app (Projetos, Início, Orçamento, relatório). Regra no design-system.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
