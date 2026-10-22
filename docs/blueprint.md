@@ -2235,6 +2235,12 @@ Verificado localmente (servidor completo contra `dev.db`):
 - `initialize`/`tools/list`/`tools/call` das 7 ferramentas;
 - fluxo OAuth inteiro: site estranho recusado, senha errada recusada, código → token → `/mcp` com 7 ferramentas, refresh rotativo (o antigo dá 400).
 
+### Novo projeto: aviso de campo faltando + contrato em US$ sem R$ (22/10)
+
+Luiz: *"por que não estou conseguindo adicionar um novo projeto?"* O backend criava normal (testado). O formulário voltava **em silêncio** quando faltava nome, início ou valor em R$ — comum em cliente estrangeiro, preenchendo só o US$.
+- O Salvar agora diz o que falta ("Preencha: nome do projeto, início, valor do projeto.").
+- Cliente estrangeiro: basta o valor em US$. Com R$ vazio, o app estima pelo câmbio de hoje (`/fx-rate`), já que o R$ de contrato em dólar é estimativa e vira o recebido real quando o projeto fecha (`projectClosure`). Campo renomeado "Valor estimado (R$)", placeholder "Vazio = câmbio de hoje".
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

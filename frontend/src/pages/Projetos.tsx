@@ -353,10 +353,26 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !startDate || !contractValue) return
+    // Diz O QUE falta (22/10, Luiz: "por que não consigo adicionar um novo
+    // projeto?") — antes o Salvar voltava em silêncio com campo vazio. Em
+    // contrato estrangeiro basta o valor em US$ (o R$ sai do câmbio de hoje).
+    const hasValue = !!contractValue || (isForeignClient && !!contractValueForeign)
+    const missing = [!name.trim() && 'nome do projeto', !startDate && 'início', !hasValue && (isForeignClient ? 'valor (R$ ou US$)' : 'valor do projeto')].filter(Boolean)
+    if (missing.length > 0) {
+      setError(`Preencha: ${missing.join(', ')}.`)
+      return
+    }
     setSaving(true)
     setError(null)
     try {
+      // Só US$ preenchido: estima o R$ pelo câmbio de hoje — num contrato
+      // estrangeiro o R$ já é estimativa e vira o recebido real quando o
+      // projeto fecha (ver `projectClosure` no backend).
+      let brlValue = Number(contractValue)
+      if (!contractValue && isForeignClient && contractValueForeign) {
+        const { usdToBrl } = await api.fxRate()
+        brlValue = Math.round(Number(contractValueForeign) * usdToBrl * 100) / 100
+      }
       let clientId = clientChoice
       if (clientChoice === NEW_CLIENT) {
         if (!newClientName.trim()) {
@@ -372,7 +388,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         name: name.trim(),
         startDate,
         endDate: endDate || null,
-        contractValue: Number(contractValue),
+        contractValue: brlValue,
         hasInvoice,
         installmentCount: Number(installmentCount) || 1,
         contractValueForeign: isForeignClient && contractValueForeign ? Number(contractValueForeign) : null,
@@ -427,7 +443,14 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
           <Input label="Fim (opcional)" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
         <div className={styles.formRow}>
-          <Input label="Valor do projeto (R$)" type="number" step="0.01" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
+          <Input
+            label={isForeignClient ? 'Valor estimado (R$)' : 'Valor do projeto (R$)'}
+            type="number"
+            step="0.01"
+            value={contractValue}
+            onChange={(e) => setContractValue(e.target.value)}
+            placeholder={isForeignClient ? 'Vazio = câmbio de hoje' : undefined}
+          />
           <Input label="Nº de parcelas" type="number" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
           <label className={styles.checkboxLabel}>
             <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
@@ -445,8 +468,8 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
               placeholder="Ex: 9400"
             />
             <p className={styles.helperText}>
-              Opcional — o valor em R$ acima continua valendo pro imposto/receita. O valor em US$ só serve pra acompanhar
-              o progresso do contrato certo (US$ contra US$), já que o câmbio muda todo dia.
+              O projeto fecha quando o recebido em US$ chega a este valor. Se deixar o valor em R$ vazio, ele é estimado
+              pelo câmbio de hoje; quando o projeto fechar, vira o que realmente caiu na conta.
             </p>
           </div>
         )}
