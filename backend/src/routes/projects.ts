@@ -32,15 +32,6 @@ async function getOrCreateSupplierExpenseCategory() {
   });
 }
 
-async function getOrCreateTaxExpenseCategory() {
-  const existing = await prisma.category.findFirst({ where: { name: "Imposto", type: "expense" } });
-  if (existing) return existing;
-  const fiscal = await prisma.category.findFirst({ where: { name: "Fiscal", type: "expense" } });
-  return prisma.category.create({
-    data: { name: "Imposto", type: "expense", kind: "non_essential", parentId: fiscal?.id ?? null },
-  });
-}
-
 // ---------- Clientes ----------
 
 projectsRouter.get("/clients", async (_req, res) => {
@@ -480,32 +471,27 @@ projectsRouter.post("/tax-payments", async (req, res) => {
     revenue = agg._sum.amount ?? 0;
   }
 
-  const category = await getOrCreateTaxExpenseCategory();
   const tax = await prisma.taxPayment.upsert({
     where: { competenceMonth_competenceYear: { competenceMonth, competenceYear } },
     update: { totalRevenue: revenue, amountPaid, paymentDate: new Date(paymentDate) },
     create: { competenceMonth, competenceYear, totalRevenue: revenue, amountPaid, paymentDate: new Date(paymentDate) },
   });
 
-  // Se já existia uma Transaction desse DAS (reenvio/correção), atualiza em
-  // vez de duplicar.
+  // Registrar o DAS NÃO cria mais gasto no Orçamento (23/10). O Luiz paga o
+  // DAS sempre com um Pix da 99 pro CNPJ que leva DAS + INSS + contador, e
+  // esse Pix já entra como gasto (dividido em Imposto + Contador) — o
+  // lançamento automático contava o DAS duas vezes (out/26: R$363,77 a mais).
+  // O TaxPayment continua alimentando Projetos (imposto pago, DAS real do
+  // mês). Transaction antiga já ligada a um DAS (meses anteriores) segue
+  // sendo atualizada numa correção, pra não ficar com valor desatualizado.
   const existingTx = await prisma.transaction.findFirst({ where: { taxPaymentId: tax.id } });
-  const description = `DAS — referente a ${String(competenceMonth).padStart(2, "0")}/${competenceYear}`;
   if (existingTx) {
     await prisma.transaction.update({
       where: { id: existingTx.id },
-      data: { date: new Date(paymentDate), amount: amountPaid, description },
-    });
-  } else {
-    await prisma.transaction.create({
       data: {
         date: new Date(paymentDate),
-        type: "expense",
-        description,
         amount: amountPaid,
-        source: "manual",
-        categoryId: category.id,
-        taxPaymentId: tax.id,
+        description: `DAS — referente a ${String(competenceMonth).padStart(2, "0")}/${competenceYear}`,
       },
     });
   }
