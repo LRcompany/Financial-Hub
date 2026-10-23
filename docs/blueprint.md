@@ -2241,6 +2241,17 @@ Luiz: *"por que não estou conseguindo adicionar um novo projeto?"* O backend cr
 - O Salvar agora diz o que falta ("Preencha: nome do projeto, início, valor do projeto.").
 - Cliente estrangeiro: basta o valor em US$. Com R$ vazio, o app estima pelo câmbio de hoje (`/fx-rate`), já que o R$ de contrato em dólar é estimativa e vira o recebido real quando o projeto fecha (`projectClosure`). Campo renomeado "Valor estimado (R$)", placeholder "Vazio = câmbio de hoje".
 
+### DAS deixa de virar gasto no Orçamento (23/10)
+
+Luiz viu no gasto diário de 20/10 "o pagamento do meu imposto + o DAS". O DAS de out/26 (R$ 363,77) estava contado duas vezes:
+- no lançamento automático criado ao registrar o DAS em Projetos (`POST /tax-payments`);
+- dentro do Pix da 99 pro CNPJ (R$ 943,77 = Imposto R$ 693,77 [DAS 363,77 + INSS 330] + Contador R$ 250).
+
+Luiz confirmou: *"eu sempre mando um Pix para o CNPJ, e nesse Pix vem o DAS, o INSS e os 250 do contador"*.
+- **Código:** registrar DAS não cria mais Transaction. O `TaxPayment` continua alimentando Projetos (imposto pago, DAS real do mês). Transaction antiga já ligada a um DAS continua sendo atualizada numa correção. `getOrCreateTaxExpenseCategory` saiu (sem uso).
+- **Dados (backup, removido depois):** apagado só o DAS automático de out/26. Imposto out/26: R$ 1.057,54 → R$ 693,77.
+- Em aberto, aguardando o Luiz: o DAS automático de set/26 (R$ 225,02) ficou; o Pix de 21/09 (R$ 580) não tinha DAS dentro. Também aguarda: Pix pro CNPJ de 30/09 (R$ 740,83, Imposto) e os de fim de mês (jun–ago, ~R$ 720–735, sem categoria).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
