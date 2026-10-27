@@ -1,13 +1,8 @@
-.pageTitle {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0 0 var(--space-2);
-}
-
 .headerRow {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
 
@@ -66,6 +61,11 @@
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.connectBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 .error {
@@ -138,11 +138,54 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
 }
 
 .actionBtn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* No mobile, 2-3 botões de ação (Sincronizar/Reconectar/Arquivar) não cabem
+ * ao lado do nome+status do banco — sem isso, eles vazavam pra fora do card
+ * e o texto "sincronizado ..." quebrava linha por baixo dos botões,
+ * sobrepondo tudo (04/09, print do Luiz mostrando esse encavalamento).
+ * Empurra as ações pra uma linha própria embaixo, com espaço de sobra. */
+@media (max-width: 480px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .rowActions {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    margin-top: var(--space-1);
+  }
+}
+
+.rowArchived {
+  opacity: 0.6;
+}
+
+.showArchivedBtn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  margin-top: var(--space-2);
+  transition: color 0.15s ease;
+}
+
+.showArchivedBtn:hover {
+  color: var(--ink);
 }
 
 .spinning {

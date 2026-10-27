@@ -1,6 +1,14 @@
 .wrap {
-  position: relative;
   width: 100%;
+}
+
+/* Altura FIXA própria (definida inline via `style={{height}}`) — as bolinhas
+ * e o tooltip usam `top: X%` relativo a ESSE container, não ao `.wrap`
+ * inteiro (que também tem o rodapé de datas embaixo). Se dividissem o mesmo
+ * container, a altura do rodapé entraria na conta do "X%" e desalinharia a
+ * bolinha da linha (bug real, 04/09). */
+.chartArea {
+  position: relative;
 }
 
 .svg {
@@ -23,6 +31,32 @@
   height: 10px;
   border: 2px solid var(--surface);
   box-shadow: var(--shadow-sm);
+}
+
+/* Bolinha fixa (não depende de hover) — cor própria (warning, não o azul de
+ * accent normal) pra ficar claramente diferente do ponto mais recente e do
+ * ponto em hover. */
+.dotMarked {
+  width: 10px;
+  height: 10px;
+  background: var(--warning);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+}
+
+.footerLabels {
+  position: relative;
+  height: 14px;
+  margin-top: 6px;
+}
+
+.footerLabel {
+  position: absolute;
+  top: 0;
+  font-size: 10px;
+  color: var(--ink-faint);
+  white-space: nowrap;
 }
 
 .tooltip {
@@ -50,4 +84,57 @@
   font-weight: 600;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+/* Modificador (15/09) pra quando o tooltip ganha a lista de "de onde veio o
+   gasto" — deixa de ser um valor único flutuando sobre área vazia (o caso
+   glass, ok) e vira uma LISTA de linhas sobre conteúdo denso, mesma regra já
+   documentada pro `HoverCard`: opaco, não glass, senão o texto de trás
+   vaza através e fica ilegível. Precisa vencer `.tooltip` (white-space:
+   nowrap) — como as duas classes são do mesmo arquivo/módulo, a ordem de
+   declaração já resolve o empate de especificidade (essa regra vem depois). */
+.tooltipDense {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  white-space: normal;
+  min-width: 180px;
+  max-width: 260px;
+}
+
+.tooltipBreakdown {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  /* Dia com muita compra pequena rola dentro do tooltip em vez de esticar
+     sem limite — mesmo valor já usado no `.popup` do HoverCard. */
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.tooltipBreakdownRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11.5px;
+  padding: 3px 0;
+}
+
+.tooltipBreakdownLabel {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tooltipBreakdownValue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
 }
