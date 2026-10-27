@@ -340,6 +340,10 @@ export async function reprojectInstallments(
       orderBy: { date: "desc" },
     });
     const postedNumbers = new Set(postedRows.map((t) => t.installmentNumber));
+    // Cópia repetida do mesmo número: fica a que tem nota do Luiz e, depois, a
+    // que veio da parcela mais recente — as outras saem.
+    const keepScore = (u: (typeof existing)[number]) => (u.note ? 2 : 0) + (u.externalId?.startsWith(`pluggy:${latest.id}:`) ? 1 : 0);
+    existing.sort((x, y) => keepScore(y) - keepScore(x));
     const byNumber = new Map<number, (typeof existing)[number]>();
     for (const u of existing) {
       const n = Number(u.externalId!.split(":")[2]);
