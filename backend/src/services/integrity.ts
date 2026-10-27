@@ -11,6 +11,7 @@
 
 import { prisma } from "../prisma.js";
 import { expenseLedger, ledgerTotal, purchaseBase } from "./ledger.js";
+import { isCalendarNoon } from "./dates.js";
 
 export type HealthIssue = {
   id: string;
@@ -185,6 +186,19 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
     brokers
       .filter((b) => b.dataSource === "pluggy" && (!b.lastSyncedAt || now.getTime() - b.lastSyncedAt.getTime() > 48 * 3600 * 1000))
       .map((b) => `${b.name} — último sync ${b.lastSyncedAt ? day(b.lastSyncedAt) : "nunca"}`)
+  );
+
+  // 13. Data fora do padrão "dia do Brasil ao meio-dia" (ver services/dates.ts)
+  //     — alguém gravou data sem passar pela regra; o dia/mês pode sair errado.
+  push(
+    "data-fora-do-padrao",
+    "erro",
+    "Data gravada fora do padrão",
+    "Data que não está como dia do calendário (meio-dia) — o gasto pode cair no dia ou mês errado.",
+    [
+      ...txs.filter((t) => !isCalendarNoon(t.date)).map((t) => `${t.description} ${t.date.toISOString()}`),
+      ...upcoming.filter((u) => !isCalendarNoon(u.dueDate)).map((u) => `parcela ${u.description} ${u.dueDate.toISOString()}`),
+    ]
   );
 
   // Parcela manual vencida que ninguém confirma é normal pro cartão Caixa (sem

@@ -15,9 +15,11 @@ import {
   Activity,
   Briefcase,
   FileText,
+  ShieldAlert,
 } from 'lucide-react'
 import {
   api,
+  type DataHealth,
   type Transaction,
   type BudgetSummary,
   type BudgetCategory,
@@ -102,6 +104,9 @@ export function Dashboard() {
   const [projectsError, setProjectsError] = useState(false)
 
   const [uncategorizedCount, setUncategorizedCount] = useState(0)
+  // Saúde dos dados (27/10): aviso no topo quando alguma regra de integridade
+  // quebra — o Luiz não precisa mais conferir número na mão.
+  const [health, setHealth] = useState<DataHealth | null>(null)
   const [showTransactionReview, setShowTransactionReview] = useState(false)
   // Categoria-mãe clicada em "Orçamento do mês" → modal "o que está incluso
   // nesse montante" (pedido do Luiz, 10/09).
@@ -131,6 +136,7 @@ export function Dashboard() {
     api.budgetSummary().then(setBudget).catch(() => setBudgetError(true))
     api.wealthOverview().then(setWealth).catch(() => setWealthError(true))
     api.projectsSummary().then(setProjects).catch(() => setProjectsError(true))
+    api.dataHealth().then(setHealth).catch(() => {})
     api.transactionLeafCategories().then(setLeafCategories).catch(() => {})
     loadUncategorizedCount()
   }, [])
@@ -184,6 +190,20 @@ export function Dashboard() {
           abaixo são só agrupadores DENTRO desta página — por isso são
           <h2>, nunca <h1> (uma página só tem um <h1>). */}
       <h1 className={styles.pageTitle}>Início</h1>
+
+      {health && health.issues.length > 0 && (
+        <div className={`${styles.banner} ${health.ok ? '' : styles.bannerDanger}`}>
+          <ShieldAlert size={16} strokeWidth={2} />
+          <span>
+            {health.ok
+              ? `${health.issues.length} aviso${health.issues.length === 1 ? '' : 's'} sobre os dados (os números estão certos).`
+              : 'Tem número errado no app — veja o que quebrou.'}
+          </span>
+          <Link to="/configuracoes#saude-dos-dados" className={styles.bannerBtn}>
+            Ver
+          </Link>
+        </div>
+      )}
 
       {showSummaryBanner && (
         <div className={styles.banner}>

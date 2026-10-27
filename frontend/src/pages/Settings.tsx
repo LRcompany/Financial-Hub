@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DataHealthPanel } from '../components/DataHealthPanel'
 import { PluggyConnect } from 'pluggy-connect-sdk'
 import { Plus, RefreshCw, Landmark, Target, PencilLine, Archive, ArchiveRestore } from 'lucide-react'
 import { api, type Broker, type DailyGoalEntry } from '../lib/api'
@@ -154,6 +155,12 @@ export function Settings() {
       <h1 className={cards.pageTitle}>Configurações</h1>
 
       {/* ---------- Relatório mensal ---------- */}
+      {/* ---------- Saúde dos dados (27/10) ---------- */}
+      <section id="saude-dos-dados">
+        <h2 className={cards.sectionTitle}>Saúde dos dados</h2>
+        <DataHealthPanel />
+      </section>
+
       <section id="relatorio-mensal">
         <h2 className={cards.sectionTitle}>Relatório mensal</h2>
         <MonthlyReport />

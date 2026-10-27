@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
 
 export const projectsRouter = Router();
@@ -293,8 +294,8 @@ projectsRouter.post("/projects", async (req, res) => {
     data: {
       clientId,
       name,
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
+      startDate: parseCalendarInput(startDate),
+      endDate: endDate ? parseCalendarInput(endDate) : null,
       contractValue,
       hasInvoice: hasInvoice ?? true,
       installmentCount: installmentCount ?? 1,
@@ -311,8 +312,8 @@ projectsRouter.put("/projects/:id", async (req, res) => {
   // Finalizar/reabrir à mão (06/10) — ver `projectClosure`.
   if (closedManually !== undefined) data.closedManuallyAt = closedManually ? new Date() : null;
   if (name !== undefined) data.name = name;
-  if (startDate !== undefined) data.startDate = new Date(startDate);
-  if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
+  if (startDate !== undefined) data.startDate = parseCalendarInput(startDate);
+  if (endDate !== undefined) data.endDate = endDate ? parseCalendarInput(endDate) : null;
   if (contractValue !== undefined) data.contractValue = contractValue;
   if (hasInvoice !== undefined) data.hasInvoice = hasInvoice;
   if (installmentCount !== undefined) data.installmentCount = installmentCount;
@@ -368,7 +369,7 @@ projectsRouter.post("/project-receipts", async (req, res) => {
       projectId,
       installmentNumber: installmentNumber ?? 1,
       amount,
-      paymentDate: new Date(paymentDate),
+      paymentDate: parseCalendarInput(paymentDate),
       grossAmountForeign: typeof grossAmountForeign === "number" ? grossAmountForeign : null,
       feeAmount: typeof feeAmount === "number" ? feeAmount : null,
       iofAmount: typeof iofAmount === "number" ? iofAmount : null,
@@ -376,7 +377,7 @@ projectsRouter.post("/project-receipts", async (req, res) => {
   });
   await prisma.transaction.create({
     data: {
-      date: new Date(paymentDate),
+      date: parseCalendarInput(paymentDate),
       type: "income",
       description: `${project.client.name} — ${project.name} (parcela ${receipt.installmentNumber})`,
       amount,
@@ -422,11 +423,11 @@ projectsRouter.post("/supplier-payments", async (req, res) => {
 
   const category = await getOrCreateSupplierExpenseCategory();
   const payment = await prisma.supplierPayment.create({
-    data: { projectSupplierCostId, installmentNumber: installmentNumber ?? 1, amount, paymentDate: new Date(paymentDate) },
+    data: { projectSupplierCostId, installmentNumber: installmentNumber ?? 1, amount, paymentDate: parseCalendarInput(paymentDate) },
   });
   await prisma.transaction.create({
     data: {
-      date: new Date(paymentDate),
+      date: parseCalendarInput(paymentDate),
       type: "expense",
       description: `${cost.supplier.name} (parcela ${payment.installmentNumber})`,
       amount,
@@ -473,8 +474,8 @@ projectsRouter.post("/tax-payments", async (req, res) => {
 
   const tax = await prisma.taxPayment.upsert({
     where: { competenceMonth_competenceYear: { competenceMonth, competenceYear } },
-    update: { totalRevenue: revenue, amountPaid, paymentDate: new Date(paymentDate) },
-    create: { competenceMonth, competenceYear, totalRevenue: revenue, amountPaid, paymentDate: new Date(paymentDate) },
+    update: { totalRevenue: revenue, amountPaid, paymentDate: parseCalendarInput(paymentDate) },
+    create: { competenceMonth, competenceYear, totalRevenue: revenue, amountPaid, paymentDate: parseCalendarInput(paymentDate) },
   });
 
   // Registrar o DAS NÃO cria mais gasto no Orçamento (23/10). O Luiz paga o
@@ -489,7 +490,7 @@ projectsRouter.post("/tax-payments", async (req, res) => {
     await prisma.transaction.update({
       where: { id: existingTx.id },
       data: {
-        date: new Date(paymentDate),
+        date: parseCalendarInput(paymentDate),
         amount: amountPaid,
         description: `DAS — referente a ${String(competenceMonth).padStart(2, "0")}/${competenceYear}`,
       },

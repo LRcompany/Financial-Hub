@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
 import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
 import { applyContribution, revertContribution } from "../services/contributions.js";
@@ -145,7 +146,7 @@ contributionsRouter.post("/contributions", async (req, res) => {
     const contribution = await applyContribution({
       brokerId: resolvedBrokerId,
       securityId: resolvedSecurityId,
-      date: date ? new Date(date) : new Date(),
+      date: parseCalendarInput(date ?? new Date()),
       amount,
       currency,
       note: note ?? null,

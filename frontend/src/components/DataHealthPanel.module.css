@@ -1,0 +1,70 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ok,
+.warn,
+.bad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ok {
+  color: var(--success);
+}
+
+.warn {
+  color: var(--ink);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.checked {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.issue {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.issueTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.iconBad {
+  color: var(--danger);
+}
+
+.iconWarn {
+  color: var(--ink-soft);
+}
+
+.detail {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.items {
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

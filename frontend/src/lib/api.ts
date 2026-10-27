@@ -95,6 +95,22 @@ export interface UncategorizedTransactionGroup {
 
 export type CategoryKind = 'essential' | 'non_essential' | 'investment'
 
+// Saúde dos dados (27/10) — regras de integridade conferidas no servidor
+// (ver backend/src/services/integrity.ts). "erro" = número errado na tela;
+// "aviso" = dado incompleto/velho que pode distorcer um número.
+export interface DataHealthIssue {
+  id: string
+  severity: 'erro' | 'aviso'
+  title: string
+  detail: string
+  items: string[]
+}
+export interface DataHealth {
+  checkedAt: string
+  ok: boolean
+  issues: DataHealthIssue[]
+}
+
 export interface BudgetCategory {
   categoryId: string // "uncategorized" = gasto sem categoria (27/10)
   name: string
@@ -878,6 +894,7 @@ export const api = {
       `/positions${params ? `?month=${params.month}&year=${params.year}` : ''}`
     ),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
+  dataHealth: () => request<DataHealth>('/data-health'),
   // Lançamento manual de provento (11/09) — botão "+ Rendimento" em posição
   // tipo Fundo (a Pluggy não manda dividendo pra esse tipo, ver pluggySync.ts
   // no backend). `date` no formato "AAAA-MM-DD" (só o mês/ano importam — o

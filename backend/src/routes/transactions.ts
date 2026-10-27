@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
 import { reinforceRule, categoryPath, leafExpenseCategories } from "../services/categorization.js";
 
@@ -278,7 +279,7 @@ transactionsRouter.post("/transactions", async (req, res) => {
 
   const transaction = await prisma.transaction.create({
     data: {
-      date: new Date(date),
+      date: parseCalendarInput(date),
       type,
       description,
       amount,

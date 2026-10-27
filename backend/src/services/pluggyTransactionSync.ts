@@ -19,6 +19,7 @@
 // como receita, pra não sujar o histórico com ruído que não importa.
 import crypto from "node:crypto";
 import { prisma } from "../prisma.js";
+import { brCalendarDay, brDayString } from "./dates.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
 import { suggestCategory } from "./categorization.js";
 
@@ -201,7 +202,8 @@ const dateYmIndex = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
  * feita em 03/07 cai SEMPRE em 03 do mês N−1 depois (1ª 03/07, 2ª 03/08…),
  * não no dia em que o banco lança na fatura (C6 dia 17, BTG dia 21). */
 export function purchaseDayPlusMonths(purchaseDate: string, monthsAhead: number): Date {
-  const [y, m, d] = purchaseDate.slice(0, 10).split("-").map(Number);
+  // Dia da compra NO BRASIL (compra às 22h de Brasília = 01h UTC do dia seguinte).
+  const [y, m, d] = brDayString(purchaseDate).split("-").map(Number);
   const monthIndex0 = m - 1 + monthsAhead;
   const yy = y + Math.floor(monthIndex0 / 12);
   const mm = ((monthIndex0 % 12) + 12) % 12;
@@ -218,7 +220,7 @@ export function effectiveDate(tx: PluggyTransaction): Date {
   if (meta?.purchaseDate && meta.installmentNumber && meta.totalInstallments && meta.totalInstallments > 1) {
     return purchaseDayPlusMonths(meta.purchaseDate, meta.installmentNumber - 1);
   }
-  return new Date(tx.date);
+  return brCalendarDay(tx.date);
 }
 
 /** Parcela de mês FUTURO (02/10): o BTG manda as parcelas ainda não
@@ -258,9 +260,7 @@ export type PlannedInstallment = {
 
 // Dia (em São Paulo, UTC−3) de uma data ISO — chave estável da compra mesmo
 // quando a Pluggy manda a hora com 3h de fuso a mais (C6, out/26).
-function spDay(iso: string): string {
-  return new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
+const spDay = brDayString;
 
 /** Agrupa as parcelas da Pluggy por compra. "Mesma compra" = descrição +
  * final do cartão + total de parcelas + data da compra a até 36h (o BTG varia
@@ -680,7 +680,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       if (manualMatch) {
         await prisma.transaction.update({
           where: { id: manualMatch.id },
-          data: { date: new Date(tx.date), description, amount, externalId, awaitingPluggyMatch: false },
+          data: { date: brCalendarDay(tx.date), description, amount, externalId, awaitingPluggyMatch: false },
         });
         if (isUtility) utilityBoletoSynced++;
         else pixSynced++;
@@ -695,7 +695,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
       const categoryId = isUtility ? null : (await suggestCategory(description))?.id ?? null;
       await prisma.transaction.create({
         data: {
-          date: new Date(tx.date),
+          date: brCalendarDay(tx.date),
           type: "expense",
           description,
           amount,

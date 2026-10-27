@@ -661,6 +661,10 @@
   color: var(--ink);
 }
 
+.bannerDanger {
+  background: var(--danger-soft);
+}
+
 .bannerBtn {
   /* inline-flex (não o default do <button>/<a>) — precisa pro Link do
      relatório mensal (08/09) renderizar do mesmo jeito que o <button> de
