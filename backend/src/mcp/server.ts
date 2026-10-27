@@ -13,7 +13,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { createSessionToken, SESSION_COOKIE_NAME } from "../services/session.js";
-import { categoryPath } from "../services/categorization.js";
+import { expenseLedger, ledgerTotal } from "../services/ledger.js";
+import { runDataHealth } from "../services/integrity.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Json = any;
@@ -50,17 +51,13 @@ const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: fa
 const mes = z.number().int().min(1).max(12).optional().describe("Mês 1–12 (padrão: mês atual)");
 const ano = z.number().int().min(2018).max(2100).optional().describe("Ano (padrão: ano atual)");
 
-// Gasto médio por mês nos N meses FECHADOS anteriores (despesa real, sem
-// transferência) — base pra "reserva de emergência cobre X meses".
+// Gasto médio por mês nos N meses FECHADOS anteriores — base pra "reserva de
+// emergência cobre X meses". Mesmo livro-razão do Orçamento (27/10).
 async function avgMonthlySpend(months: number) {
   const now = new Date();
   const end = new Date(now.getFullYear(), now.getMonth(), 1);
   const start = new Date(now.getFullYear(), now.getMonth() - months, 1);
-  const agg = await prisma.transaction.aggregate({
-    where: { type: "expense", isTransfer: false, date: { gte: start, lt: end } },
-    _sum: { amount: true },
-  });
-  return r2((agg._sum.amount ?? 0) / months);
+  return r2(ledgerTotal(await expenseLedger(start, end)) / months);
 }
 
 export function buildMcpServer() {
@@ -108,9 +105,13 @@ export function buildMcpServer() {
           entradas_mes_anterior: r2(b.previousTotalIncome),
           maiores_categorias: [...byParent.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([nome, valor]) => ({ nome, gasto: r2(valor) })),
           estouraram: b.categories
-            .filter((c: Json) => c.spent > c.planned)
+            .filter((c: Json) => c.hasTarget && c.spent > c.planned)
             .map((c: Json) => ({ categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`, gasto: r2(c.spent), planejado: r2(c.planned), passou: r2(c.spent - c.planned) }))
             .sort((x: Json, y: Json) => y.passou - x.passou),
+          gasto_sem_meta: b.categories
+            .filter((c: Json) => !c.hasTarget && c.spent > 0)
+            .map((c: Json) => ({ categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`, gasto: r2(c.spent) }))
+            .sort((x: Json, y: Json) => y.gasto - x.gasto),
           maior_compra: b.biggestPurchase ? { descricao: b.biggestPurchase.description, valor: r2(b.biggestPurchase.amount), categoria: b.biggestPurchase.category } : null,
           meta_diaria: b.dailyGoal,
           dias_abaixo_da_meta: `${b.daysUnderGoal} de ${b.daysWithGoal}`,
@@ -167,7 +168,8 @@ export function buildMcpServer() {
         categorias: b.categories
           .map((c: Json) => ({
             categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`,
-            tipo: c.kind === "essential" ? "essencial" : "não essencial",
+            tipo: c.kind === "essential" ? "essencial" : c.kind === "uncategorized" ? "sem categoria" : "não essencial",
+            tem_meta: c.hasTarget,
             planejado: r2(c.planned),
             gasto: r2(c.spent),
             mes_anterior: r2(c.previousSpent),
@@ -194,14 +196,18 @@ export function buildMcpServer() {
     },
     reply(async (a) => {
       const p = period(a);
-      const txs: Json[] = await api(`/transactions?${p.q}`);
-      const rows: { data: string; descricao: string; valor: number; categoria: string; cartao: string | null; parcela: string | null }[] = [];
-      for (const t of txs) {
-        if (t.type !== "expense" || t.isTransfer) continue;
-        const base = { data: String(t.date).slice(0, 10), descricao: t.note || t.description, cartao: t.broker?.name ?? null, parcela: t.installmentNumber && t.totalInstallments ? `${t.installmentNumber}/${t.totalInstallments}` : null };
-        if (t.splits?.length) for (const s of t.splits) rows.push({ ...base, valor: s.amount, categoria: s.categoryPath ?? "Sem categoria" });
-        else rows.push({ ...base, valor: t.amount, categoria: t.categoryPath ?? "Sem categoria" });
-      }
+      // Livro-razão do mês (27/10): lançamentos reais + parcelas ainda não
+      // lançadas, divisão já aplicada — o mesmo total do Orçamento.
+      const ledger = await expenseLedger(new Date(p.year, p.month - 1, 1), new Date(p.year, p.month, 1));
+      const rows = ledger.map((i) => ({
+        data: i.date.toISOString().slice(0, 10),
+        descricao: i.description,
+        valor: i.amount,
+        categoria: i.category ?? "Sem categoria",
+        cartao: i.cardLabel,
+        parcela: i.installmentNumber && i.totalInstallments ? `${i.installmentNumber}/${i.totalInstallments}` : null,
+        ainda_nao_lancada: i.kind === "installment",
+      }));
       const filtro = a.categoria?.toLowerCase();
       const filtered = filtro ? rows.filter((r) => r.categoria.toLowerCase().includes(filtro)) : rows;
       const porCategoria = new Map<string, number>();
@@ -353,35 +359,25 @@ export function buildMcpServer() {
       const n = a.meses ?? 12;
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth() - (n - 1), 1);
-      const [txs, splits] = await Promise.all([
-        prisma.transaction.findMany({
-          where: { isTransfer: false, date: { gte: start } },
-          select: { date: true, amount: true, type: true, category: { include: { parent: { include: { parent: true } } } }, splits: { select: { id: true } } },
-        }),
-        prisma.transactionSplit.findMany({
-          where: { transaction: { isTransfer: false, type: "expense", date: { gte: start } } },
-          select: { amount: true, transaction: { select: { date: true } }, category: { include: { parent: { include: { parent: true } } } } },
-        }),
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      // Gasto = livro-razão (27/10), o mesmo do Orçamento; entradas = Transaction de entrada.
+      const [ledger, incomes] = await Promise.all([
+        expenseLedger(start, end),
+        prisma.transaction.findMany({ where: { type: "income", isTransfer: false, date: { gte: start, lt: end } }, select: { date: true, amount: true } }),
       ]);
-      const parentOf = (c: Json) => (c ? (categoryPath(c) ?? c.name).split(" > ")[0] : "Sem categoria");
       const months = new Map<string, { gasto: number; entradas: number; cats: Map<string, number> }>();
       const bucket = (d: Date) => {
         const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         if (!months.has(k)) months.set(k, { gasto: 0, entradas: 0, cats: new Map() });
         return months.get(k)!;
       };
-      for (const t of txs) {
-        const m = bucket(t.date);
-        if (t.type === "income") m.entradas += t.amount;
-        else if (t.type === "expense") {
-          m.gasto += t.amount;
-          if (t.splits.length === 0) m.cats.set(parentOf(t.category), (m.cats.get(parentOf(t.category)) ?? 0) + t.amount);
-        }
+      for (const i of ledger) {
+        const m = bucket(i.date);
+        m.gasto += i.amount;
+        const mae = (i.category ?? "Sem categoria").split(" > ")[0];
+        m.cats.set(mae, (m.cats.get(mae) ?? 0) + i.amount);
       }
-      for (const s of splits) {
-        const m = bucket(s.transaction.date);
-        m.cats.set(parentOf(s.category), (m.cats.get(parentOf(s.category)) ?? 0) + s.amount);
-      }
+      for (const t of incomes) bucket(t.date).entradas += t.amount;
       return [...months.entries()]
         .sort((x, y) => x[0].localeCompare(y[0]))
         .map(([mes, m]) => ({
@@ -392,6 +388,19 @@ export function buildMcpServer() {
           principais_categorias: [...m.cats.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([categoria, valor]) => ({ categoria, valor: r2(valor) })),
         }));
     })
+  );
+
+  server.registerTool(
+    "saude_dos_dados",
+    {
+      title: "Saúde dos dados",
+      description:
+        "Confere as regras de integridade do Command OS (parcela contada 2x, divisão que não fecha, gasto sem categoria, corretora manual desatualizada, banco sem sincronizar...). " +
+        "Use antes de tirar conclusão de um número estranho, ou quando o Luiz perguntar se os números estão certos.",
+      inputSchema: {},
+      annotations: readOnly,
+    },
+    reply(async () => runDataHealth())
   );
 
   return server;

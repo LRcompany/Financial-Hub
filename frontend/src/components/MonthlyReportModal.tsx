@@ -10,7 +10,7 @@ import { RankedBarList } from './RankedBarList'
 import { SmoothLineChart } from './SmoothLineChart'
 import { MonthDelta } from './MonthDelta'
 import { PlannedValue } from './SpentPlannedValue'
-import { OverBudgetIcon } from './Badge'
+import { OverBudgetIcon, NoTargetTag, isOverBudget } from './Badge'
 import { ModalShell } from './ModalShell'
 import styles from './MonthlyReportModal.module.css'
 
@@ -58,13 +58,14 @@ function spentByParent(categories: BudgetCategory[]) {
  * "o que gastei em cada uma e o que passou do estipulado". Só entra folha com
  * meta OU gasto no mês (linha zerada dos dois lados é ruído). */
 function groupedCategories(categories: BudgetCategory[]) {
-  const groups = new Map<string, { name: string; spent: number; planned: number; rows: BudgetCategory[] }>()
+  const groups = new Map<string, { name: string; spent: number; planned: number; targetSpent: number; rows: BudgetCategory[] }>()
   for (const c of categories) {
     if (c.spent <= 0 && c.planned <= 0) continue
-    const key = c.parentName ?? 'Outras'
-    const g = groups.get(key) ?? { name: key, spent: 0, planned: 0, rows: [] }
+    const key = c.kind === 'uncategorized' ? 'Sem categoria' : c.parentName ?? 'Outras'
+    const g = groups.get(key) ?? { name: key, spent: 0, planned: 0, targetSpent: 0, rows: [] }
     g.spent += c.spent
     g.planned += c.planned
+    if (c.hasTarget) g.targetSpent += c.spent
     g.rows.push(c)
     groups.set(key, g)
   }
@@ -321,7 +322,7 @@ export function MonthlyReportModal({
   // ---------------- Orçamento ----------------
   const essentialSpent = budget?.categories.filter((c) => c.kind === 'essential').reduce((s, c) => s + c.spent, 0) ?? 0
   const nonEssentialSpent = budget?.categories.filter((c) => c.kind === 'non_essential').reduce((s, c) => s + c.spent, 0) ?? 0
-  const previousTotalSpent = budget?.categories.reduce((s, c) => s + c.previousSpent, 0) ?? 0
+  const previousTotalSpent = budget?.previousTotalSpent ?? 0
   const diffFromPlanned = budget ? budget.totalPlanned - budget.totalSpent : 0
   const withinBudget = diffFromPlanned >= 0
   const byParent = budget ? spentByParent(budget.categories) : []
@@ -333,7 +334,7 @@ export function MonthlyReportModal({
   // Mesma regra de "estourou" de todo o app: `spent > planned`, nunca
   // `planned > 0 && ...` (meta zerada com gasto real também é estouro).
   const overBudgetCategories = (budget?.categories ?? [])
-    .filter((c) => c.spent > c.planned)
+    .filter((c) => isOverBudget(c))
     .sort((a, b) => b.spent - b.planned - (a.spent - a.planned))
   const groups = budget ? groupedCategories(budget.categories) : []
   const dailyDays = budget?.dailyDays ?? []
@@ -888,14 +889,14 @@ export function MonthlyReportModal({
 /** Linhas de um grupo-mãe na tabela de categorias: subtotal em destaque +
  * folhas. `Diferença` = estipulado - gasto (negativo = passou), com o ícone de
  * alerta padrão só quando estourou (nunca cor no número). */
-function GroupRows({ group }: { group: { name: string; spent: number; planned: number; rows: BudgetCategory[] } }) {
+function GroupRows({ group }: { group: { name: string; spent: number; planned: number; targetSpent: number; rows: BudgetCategory[] } }) {
   return (
     <>
       <tr className={styles.groupRow}>
         <td>{group.name}</td>
         <td><Money>R$ {currency(group.spent)}</Money></td>
         <td><PlannedValue value={group.planned} /></td>
-        <DiffCell planned={group.planned} spent={group.spent} />
+        <DiffCell planned={group.planned} spent={group.targetSpent} />
       </tr>
       {group.rows.map((c) => (
         <tr key={c.categoryId} className={styles.leafRow}>
@@ -904,7 +905,7 @@ function GroupRows({ group }: { group: { name: string; spent: number; planned: n
           </td>
           <td><Money>R$ {currency(c.spent)}</Money></td>
           <td>{c.planned > 0 ? <PlannedValue value={c.planned} /> : '—'}</td>
-          <DiffCell planned={c.planned} spent={c.spent} />
+          {c.hasTarget ? <DiffCell planned={c.planned} spent={c.spent} /> : <td><NoTargetTag /></td>}
         </tr>
       ))}
     </>

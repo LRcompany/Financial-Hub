@@ -14,6 +14,7 @@ import { projectsRouter } from "./routes/projects.js";
 import { brokersRouter } from "./routes/brokers.js";
 import { pluggyConnectRouter } from "./routes/pluggyConnect.js";
 import { contributionsRouter } from "./routes/contributions.js";
+import { dataHealthRouter } from "./routes/dataHealth.js";
 import { pluggyWebhookRouter } from "./routes/pluggyWebhook.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { startCreditCardSyncScheduler } from "./services/scheduler.js";
@@ -57,6 +58,7 @@ app.use("/api", projectsRouter);
 app.use("/api", brokersRouter);
 app.use("/api", pluggyConnectRouter);
 app.use("/api", contributionsRouter);
+app.use("/api", dataHealthRouter);
 
 // ---------- Conector do Claude (MCP, só leitura) — 16/10 ----------
 // Login OAuth (app do Claude no iPhone/site) — rotas na raiz, fora de /api,

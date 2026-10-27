@@ -11,6 +11,7 @@
 // atrasada sozinho. Rodar nosso sync mais de 1x/dia não traria dado mais
 // novo, só bateria a API à toa. Rodar baseado em "dias desde a última
 // transação" seria mais complexo pro mesmo resultado prático.
+import { runDataHealth } from "./integrity.js";
 import { syncAllBrokersCreditCardTransactions } from "./pluggyTransactionSync.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -31,6 +32,15 @@ async function runSync() {
     // Nunca deixa o agendador matar o processo por causa de uma falha de
     // rede/Pluggy — só loga e tenta de novo no próximo ciclo.
     console.error(`[scheduler] falha no sync automático de ${startedAt}:`, (err as Error).message);
+  }
+  // Saúde dos dados logo depois do sync (27/10) — qualquer regra quebrada
+  // fica registrada no log com o que quebrou (e aparece no app na hora).
+  try {
+    const health = await runDataHealth();
+    const summary = health.issues.map((i) => `${i.severity}: ${i.title} (${i.items.length})`).join("; ");
+    console.log(`[saúde dos dados] ${health.ok ? "ok" : "COM ERRO"}${summary ? ` — ${summary}` : ""}`);
+  } catch (err) {
+    console.error("[saúde dos dados] falhou:", (err as Error).message);
   }
 }
 

@@ -35,3 +35,19 @@
   vertical-align: middle;
   flex-shrink: 0;
 }
+
+/* "sem meta" (27/10) — cinza neutro, nunca cor de alerta: gasto sem meta não
+   é bom nem ruim, só não tinha planejamento. */
+.noTarget {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--fill-muted);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}

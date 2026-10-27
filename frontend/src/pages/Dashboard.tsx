@@ -54,13 +54,16 @@ function formatDayLabel(iso: string): string {
 function groupByParent(categories: BudgetCategory[]) {
   const groups = new Map<
     string,
-    { parentName: string; planned: number; spent: number; spentProjected: number; previousSpent: number; categoryIds: string[] }
+    { parentName: string; planned: number; spent: number; spentProjected: number; previousSpent: number; categoryIds: string[]; targetSpent: number }
   >()
   for (const c of categories) {
-    const key = c.parentName ?? 'Outras'
+    const key = c.kind === 'uncategorized' ? 'Sem categoria' : c.parentName ?? 'Outras'
+    // "Estourou" só compara o gasto das folhas COM meta com a meta (27/10).
+    const targetSpent = c.hasTarget ? c.spent : 0
     const existing = groups.get(key)
     if (existing) {
       existing.planned += c.planned
+      existing.targetSpent += targetSpent
       existing.spent += c.spent
       existing.spentProjected += c.spentProjected
       existing.previousSpent += c.previousSpent
@@ -73,6 +76,7 @@ function groupByParent(categories: BudgetCategory[]) {
         spentProjected: c.spentProjected,
         previousSpent: c.previousSpent,
         categoryIds: [c.categoryId],
+        targetSpent,
       })
     }
   }
@@ -385,7 +389,7 @@ export function Dashboard() {
                   )
                 })()}
                 {groupByParent(budget.categories).map((group) => {
-                  const isOver = group.spent > group.planned
+                  const isOver = group.targetSpent > group.planned
                   return (
                     <button
                       type="button"

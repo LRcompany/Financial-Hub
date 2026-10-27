@@ -96,11 +96,14 @@ export interface UncategorizedTransactionGroup {
 export type CategoryKind = 'essential' | 'non_essential' | 'investment'
 
 export interface BudgetCategory {
-  categoryId: string
+  categoryId: string // "uncategorized" = gasto sem categoria (27/10)
   name: string
-  kind: CategoryKind
+  kind: CategoryKind | 'uncategorized'
   parentId: string | null
   parentName: string | null
+  // false = categoria com gasto mas sem meta no mês (27/10): conta no total,
+  // aparece como "sem meta", nunca como "estourou".
+  hasTarget: boolean
   planned: number
   // Já inclui a parcela futura comprometida (UpcomingInstallment) que vence
   // dentro do mês, mesmo sem a Pluggy ter confirmado ainda (09/09: "a
@@ -171,6 +174,7 @@ export interface BudgetSummary {
   }[]
   totalPlanned: number
   totalSpent: number
+  previousTotalSpent: number // mês anterior inteiro, mesmo livro-razão (27/10)
   totalProjected: number
   totalIncome: number
   previousTotalIncome: number

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { reinforceRule, categoryPath } from "../services/categorization.js";
+import { expenseLedger, sumByCategory, ledgerTotal, purchaseBase, buildInstallmentPositions, type LedgerItem } from "../services/ledger.js";
 
 export const budgetRouter = Router();
 
@@ -15,60 +16,22 @@ function goalAt(goals: { amount: number; effectiveFrom: Date }[], date: Date): n
   return applicable?.amount ?? null;
 }
 
-// Usadas pelo /budget-summary E pelo /budget-target/review (01/10): as duas
-// telas precisam da MESMA regra de "quanto gastei na categoria" (transação
-// sem split + fatia de split + parcela projetada), senão a revisão do mês
-// novo mostra um número diferente do que o Orçamento mostrou no mês passado.
-//
-// Parcela futura comprometida (UpcomingInstallment) que vence dentro do
-// período — conta como "gasto" da categoria/dia mesmo sem a Pluggy ter
-// confirmado ainda (pedido do Luiz, 09/09: "a parcela que fiz... todo mês
-// eu vou pagar 100 reais... é assim a lógica correta"). Dedup contra
-// Transaction real do MESMO período pela mesma chave já usada em
-// /upcoming-installments/groups (purchaseBase+valor) — evita contar duas
-// vezes quando a compra finalmente é confirmada pela Pluggy dentro do
-// próprio mês (ver nota em pluggyTransactionSync.ts sobre parcela manual
-// tipo "PEOPLE BIKE SHOP", criada à mão por falta de billForecastDate).
-async function projectedSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
-  const [installments, postedKeys] = await Promise.all([
-    prisma.upcomingInstallment.findMany({
-      where: { dueDate: { gte: start, lt: end } },
-      select: { amount: true, description: true, categoryId: true },
-    }),
-    getPostedPurchaseKeys(start, end),
-  ]);
-  const map = new Map<string, number>();
-  for (const i of installments) {
-    if (!i.categoryId) continue;
-    const key = `${purchaseBase(i.description)}|${i.amount.toFixed(2)}`;
-    if (postedKeys.has(key)) continue;
-    map.set(i.categoryId, (map.get(i.categoryId) ?? 0) + i.amount);
-  }
-  return map;
+// Categoria-mãe direta e avó (até 3 níveis: Transporte > Carro > Aluguel) —
+// o front agrupa por essa mãe.
+function parentInfo(c: { parent: { id: string; name: string; parent: { id: string; name: string } | null } | null } | null) {
+  const parent = c?.parent ?? null;
+  return { parentId: parent?.parent?.id ?? parent?.id ?? null, parentName: parent?.parent?.name ?? parent?.name ?? null };
 }
 
-// Transação dividida em N categorias (14/09 — ver TransactionSplit no
-// schema, ex: boleto de aluguel+água+gás+internet+seguro cobrados
-// juntos): cada split conta na SUA categoria, não na `categoryId` (às
-// vezes nem existe mais/nunca existiu) da Transaction inteira. A
-// Transaction em si é excluída do `spentAgg` normal (ver `splits: {
-// none: {} }` nos dois endpoints) — sem isso o valor total contaria 2x, uma vez
-// inteiro na categoria antiga e de novo fatiado nas categorias novas.
-async function splitSpendByCategory(start: Date, end: Date): Promise<Map<string, number>> {
-  const splits = await prisma.transactionSplit.findMany({
-    where: { transaction: { type: "expense", isTransfer: false, date: { gte: start, lt: end } } },
-    select: { categoryId: true, amount: true },
-  });
-  const map = new Map<string, number>();
-  for (const s of splits) {
-    map.set(s.categoryId, (map.get(s.categoryId) ?? 0) + s.amount);
-  }
-  return map;
-}
+export const UNCATEGORIZED_ID = "uncategorized";
 
 // GET /api/budget-summary?month=8&year=2026
-// Orçamento mensal (soma dos BudgetTarget do mês) + gasto real por categoria +
-// meta/gasto diário — tudo calculado a partir de Transaction, sem valor fixo.
+// Orçamento do mês + gasto por categoria + gasto diário. TODO gasto vem do
+// livro-razão (`services/ledger.ts`, 27/10) — o mesmo número em toda tela.
+// Desde 27/10 o total inclui gasto em categoria SEM meta (`hasTarget:
+// false`) e SEM categoria (linha "Sem categoria") — antes ficavam de fora do
+// total do Orçamento mas dentro do gráfico diário (set/26: R$24.483,99 x
+// R$24.782,37 pro mesmo mês).
 budgetRouter.get("/budget-summary", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
@@ -76,103 +39,66 @@ budgetRouter.get("/budget-summary", async (req, res) => {
 
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
-  const prevMonthDate = new Date(year, month - 2, 1);
-  const prevMonthStart = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
-  const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
+  const prevMonthStart = new Date(year, month - 2, 1);
+  const prevMonthEnd = monthStart;
 
-  const [targets, dailyGoals, projectedThisMonth, projectedPrevMonth, splitThisMonth, splitPrevMonth] = await Promise.all([
-    // Só categoria de despesa — meta de receita (Salário, projetos) é
-    // "quanto espero receber", não "quanto posso gastar", não faz sentido
-    // misturar na mesma lista de progresso de gasto por categoria. Também
-    // exclui kind "investment" — aporte não é gasto, tem home própria em
-    // Patrimônio; deixar aqui inflava o "planejado" do mês com meta de
-    // investimento (ex: R$1.323,05 de "Liberdade Financeira" somado ao total
-    // de despesa, sem fazer sentido no "quanto gastei este mês").
-    prisma.budgetTarget.findMany({
-      where: { month, year, category: { type: "expense", kind: { not: "investment" } } },
-      include: { category: { include: { parent: { include: { parent: true } } } } },
-    }),
+  const [targets, dailyGoals, ledgerMonth, ledgerPrev, expenseCategories] = await Promise.all([
+    // Meta de investimento não é meta de gasto (aporte tem home em Patrimônio).
+    prisma.budgetTarget.findMany({ where: { month, year, category: { type: "expense", kind: { not: "investment" } } } }),
     prisma.dailySpendGoal.findMany({ orderBy: { effectiveFrom: "asc" } }),
-    projectedSpendByCategory(monthStart, monthEnd),
-    projectedSpendByCategory(prevMonthStart, prevMonthEnd),
-    splitSpendByCategory(monthStart, monthEnd),
-    splitSpendByCategory(prevMonthStart, prevMonthEnd),
+    expenseLedger(monthStart, monthEnd),
+    expenseLedger(prevMonthStart, prevMonthEnd),
+    prisma.category.findMany({ where: { type: "expense" }, include: { parent: { include: { parent: true } } } }),
   ]);
+  const catById = new Map(expenseCategories.map((c) => [c.id, c]));
+  const spentNow = sumByCategory(ledgerMonth);
+  const spentPrev = sumByCategory(ledgerPrev);
+  const plannedById = new Map(targets.map((t) => [t.categoryId, t.plannedAmount]));
 
-  const categories = await Promise.all(
-    targets.map(async (target) => {
-      const [spentAgg, previousSpentAgg] = await Promise.all([
-        prisma.transaction.aggregate({
-          where: {
-            categoryId: target.categoryId,
-            type: "expense",
-            isTransfer: false,
-            date: { gte: monthStart, lt: monthEnd },
-            // Transação dividida (ver TransactionSplit) sai daqui — o valor
-            // dela conta via `splitThisMonth` abaixo, fatiado por categoria,
-            // nunca inteiro na `categoryId` antiga/genérica ao mesmo tempo.
-            splits: { none: {} },
-          },
-          _sum: { amount: true },
-        }),
-        prisma.transaction.aggregate({
-          where: {
-            categoryId: target.categoryId,
-            type: "expense",
-            isTransfer: false,
-            date: { gte: prevMonthStart, lt: prevMonthEnd },
-            splits: { none: {} },
-          },
-          _sum: { amount: true },
-        }),
-      ]);
-      // Categoria-mãe direta (Moradia) e avó, se a folha estiver 3 níveis
-      // fundo (Transporte > Carro > Aluguel) — front agrupa por essa mãe pra
-      // exibir em accordion, em vez de listar as ~80 folhas soltas.
-      const parent = target.category.parent;
-      const parentName = parent?.parent?.name ?? parent?.name ?? null;
-      // `spent`/`previousSpent` já vêm com a parcela futura comprometida
-      // somada (spentProjected é só a fatia dela, pro front marcar
-      // "projetado" — não é um valor à parte, já está dentro do total).
-      const spentProjected = projectedThisMonth.get(target.categoryId) ?? 0;
-      const previousSpentProjected = projectedPrevMonth.get(target.categoryId) ?? 0;
-      // Fatia dessa categoria vinda de transação dividida (ver
-      // TransactionSplit) — soma junto do resto, mesmo princípio de
-      // spentProjected acima (já dentro do total, não é um valor à parte).
-      const spentSplit = splitThisMonth.get(target.categoryId) ?? 0;
-      const previousSpentSplit = splitPrevMonth.get(target.categoryId) ?? 0;
+  // Linhas: toda categoria com meta + toda categoria com gasto (com ou sem meta) + "Sem categoria".
+  const ids = new Set<string | null>([...plannedById.keys(), ...spentNow.keys()]);
+  const categories = [...ids]
+    .map((id) => {
+      const now = spentNow.get(id) ?? { spent: 0, installments: 0 };
+      const prev = spentPrev.get(id)?.spent ?? 0;
+      if (id === null) {
+        return {
+          categoryId: UNCATEGORIZED_ID,
+          name: "Sem categoria",
+          kind: "uncategorized",
+          parentId: null,
+          parentName: null,
+          hasTarget: false,
+          planned: 0,
+          spent: now.spent,
+          spentProjected: now.installments,
+          previousSpent: prev,
+        };
+      }
+      const cat = catById.get(id);
+      if (!cat || cat.kind === "investment") return null;
       return {
-        categoryId: target.categoryId,
-        name: target.category.name,
-        kind: target.category.kind, // essential | non_essential | investment
-        parentId: (parent?.parent?.id ?? parent?.id) ?? null,
-        parentName,
-        planned: target.plannedAmount,
-        spent: (spentAgg._sum.amount ?? 0) + spentProjected + spentSplit,
-        spentProjected,
-        previousSpent: (previousSpentAgg._sum.amount ?? 0) + previousSpentProjected + previousSpentSplit,
+        categoryId: id,
+        name: cat.name,
+        kind: cat.kind, // essential | non_essential
+        ...parentInfo(cat),
+        hasTarget: plannedById.has(id),
+        planned: plannedById.get(id) ?? 0,
+        spent: now.spent,
+        spentProjected: now.installments,
+        previousSpent: prev,
       };
     })
-  );
+    .filter((c): c is NonNullable<typeof c> => c !== null);
 
   const totalPlanned = categories.reduce((sum, c) => sum + c.planned, 0);
-  const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
-  const totalProjected = categories.reduce((sum, c) => sum + c.spentProjected, 0);
+  const totalSpent = ledgerTotal(ledgerMonth);
+  const totalProjected = ledgerMonth.filter((i) => i.kind === "installment").reduce((s, i) => s + i.amount, 0);
 
-  // Entradas do mês — Projetos virou o principal gerador de receita real
-  // (cada recebimento já cria uma Transaction de entrada), então o Orçamento
-  // (visão de dia a dia) precisa mostrar quanto entrou, não só quanto saiu.
-  // `incomeFromProjects` é o recorte específico (via projectReceiptId) só
-  // pra deixar claro de onde parte da entrada do mês está vindo.
+  // Entradas do mês (recebimentos de projeto viram Transaction de entrada).
   const [incomeAgg, previousIncomeAgg, incomeFromProjectsAgg] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { type: "income", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { type: "income", isTransfer: false, date: { gte: prevMonthStart, lt: prevMonthEnd } },
-      _sum: { amount: true },
-    }),
+    prisma.transaction.aggregate({ where: { type: "income", isTransfer: false, date: { gte: monthStart, lt: monthEnd } }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { type: "income", isTransfer: false, date: { gte: prevMonthStart, lt: prevMonthEnd } }, _sum: { amount: true } }),
     prisma.transaction.aggregate({
       where: { type: "income", isTransfer: false, projectReceiptId: { not: null }, date: { gte: monthStart, lt: monthEnd } },
       _sum: { amount: true },
@@ -182,33 +108,27 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const previousTotalIncome = previousIncomeAgg._sum.amount ?? 0;
   const incomeFromProjects = incomeFromProjectsAgg._sum.amount ?? 0;
 
-  // Maior compra do mês — pro relatório mensal (pedido do Luiz, 08/09).
-  // Só gasto de verdade (expense, não transferência) — fatura de cartão
-  // fechando ou pagamento não é "compra".
-  const biggestPurchaseTx = await prisma.transaction.findFirst({
-    where: { type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } },
-    orderBy: { amount: "desc" },
-    include: { category: { include: { parent: { include: { parent: true } } } } },
-  });
-  const biggestPurchase = biggestPurchaseTx
+  // Maior compra do mês (relatório mensal): o maior gasto real, inteiro (uma
+  // transação dividida conta pelo valor total, não por fatia).
+  const byTransaction = new Map<string, { amount: number; item: LedgerItem }>();
+  for (const i of ledgerMonth) {
+    if (i.kind !== "posted" || !i.transactionId) continue;
+    const cur = byTransaction.get(i.transactionId);
+    byTransaction.set(i.transactionId, { amount: (cur?.amount ?? 0) + i.amount, item: cur?.item ?? i });
+  }
+  const biggest = [...byTransaction.values()].sort((a, b) => b.amount - a.amount)[0];
+  const biggestPurchase = biggest
     ? {
-        description: biggestPurchaseTx.note || biggestPurchaseTx.description,
-        amount: biggestPurchaseTx.amount,
-        date: biggestPurchaseTx.date,
-        category: categoryPath(biggestPurchaseTx.category),
-        // Regra global (10/09): sempre que falamos de parcela em algum lugar
-        // do app, mostra também a posição (N de Total) — "maior compra" não
-        // fazia isso, mesmo quando a maior compra do mês era ela mesma uma
-        // parcela de cartão.
-        installmentNumber: biggestPurchaseTx.installmentNumber,
-        totalInstallments: biggestPurchaseTx.totalInstallments,
+        description: biggest.item.description,
+        amount: biggest.amount,
+        date: biggest.item.date,
+        category: biggest.item.category,
+        installmentNumber: biggest.item.installmentNumber,
+        totalInstallments: biggest.item.totalInstallments,
       }
     : null;
 
-  // Histórico de entrada por mês (últimos 12, terminando no mês navegado) —
-  // pro gráfico "Por mês" dentro do próprio box "Entradas do mês" (pedido do
-  // Luiz, 04/09: "quero visualizar isso"). Busca tudo de uma vez (mesmo
-  // padrão do last14Days abaixo) e agrupa em memória, em vez de 12 queries.
+  // Entradas por mês, últimos 12 (gráfico "Por mês" do box Entradas).
   const twelveMonthsAgoStart = new Date(year, month - 12, 1);
   const incomeHistoryTransactions = await prisma.transaction.findMany({
     where: { type: "income", isTransfer: false, date: { gte: twelveMonthsAgoStart, lt: monthEnd } },
@@ -218,130 +138,49 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   for (let i = 11; i >= 0; i--) {
     const bucketStart = new Date(year, month - 1 - i, 1);
     const bucketEnd = new Date(year, month - i, 1);
-    const value = incomeHistoryTransactions
-      .filter((t) => t.date >= bucketStart && t.date < bucketEnd)
-      .reduce((sum, t) => sum + t.amount, 0);
+    const value = incomeHistoryTransactions.filter((t) => t.date >= bucketStart && t.date < bucketEnd).reduce((sum, t) => sum + t.amount, 0);
     incomeByMonth.push({ label: bucketStart.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), value });
   }
 
-  // Gasto diário DO MÊS NAVEGADO (02/10, pedido do Luiz: "quando vou em
-  // Orçamento e volto pra setembro, o box do gasto diário não atualiza...
-  // você precisa deixar as informações certinhas por cada mês"). Até 02/10
-  // isso era travado no mês-calendário ATUAL, qualquer que fosse o mês
-  // navegado. Agora a janela é o mês da query: mês atual = dia 1 até HOJE
-  // (dia futuro nunca entra — não é "abaixo" nem "acima" de nada); mês
-  // passado = mês inteiro; mês futuro = janela vazia. Todas as despesas do
-  // período, não só as categorizadas no orçamento (gasto real do dia a dia).
+  // Gasto diário do MÊS NAVEGADO (02/10): mês atual = dia 1 até hoje (dia
+  // futuro não é "abaixo" nem "acima" de nada); mês passado = inteiro; mês
+  // futuro = vazio. Mesmo livro-razão do total acima.
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   const isCurrentMonth = monthStart <= now && now < monthEnd;
   const windowEnd = monthEnd < todayEnd ? monthEnd : todayEnd;
+  const DAY = 24 * 60 * 60 * 1000;
+  const onDay = (items: LedgerItem[], day: Date) => items.filter((i) => i.date >= day && i.date.getTime() < day.getTime() + DAY);
 
-  const [windowTransactions, windowInstallments] = await Promise.all([
-    // Desde o início do MÊS ANTERIOR de uma vez só — cobre a série do mês
-    // navegado e os dias alinhados do mês anterior (comparação abaixo).
-    prisma.transaction.findMany({
-      where: { type: "expense", isTransfer: false, date: { gte: prevMonthStart, lt: windowEnd } },
-      select: { date: true, amount: true, description: true },
-    }),
-    // Parcela futura comprometida com vencimento no mesmo período — mesma
-    // lógica de merge/dedup de projectedSpendByCategory, só que por DIA em
-    // vez de por categoria (o gráfico mostra o dia real em que ela cai).
-    prisma.upcomingInstallment.findMany({
-      where: { dueDate: { gte: prevMonthStart, lt: windowEnd } },
-      select: { dueDate: true, amount: true, description: true },
-    }),
-  ]);
-  // Dedup "parcela já virou transação real" SEMPRE dentro do mesmo mês
-  // (mesma regra de `getPostedPurchaseKeys`/`projectedSpendByCategory`).
-  // Bug achado em 02/10: a busca cobre 2 meses (mês anterior + navegado) e
-  // o dedup usava as chaves dos dois juntos — a parcela 4 de setembro sumia
-  // do gráfico só porque a parcela 3 (mesma descrição + valor) foi lançada
-  // em agosto.
-  const ymKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-  const postedKeysByMonth = new Map<string, Set<string>>();
-  for (const t of windowTransactions) {
-    const k = ymKey(t.date);
-    if (!postedKeysByMonth.has(k)) postedKeysByMonth.set(k, new Set());
-    postedKeysByMonth.get(k)!.add(`${purchaseBase(t.description)}|${t.amount.toFixed(2)}`);
-  }
-  const projectedInstallmentsDaily = windowInstallments.filter(
-    (i) => !postedKeysByMonth.get(ymKey(i.dueDate))?.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
-  );
-
-  function projectedOnDay(day: Date): number {
-    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    return projectedInstallmentsDaily
-      .filter((i) => i.dueDate >= day && i.dueDate < dayEnd)
-      .reduce((sum, i) => sum + i.amount, 0);
-  }
-
-  function sumOnDay(day: Date): number {
-    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const real = windowTransactions.filter((t) => t.date >= day && t.date < dayEnd).reduce((sum, t) => sum + t.amount, 0);
-    return real + projectedOnDay(day);
-  }
-
-  // De onde veio o gasto daquele dia (pedido do Luiz, 15/09: "só existe o
-  // valor total, mas não mostra o que foi gasto... eu quero essa lista") —
-  // agrupado por compra (`purchaseBase`: "bike x3" e "bike x4" contam como a
-  // mesma compra). Parcela comprometida ainda sem confirmação da Pluggy
-  // entra junto, marcada `projected: true`. Maior primeiro.
-  function breakdownOnDay(day: Date): { label: string; value: number; projected: boolean }[] {
-    const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-    const real = windowTransactions.filter((t) => t.date >= day && t.date < dayEnd);
-    const projected = projectedInstallmentsDaily.filter((i) => i.dueDate >= day && i.dueDate < dayEnd);
-    const map = new Map<string, { value: number; projected: boolean }>();
-    for (const t of real) {
-      const key = purchaseBase(t.description);
-      const cur = map.get(key);
-      map.set(key, { value: (cur?.value ?? 0) + t.amount, projected: false });
-    }
-    for (const i of projected) {
-      const key = purchaseBase(i.description);
-      const cur = map.get(key);
-      map.set(key, { value: (cur?.value ?? 0) + i.amount, projected: cur ? cur.projected : true });
-    }
-    return [...map.entries()]
-      .map(([label, v]) => ({ label, value: v.value, projected: v.projected }))
-      .sort((a, b) => b.value - a.value);
-  }
-
-  const dailyDays: {
-    date: string;
-    amount: number;
-    projected: number;
-    goal: number | null;
-    breakdown: { label: string; value: number; projected: boolean }[];
-  }[] = [];
+  const dailyDays: { date: string; amount: number; projected: number; goal: number | null; breakdown: { label: string; value: number; projected: boolean }[] }[] = [];
   for (let day = new Date(monthStart); day < windowEnd; day.setDate(day.getDate() + 1)) {
+    const items = onDay(ledgerMonth, day);
+    const groups = new Map<string, { value: number; projected: boolean }>();
+    for (const i of items) {
+      const cur = groups.get(i.label);
+      groups.set(i.label, { value: (cur?.value ?? 0) + i.amount, projected: cur ? cur.projected && i.kind === "installment" : i.kind === "installment" });
+    }
     dailyDays.push({
       date: day.toISOString().slice(0, 10),
-      amount: sumOnDay(day),
-      projected: projectedOnDay(day),
+      amount: ledgerTotal(items),
+      projected: items.filter((i) => i.kind === "installment").reduce((s, i) => s + i.amount, 0),
       goal: goalAt(dailyGoals, day),
-      breakdown: breakdownOnDay(day),
+      breakdown: [...groups.entries()].map(([label, v]) => ({ label, value: v.value, projected: v.projected })).sort((a, b) => b.value - a.value),
     });
   }
-  // Comparação "vs. mês anterior": mesmo NÚMERO de dias (dia 1 ao dia 1, dia
-  // 2 ao dia 2...), não o mês anterior inteiro — senão um mês em andamento
-  // compararia contra um mês fechado, sempre parecendo "abaixo".
+  // "vs. mês anterior": mesmo NÚMERO de dias (dia 1 ao dia 1...), não o mês inteiro.
   const previousMonthAligned: number[] = [];
   for (let i = 0; i < dailyDays.length; i++) {
     const day = new Date(prevMonthStart);
     day.setDate(day.getDate() + i);
     if (day >= prevMonthEnd) break;
-    previousMonthAligned.push(sumOnDay(day));
+    previousMonthAligned.push(ledgerTotal(onDay(ledgerPrev, day)));
   }
-
   const monthlyAvgDailySpend = dailyDays.length > 0 ? dailyDays.reduce((sum, d) => sum + d.amount, 0) / dailyDays.length : 0;
   const previousMonthlyAvgDailySpend =
     previousMonthAligned.length > 0 ? previousMonthAligned.reduce((sum, v) => sum + v, 0) / previousMonthAligned.length : 0;
 
-  // A Pluggy sincroniza com atraso — "hoje" quase sempre aparece com R$0 só
-  // porque a transação ainda não chegou. Pedido do Luiz (04/09): mostra o
-  // ÚLTIMO DIA com gasto lançado dentro da janela (no mês passado, o último
-  // dia com gasto daquele mês). `null` só se não houve gasto nenhum.
+  // Último dia da janela com gasto (a Pluggy atrasa — "hoje" quase sempre R$0).
   let lastDayWithSpend: { date: string; amount: number } | null = null;
   for (let i = dailyDays.length - 1; i >= 0; i--) {
     if (dailyDays[i].amount > 0) {
@@ -349,12 +188,6 @@ budgetRouter.get("/budget-summary", async (req, res) => {
       break;
     }
   }
-
-  // "Quantos dias fiquei abaixo da meta" (pedido do Luiz, 07/09) — dentro da
-  // janela do mês navegado. Dia sem meta cadastrada (goal null) fica de fora
-  // — não dá pra avaliar cumprimento sem meta. (O "saldo da meta" saiu em
-  // 02/10: somava toda despesa do dia, inclusive aluguel e parcelas, e o
-  // número não dizia nada — "por que passei 17k?".)
   let daysUnderGoal = 0;
   let daysWithGoal = 0;
   for (const d of dailyDays) {
@@ -362,15 +195,12 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     daysWithGoal++;
     if (d.amount <= d.goal) daysUnderGoal++;
   }
-  // Meta vigente no fim da janela: hoje no mês atual, último dia no mês
-  // passado (mostra a meta que valia naquele mês, não a de hoje).
+  // Meta vigente no fim da janela (hoje, ou o último dia de um mês passado).
   const dailyGoal = goalAt(dailyGoals, new Date(windowEnd.getTime() - 1));
 
   res.json({
     month,
     year,
-    // Tudo do gasto diário é do MÊS DA QUERY (02/10) — nome sem "ThisMonth"
-    // de propósito, mesma convenção de `totalSpent`/`totalPlanned`.
     isCurrentMonth,
     dailyGoal,
     lastDayWithSpend,
@@ -381,6 +211,9 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     dailyDays,
     totalPlanned,
     totalSpent,
+    // Total do mês anterior inteiro, pelo mesmo livro-razão — somar o
+    // `previousSpent` das linhas perdia categoria que só teve gasto lá.
+    previousTotalSpent: ledgerTotal(ledgerPrev),
     totalProjected,
     totalIncome,
     previousTotalIncome,
@@ -392,107 +225,36 @@ budgetRouter.get("/budget-summary", async (req, res) => {
 });
 
 // GET /api/budget-summary/category-breakdown?month&year&categoryIds=a,b,c
-// "O que está incluso nesse montante" (pedido do Luiz, 10/09) — ao clicar
-// numa categoria (folha) ou num grupo-mãe (várias folhas) do Orçamento,
-// lista as transações reais + parcelas projetadas que somam aquele valor.
-// Recebe os `categoryIds` já resolvidos pelo front (as folhas daquele grupo
-// que TÊM meta no mês) — assim o total da modal bate exatamente com a barra
-// clicada, que também só soma folha com meta.
+// "O que está incluso nesse montante" (10/09) — os itens do livro-razão das
+// categorias clicadas (`uncategorized` = sem categoria). O total da modal é
+// por construção o mesmo da linha clicada.
 budgetRouter.get("/budget-summary/category-breakdown", async (req, res) => {
   const now = new Date();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
-  const ids = String(req.query.categoryIds ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (ids.length === 0) return res.json({ transactions: [], projected: [] });
-
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 1);
-
-  const [transactions, splits, installments, postedKeys, allInstallmentsForPositions] = await Promise.all([
-    prisma.transaction.findMany({
-      // `splits: { none: {} }` — transação dividida (ver TransactionSplit)
-      // entra pela lista de `splits` abaixo, fatiada por categoria, nunca
-      // pelo valor inteiro aqui (senão contaria 2x na modal).
-      where: { categoryId: { in: ids }, type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd }, splits: { none: {} } },
-      orderBy: { date: "desc" },
-      include: { category: { include: { parent: { include: { parent: true } } } } },
-    }),
-    // Fatia de transação dividida que caiu numa das categorias pedidas —
-    // mostra como uma linha própria (descrição da Transaction original +
-    // só a fatia daquele valor), não a Transaction inteira.
-    prisma.transactionSplit.findMany({
-      where: { categoryId: { in: ids }, transaction: { type: "expense", isTransfer: false, date: { gte: monthStart, lt: monthEnd } } },
-      orderBy: { createdAt: "desc" },
-      include: { transaction: true, category: { include: { parent: { include: { parent: true } } } } },
-    }),
-    prisma.upcomingInstallment.findMany({
-      where: { categoryId: { in: ids }, dueDate: { gte: monthStart, lt: monthEnd } },
-      orderBy: { dueDate: "asc" },
-      include: { category: { include: { parent: { include: { parent: true } } } } },
-    }),
-    // Mesmo dedup de projectedSpendByCategory/getPostedPurchaseKeys: parcela
-    // cuja compra já virou Transaction real no mês (qualquer categoria) não
-    // aparece de novo aqui.
-    getPostedPurchaseKeys(monthStart, monthEnd),
-    // Sem filtro de mês/categoria — buildInstallmentPositions precisa de
-    // TODA parcela da mesma compra (passada e futura) pra achar "N de Total"
-    // certo (mesma necessidade de /upcoming-installments/groups).
-    prisma.upcomingInstallment.findMany({
-      select: { id: true, dueDate: true, description: true, amount: true, externalId: true, totalInstallments: true },
-    }),
-  ]);
-  const positions = buildInstallmentPositions(allInstallmentsForPositions);
-
-  // Fatia de transação dividida entra na mesma lista de `transactions` (é
-  // uma despesa real igual às outras, só que representa só uma PARTE do
-  // valor da Transaction original) — nunca teve/tem parcela própria, por
-  // isso installmentNumber/totalInstallments sempre null aqui.
-  const splitRows = splits.map((s) => ({
-    id: s.id,
-    date: s.transaction.date,
-    description: s.transaction.note || s.transaction.description,
-    rawDescription: s.transaction.note ? s.transaction.description : null,
-    amount: s.amount,
-    category: categoryPath(s.category),
-    installmentNumber: null as number | null,
-    totalInstallments: null as number | null,
-  }));
-
+  const ids = new Set(
+    String(req.query.categoryIds ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+  if (ids.size === 0) return res.json({ transactions: [], projected: [] });
+  const items = (await expenseLedger(new Date(year, month - 1, 1), new Date(year, month, 1))).filter((i) =>
+    i.categoryId === null ? ids.has(UNCATEGORIZED_ID) : ids.has(i.categoryId)
+  );
+  const row = (i: LedgerItem) => ({
+    id: i.id,
+    date: i.date,
+    description: i.description,
+    rawDescription: i.rawDescription,
+    amount: i.amount,
+    category: i.category,
+    installmentNumber: i.installmentNumber,
+    totalInstallments: i.totalInstallments,
+  });
   res.json({
-    transactions: [
-      ...transactions.map((t) => ({
-        id: t.id,
-        date: t.date,
-        description: t.note || t.description,
-        rawDescription: t.note ? t.description : null,
-        amount: t.amount,
-        category: categoryPath(t.category),
-        installmentNumber: t.installmentNumber,
-        totalInstallments: t.totalInstallments,
-      })),
-      ...splitRows,
-    ].sort((a, b) => b.date.getTime() - a.date.getTime()),
-    projected: installments
-      .filter((i) => !postedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`))
-      .map((i) => {
-        const position = positions.get(i.id);
-        return {
-          id: i.id,
-          date: i.dueDate,
-          description: i.note || i.description,
-          rawDescription: i.note ? i.description : null,
-          amount: i.amount,
-          category: categoryPath(i.category),
-          // Mesma regra global de "sempre mostrar N de Total junto de uma
-          // parcela" (10/09) — antes só a lista de Transaction real tinha
-          // isso aqui, a de projetada ficava muda sobre qual parcela era.
-          installmentNumber: position?.installmentNumber ?? null,
-          totalInstallments: position?.totalInstallments ?? null,
-        };
-      }),
+    transactions: items.filter((i) => i.kind === "posted").map(row).sort((a, b) => b.date.getTime() - a.date.getTime()),
+    projected: items.filter((i) => i.kind === "installment").map(row),
   });
 });
 
@@ -531,87 +293,6 @@ budgetRouter.delete("/daily-goal/:id", async (req, res) => {
 // total (mesmo que parcelas antigas já vencidas continuem no banco — elas
 // nunca são apagadas, só as futuras somem da lista por causa do filtro de
 // mês). Null pra parcela importada da planilha (sem esse formato de id).
-function parsePluggyInstallmentId(externalId: string | null): { purchaseId: string; n: number } | null {
-  if (!externalId) return null;
-  const match = /^pluggy:(.+):(\d+)$/.exec(externalId);
-  if (!match) return null;
-  return { purchaseId: match[1], n: Number(match[2]) };
-}
-
-/** Maior N visto por compra (`externalId` "pluggy:<txId>:<N>") entre TODA
- * linha passada — é o total derivado automaticamente. `rows` precisa vir
- * sem filtro de mês/data (parcela antiga já vencida conta pro cálculo). */
-function buildDerivedTotalsMap(rows: { externalId: string | null }[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const row of rows) {
-    const parsed = parsePluggyInstallmentId(row.externalId);
-    if (!parsed) continue;
-    const current = map.get(parsed.purchaseId) ?? 0;
-    if (parsed.n > current) map.set(parsed.purchaseId, parsed.n);
-  }
-  return map;
-}
-
-type InstallmentPositionRow = {
-  id: string;
-  dueDate: Date;
-  description: string;
-  amount: number;
-  externalId: string | null;
-  totalInstallments: number | null;
-};
-
-/** Calcula "parcela N de Total" pra CADA linha, de um jeito que funciona
- * pra qualquer origem (Pluggy OU Caixa/planilha manual) — não só quando tem
- * `externalId`. A ideia: dentro da mesma compra (mesma `purchaseBase` +
- * valor — mesma chave de agrupamento do endpoint `/groups`), as parcelas
- * restantes são sempre meses CONSECUTIVOS até a última (nunca pula mês no
- * meio), então dá pra contar de trás pra frente a partir do TOTAL: a linha
- * de vencimento mais distante = parcela `total`, a anterior = `total - 1`,
- * e assim por diante. Só precisa saber o TOTAL de algum jeito — manual
- * (`totalInstallments`, corrigido na modal "Revisar parcelas", vale pra
- * QUALQUER cartão) ou automático (maior N do `externalId` "pluggy:<txId>:
- * <N>", só existe pra parcela vinda do sync real da Pluggy). Sem total
- * conhecido (Caixa/planilha sem correção manual ainda), fica tudo null —
- * não dá pra saber a posição sem pelo menos o total. */
-function buildInstallmentPositions(rows: InstallmentPositionRow[]): Map<string, { installmentNumber: number | null; totalInstallments: number | null }> {
-  const derivedTotals = buildDerivedTotalsMap(rows);
-
-  const groups = new Map<string, InstallmentPositionRow[]>();
-  for (const row of rows) {
-    const key = `${purchaseBase(row.description)}|${row.amount.toFixed(2)}`;
-    const list = groups.get(key);
-    if (list) list.push(row);
-    else groups.set(key, [row]);
-  }
-
-  const result = new Map<string, { installmentNumber: number | null; totalInstallments: number | null }>();
-  for (const groupRows of groups.values()) {
-    const sorted = [...groupRows].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-
-    // Total: override manual (em qualquer linha do grupo — aplicado em bloco
-    // pela modal) sempre vence; senão cai pro automático via externalId.
-    let total = sorted.find((r) => r.totalInstallments != null)?.totalInstallments ?? null;
-    if (total == null) {
-      for (const r of sorted) {
-        const parsed = parsePluggyInstallmentId(r.externalId);
-        const derived = parsed ? derivedTotals.get(parsed.purchaseId) : undefined;
-        if (derived != null) {
-          total = derived;
-          break;
-        }
-      }
-    }
-
-    const count = sorted.length;
-    sorted.forEach((row, index) => {
-      const installmentNumber = total != null ? total - count + 1 + index : null;
-      result.set(row.id, { installmentNumber, totalInstallments: total });
-    });
-  }
-  return result;
-}
-
 // GET /api/upcoming-installments?month&year — parcela de compra parcelada
 // que ainda vai vencer (não é gasto que já aconteceu, é compromisso futuro
 // conhecido). A lista/total/byCard são do MÊS informado (o mesmo que o Luiz
@@ -628,161 +309,70 @@ budgetRouter.get("/upcoming-installments", async (req, res) => {
   const year = req.query.year ? Number(req.query.year) : now.getFullYear();
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
-
-  const [installmentsRaw, allFuture, allForPositions, postedKeys] = await Promise.all([
-    prisma.upcomingInstallment.findMany({
-      where: { dueDate: { gte: monthStart, lt: monthEnd } },
-      orderBy: { dueDate: "asc" },
-      // Cadeia de pai completa — Luiz pediu (05/09) pra sempre ver a
-      // categoria-mãe junto da folha ("bike" só como "Compra" não diz nada;
-      // "Transporte > Compra" sim) — mesmo padrão já usado em
-      // /upcoming-installments/groups e nos outros lugares que montam path.
-      include: { category: { include: { parent: { include: { parent: true } } } } },
-    }),
-    prisma.upcomingInstallment.findMany({
-      where: { dueDate: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
-      select: { dueDate: true, amount: true },
-    }),
-    // Sem filtro de mês — precisa de TODA parcela já criada da mesma compra
-    // (passada ou futura) pra saber o total e a posição de cada uma certos.
-    prisma.upcomingInstallment.findMany({
-      select: { id: true, dueDate: true, description: true, amount: true, externalId: true, totalInstallments: true },
-    }),
-    // Revisão de consistência (11/09): mesmo dedup do /budget-summary — sem
-    // isso, uma parcela cuja compra já virou Transaction real nesse mesmo
-    // mês continuava contando aqui, divergindo do total já deduplicado em
-    // "Onde meu dinheiro foi"/categorias.
-    getPostedPurchaseKeys(monthStart, monthEnd),
-  ]);
-  const installments = installmentsRaw.filter(
-    (i) => !postedKeys.has(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`)
-  );
-
-  // Parcela é parcela (02/10, Luiz: "se eu compro algo parcelado em 10x não
-  // é previsão... faça chuva ou faça sol ela sempre vai cair"). As parcelas
-  // do mês que a Pluggy JÁ lançou (Transaction com totalInstallments > 1)
-  // entram na lista junto das ainda não lançadas, do mesmo jeito — antes uma
-  // parcela sumia do box no dia em que a Pluggy confirmava (Usina Solar).
-  async function postedInstallmentsIn(start: Date, end: Date) {
-    return prisma.transaction.findMany({
-      where: { type: "expense", isTransfer: false, totalInstallments: { gt: 1 }, date: { gte: start, lt: end } },
-      include: { category: { include: { parent: { include: { parent: true } } } }, broker: { select: { name: true } } },
-    });
-  }
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const [postedThisMonth, postedCurrentMonth] = await Promise.all([
-    postedInstallmentsIn(monthStart, monthEnd),
-    postedInstallmentsIn(currentMonthStart, currentMonthEnd),
-  ]);
-  const postedRows = postedThisMonth.map((t) => ({
-    id: t.id,
-    dueDate: t.date,
-    description: t.description,
-    note: t.note,
-    amount: t.amount,
-    category: categoryPath(t.category),
-    cardLabel: t.broker?.name ?? null,
-    installmentNumber: t.installmentNumber,
-    totalInstallments: t.totalInstallments,
-  }));
 
-  const total = installments.reduce((sum, i) => sum + i.amount, 0) + postedRows.reduce((sum, r) => sum + r.amount, 0);
+  // Parcela é parcela (02/10): toda parcela do mês, lançada pela Pluggy ou
+  // ainda não — tirada do MESMO livro-razão do Orçamento (27/10), então o
+  // total daqui e a fatia de parcelas no Orçamento nunca divergem.
+  const isInstallment = (i: LedgerItem) => i.kind === "installment" || (i.totalInstallments ?? 0) > 1;
+  const [ledgerMonth, ledgerAhead, allUpcoming] = await Promise.all([
+    expenseLedger(monthStart, monthEnd),
+    expenseLedger(currentMonthStart, new Date(now.getFullYear(), now.getMonth() + 36, 1)),
+    prisma.upcomingInstallment.findMany({ select: { dueDate: true, description: true, amount: true } }),
+  ]);
+  const items = ledgerMonth.filter(isInstallment);
+  const total = items.reduce((sum, i) => sum + i.amount, 0);
 
   const byCard = new Map<string, number>();
-  for (const i of [...installments, ...postedRows]) {
+  for (const i of items) {
     const cardKey = i.cardLabel ?? "Outros (sem cartão identificado)";
     byCard.set(cardKey, (byCard.get(cardKey) ?? 0) + i.amount);
   }
 
   const byMonthMap = new Map<string, { month: number; year: number; amount: number }>();
-  // Mês atual inclui as parcelas que já foram lançadas nele (mesma regra da
-  // lista acima); meses seguintes só têm as ainda não lançadas, por natureza.
-  if (postedCurrentMonth.length > 0) {
-    byMonthMap.set(`${now.getFullYear()}-${now.getMonth() + 1}`, {
-      month: now.getMonth() + 1,
-      year: now.getFullYear(),
-      amount: postedCurrentMonth.reduce((sum, t) => sum + t.amount, 0),
-    });
-  }
-  for (const i of allFuture) {
-    const d = new Date(i.dueDate);
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-    const existing = byMonthMap.get(key);
-    if (existing) existing.amount += i.amount;
-    else byMonthMap.set(key, { month: d.getMonth() + 1, year: d.getFullYear(), amount: i.amount });
+  for (const i of ledgerAhead.filter(isInstallment)) {
+    const key = `${i.date.getFullYear()}-${i.date.getMonth() + 1}`;
+    const cur = byMonthMap.get(key) ?? { month: i.date.getMonth() + 1, year: i.date.getFullYear(), amount: 0 };
+    cur.amount += i.amount;
+    byMonthMap.set(key, cur);
   }
   const byMonth = [...byMonthMap.values()].sort((a, b) => a.year - b.year || a.month - b.month);
 
-  const positions = buildInstallmentPositions(allForPositions);
-
-  // "Parcelas que terminam neste mês" (24/09, pedido do Luiz: "quais são as
-  // parcelas que acabam no mês... quero saber quais são e o valor total") —
-  // a última parcela de uma compra é a de vencimento MAIS DISTANTE dentro da
-  // mesma compra (mesma chave `purchaseBase`+valor de `buildInstallmentPositions`),
-  // então não depende de saber o total de parcelas. Usa a lista SEM o dedup
-  // de `postedKeys`: se a última parcela já virou transação real no mês, a
-  // compra continua terminando nesse mês do mesmo jeito.
+  // "Terminam neste mês" (24/09): a última parcela da compra. Com "N de
+  // Total", é N === Total; parcela manual sem total conhecido termina quando
+  // não existe parcela da mesma compra (descrição + valor) mais pra frente.
   const lastDueByPurchase = new Map<string, number>();
-  for (const r of allForPositions) {
+  for (const r of allUpcoming) {
     const key = `${purchaseBase(r.description)}|${r.amount.toFixed(2)}`;
-    const t = r.dueDate.getTime();
-    if (t > (lastDueByPurchase.get(key) ?? 0)) lastDueByPurchase.set(key, t);
+    lastDueByPurchase.set(key, Math.max(lastDueByPurchase.get(key) ?? 0, r.dueDate.getTime()));
   }
-  const ending = installmentsRaw
-    .filter((i) => lastDueByPurchase.get(`${purchaseBase(i.description)}|${i.amount.toFixed(2)}`) === i.dueDate.getTime())
-    .sort((a, b) => b.amount - a.amount);
-  // Parcela lançada que é a ÚLTIMA da compra também termina no mês.
-  const endingPosted = postedRows.filter((r) => r.installmentNumber != null && r.installmentNumber === r.totalInstallments);
-  const endingTotal = ending.reduce((sum, i) => sum + i.amount, 0) + endingPosted.reduce((sum, r) => sum + r.amount, 0);
+  const isLast = (i: LedgerItem) =>
+    i.totalInstallments != null && i.installmentNumber != null
+      ? i.installmentNumber === i.totalInstallments
+      : i.kind === "installment" && lastDueByPurchase.get(`${i.label}|${i.amount.toFixed(2)}`) === i.date.getTime();
+  const ending = items.filter(isLast).sort((a, b) => b.amount - a.amount);
 
-  function toRow(i: (typeof installmentsRaw)[number]) {
-    const position = positions.get(i.id);
-    return {
-      id: i.id,
-      dueDate: i.dueDate,
-      description: i.description,
-      note: i.note,
-      amount: i.amount,
-      category: categoryPath(i.category),
-      cardLabel: i.cardLabel,
-      installmentNumber: position?.installmentNumber ?? null,
-      totalInstallments: position?.totalInstallments ?? null,
-    };
-  }
+  const toRow = (i: LedgerItem) => ({
+    id: i.id,
+    dueDate: i.date,
+    description: i.rawDescription ?? i.description,
+    note: i.rawDescription ? i.description : null,
+    amount: i.amount,
+    category: i.category,
+    cardLabel: i.cardLabel,
+    installmentNumber: i.installmentNumber,
+    totalInstallments: i.totalInstallments,
+  });
 
   res.json({
     total,
-    ending: [...ending.map(toRow), ...endingPosted].sort((a, b) => b.amount - a.amount),
-    endingTotal,
+    ending: ending.map(toRow),
+    endingTotal: ending.reduce((sum, i) => sum + i.amount, 0),
     byCard: [...byCard.entries()].map(([card, amount]) => ({ card, amount })).sort((a, b) => b.amount - a.amount),
     byMonth,
-    installments: [...installments.map(toRow), ...postedRows].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()),
+    installments: items.map(toRow),
   });
 });
-
-// A planilha codifica parcela na própria descrição ("bike x3", "bike x4" —
-// mesma compra, um sufixo " xN" por linha). A fatura da Caixa não faz isso
-// (cada linha da mesma compra futura já vem com a MESMA descrição). Tirar o
-// sufixo deixa as duas fontes agrupáveis pela mesma chave.
-function purchaseBase(description: string): string {
-  return description.replace(/\s+x\d+$/i, "").trim();
-}
-
-// Chave "mesma compra" (purchaseBase+valor) de toda `Transaction` de despesa
-// já lançada no período — fonte única do dedup "parcela projetada cuja
-// compra já virou gasto real não conta duas vezes" (revisão de consistência,
-// 11/09: antes só `/budget-summary` fazia esse dedup; `/upcoming-installments`
-// somava a parcela projetada MESMO quando já tinha Transaction real pro
-// mesmo período, o que podia fazer o total de "Comprometido em parcelas
-// futuras" divergir do total já deduplicado em "Onde meu dinheiro foi").
-async function getPostedPurchaseKeys(start: Date, end: Date): Promise<Set<string>> {
-  const transactions = await prisma.transaction.findMany({
-    where: { type: "expense", isTransfer: false, date: { gte: start, lt: end } },
-    select: { amount: true, description: true },
-  });
-  return new Set(transactions.map((t) => `${purchaseBase(t.description)}|${t.amount.toFixed(2)}`));
-}
 
 // GET /api/upcoming-installments/groups — TODAS as parcelas futuras (sem
 // filtro de mês — é ferramenta de conferência, não quer esconder nada),
@@ -978,77 +568,39 @@ budgetRouter.get("/budget-target/review", async (req, res) => {
   const curStart = new Date(year, month - 1, 1);
   const curEnd = new Date(year, month, 1);
 
-  // Parcela de compra parcelada JÁ LANÇADA como Transaction no período (a
-  // parcela que a Pluggy confirmou — `totalInstallments` > 1), por categoria.
-  // Junto com `projectedSpendByCategory` (parcela prevista ainda não
-  // confirmada) dá "quanto da categoria no período é parcela".
-  async function postedInstallmentsByCategory(start: Date, end: Date): Promise<Map<string, number>> {
-    const rows = await prisma.transaction.findMany({
-      where: { type: "expense", isTransfer: false, date: { gte: start, lt: end }, totalInstallments: { gt: 1 }, splits: { none: {} } },
-      select: { categoryId: true, amount: true },
-    });
-    const map = new Map<string, number>();
-    for (const r of rows) {
-      if (!r.categoryId) continue;
-      map.set(r.categoryId, (map.get(r.categoryId) ?? 0) + r.amount);
-    }
-    return map;
-  }
-
-  const [categories, currentTargets, projectedPrev, splitPrev, postedInstPrev, postedInstCur, projectedCur] = await Promise.all([
-    // Mesmo corte do /budget-summary — investimento não é meta de gasto do
-    // Orçamento, não faz sentido revisar aportar aqui. `children: { none: {} }`
-    // exclui categoria-mãe (Moradia, Transporte...) — mãe é só rollup pra
-    // gráfico geral, meta real sempre é lançada na filha (folha).
+  // Mesmo livro-razão do Orçamento (27/10): o "mês passado" da revisão é
+  // exatamente o gasto que o Orçamento mostrou naquele mês, e "parcelas em
+  // aberto" é a fatia de parcelas (lançadas ou não) deste mês.
+  const isInstallment = (i: LedgerItem) => i.kind === "installment" || (i.totalInstallments ?? 0) > 1;
+  const [categories, currentTargets, ledgerPrev, ledgerCur] = await Promise.all([
+    // Investimento não é meta de gasto; categoria-mãe é só agrupamento (meta
+    // sempre na folha).
     prisma.category.findMany({
       where: { type: "expense", kind: { not: "investment" }, children: { none: {} } },
       include: { parent: { include: { parent: true } } },
     }),
     prisma.budgetTarget.findMany({ where: { month, year } }),
-    projectedSpendByCategory(prevStart, prevEnd),
-    splitSpendByCategory(prevStart, prevEnd),
-    postedInstallmentsByCategory(prevStart, prevEnd),
-    postedInstallmentsByCategory(curStart, curEnd),
-    projectedSpendByCategory(curStart, curEnd),
+    expenseLedger(prevStart, prevEnd),
+    expenseLedger(curStart, curEnd),
   ]);
   const targetByCategory = new Map(currentTargets.map((t) => [t.categoryId, t.plannedAmount]));
+  const prevByCat = sumByCategory(ledgerPrev);
+  const instPrevByCat = sumByCategory(ledgerPrev.filter(isInstallment));
+  const instCurByCat = sumByCategory(ledgerCur.filter(isInstallment));
 
-  const result = await Promise.all(
-    categories.map(async (c) => {
-      const agg = await prisma.transaction.aggregate({
-        // Mesma regra do /budget-summary (bug real, 01/10: revisão de outubro
-        // mostrava Contador zerado — os R$250 eram um split do Pix pro CNPJ, e
-        // parcela projetada também ficava de fora): transação dividida sai
-        // daqui e entra fatiada via `splitPrev`; parcela comprometida que
-        // venceu no mês e a Pluggy ainda não confirmou entra via `projectedPrev`.
-        where: { categoryId: c.id, type: "expense", isTransfer: false, date: { gte: prevStart, lt: prevEnd }, splits: { none: {} } },
-        _sum: { amount: true },
-      });
-      // Caminho completo ("Moradia > Aluguel") — várias folhas repetem nome
-      // entre pais diferentes de propósito (Aluguel existe em Moradia E em
-      // Transporte > Carro), só o nome sozinho não dá pra distinguir.
-      const path = categoryPath(c) ?? c.name;
-      const previousSpent = (agg._sum.amount ?? 0) + (projectedPrev.get(c.id) ?? 0) + (splitPrev.get(c.id) ?? 0);
-      // Parcela em aberto (01/10, pedido do Luiz): a meta deste mês vem
-      // preenchida SÓ com as parcelas que vencem neste mês — é o único gasto
-      // garantido. Todo o resto (ex: contador, que ele pode parar de pagar)
-      // fica em branco pra ele decidir; o gasto do mês passado continua ao
-      // lado só como referência. Parcela que terminou no mês passado some
-      // sozinha (não vence mais), compra nova parcelada já aparece.
-      const previousInstallments = (postedInstPrev.get(c.id) ?? 0) + (projectedPrev.get(c.id) ?? 0);
-      const currentInstallments = (postedInstCur.get(c.id) ?? 0) + (projectedCur.get(c.id) ?? 0);
-      return {
-        categoryId: c.id,
-        name: c.name,
-        path,
-        kind: c.kind,
-        previousSpent,
-        previousInstallments,
-        currentInstallments,
-        currentTarget: targetByCategory.get(c.id) ?? null,
-      };
-    })
-  );
+  const result = categories.map((c) => ({
+    categoryId: c.id,
+    name: c.name,
+    // Caminho completo — várias folhas repetem nome entre mães diferentes.
+    path: categoryPath(c) ?? c.name,
+    kind: c.kind,
+    previousSpent: prevByCat.get(c.id)?.spent ?? 0,
+    // Parcela em aberto (01/10): a meta deste mês vem preenchida só com as
+    // parcelas que vencem neste mês — o único gasto garantido.
+    previousInstallments: instPrevByCat.get(c.id)?.spent ?? 0,
+    currentInstallments: instCurByCat.get(c.id)?.spent ?? 0,
+    currentTarget: targetByCategory.get(c.id) ?? null,
+  }));
   // Ordena pelo caminho completo (não só pelo nome da folha) — assim as
   // categorias do mesmo pai ficam juntas, mais fácil de escanear a lista.
   result.sort((a, b) => {

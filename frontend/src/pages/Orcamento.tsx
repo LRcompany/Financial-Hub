@@ -36,7 +36,7 @@ import { TransactionModal } from '../components/TransactionModal'
 import { CategoryBreakdownModal } from '../components/CategoryBreakdownModal'
 import { TransactionEditModal } from '../components/TransactionEditModal'
 import { Select } from '../components/Select'
-import { InstallmentBadge, OverBudgetIcon } from '../components/Badge'
+import { InstallmentBadge, OverBudgetIcon, NoTargetTag, isOverBudget } from '../components/Badge'
 import { SpentPlannedValue, PlannedValue } from '../components/SpentPlannedValue'
 import { MonthNavigator } from '../components/MonthNavigator'
 import { Money } from '../components/Money'
@@ -221,7 +221,7 @@ export function Orcamento() {
   const pieData = [...pieByParent.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear()
-  const showReviewBanner = isCurrentMonth && now.getDate() <= 5 && budget.categories.length === 0
+  const showReviewBanner = isCurrentMonth && now.getDate() <= 5 && budget.categories.every((c) => !c.hasTarget)
 
   return (
     <div className={cards.page}>
@@ -308,7 +308,7 @@ export function Orcamento() {
           </div>
           <div className={cards.chartMeta}>
             <span>
-              {budget.categories.length} categorias com meta
+              {budget.categories.filter((c) => c.hasTarget).length} categorias com meta
             </span>
           </div>
           {pieData.length > 0 ? (
@@ -718,6 +718,18 @@ export function Orcamento() {
               </div>
             )
           })}
+          {/* Gasto sem categoria (27/10) — conta no total do mês, então
+              aparece aqui com o valor; clicar mostra o que é. */}
+          {(() => {
+            const uncategorized = budget.categories.find((c) => c.kind === 'uncategorized')
+            if (!uncategorized || uncategorized.spent <= 0) return null
+            return (
+              <div className={cards.card}>
+                <h3 className={styles.groupTitle}>Sem categoria</h3>
+                <CategoryRow item={uncategorized} onOpen={setBreakdown} />
+              </div>
+            )
+          })()}
         </div>
 
         <div className={`${cards.card} ${cards.fullWidth}`}>
@@ -895,13 +907,11 @@ function ParentAccordion({
   const [open, setOpen] = useState(false)
   const planned = items.reduce((s, c) => s + c.planned, 0)
   const spent = items.reduce((s, c) => s + c.spent, 0)
-  // Sem `planned > 0` no gate (11/09, achado pelo Luiz): categoria com meta
-  // planejada de R$0,00 e gasto real > 0 estourou tanto quanto (ou mais que)
-  // uma com meta positiva — "planned" aqui já vem de um `BudgetTarget`
-  // que EXISTE pra esse mês (0 é um valor real, "não planejei gastar nada
-  // aqui", não "sem meta cadastrada"). `spent > planned` sozinho já cobre
-  // os dois casos (0/0 continua sem alerta, > 0/0 passa a alertar).
-  const isOver = spent > planned
+  // "Estourou" só olha as folhas COM meta (27/10): gasto em folha sem meta
+  // conta no total do grupo, mas não tinha o que estourar — vira "sem meta".
+  const withTarget = items.filter((c) => c.hasTarget)
+  const isOver = withTarget.reduce((s, c) => s + c.spent, 0) > withTarget.reduce((s, c) => s + c.planned, 0)
+  const hasNoTargetSpend = items.some((c) => !c.hasTarget && c.spent > 0)
 
   return (
     <div className={`${styles.accordion} ${open ? styles.accordionOpen : ''}`}>
@@ -910,9 +920,10 @@ function ParentAccordion({
         <span className={styles.accordionName}>
           {parentName}
           {isOver && <OverBudgetIcon />}
+          {hasNoTargetSpend && <NoTargetTag />}
         </span>
         <span className={styles.categoryRowValues}>
-          <SpentPlannedValue spent={spent} planned={planned} />
+          {withTarget.length > 0 ? <SpentPlannedValue spent={spent} planned={planned} /> : <Money>R$ {currency(spent)}</Money>}
         </span>
       </button>
       {open && (
@@ -933,11 +944,10 @@ function CategoryRow({
   item,
   onOpen,
 }: {
-  item: { categoryId: string; name: string; planned: number; spent: number; spentProjected: number; previousSpent: number }
+  item: { categoryId: string; name: string; hasTarget: boolean; planned: number; spent: number; spentProjected: number; previousSpent: number }
   onOpen: (sel: BreakdownSel) => void
 }) {
-  // Ver comentário equivalente em `ParentAccordion` acima — mesmo fix.
-  const isOver = item.spent > item.planned
+  const isOver = isOverBudget(item)
   return (
     <button
       type="button"
@@ -948,9 +958,10 @@ function CategoryRow({
         <span className={styles.categoryRowName}>
           {item.name}
           {isOver && <OverBudgetIcon />}
+          {!item.hasTarget && <NoTargetTag />}
         </span>
         <span className={styles.categoryRowValues}>
-          <SpentPlannedValue spent={item.spent} planned={item.planned} />
+          {item.hasTarget ? <SpentPlannedValue spent={item.spent} planned={item.planned} /> : <Money>R$ {currency(item.spent)}</Money>}
         </span>
       </div>
       <div className={cards.deltaRow}>

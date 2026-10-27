@@ -12,6 +12,19 @@ export function InstallmentBadge({ number, total }: { number?: number | null; to
 }
 
 
+/** Pill cinza "sem meta" (27/10) — gasto numa categoria sem meta no mês. Conta
+ * no total do Orçamento igual a qualquer gasto, mas não é "estourou" (não tinha
+ * o que estourar) — por isso nunca o `OverBudgetIcon` nesse caso. */
+export function NoTargetTag() {
+  return <span className={styles.noTarget}>sem meta</span>
+}
+
+/** Regra ÚNICA de "estourou" (27/10): só categoria COM meta no mês, e gasto
+ * acima dela (meta R$0 com gasto também estoura). Sem meta = `NoTargetTag`. */
+export function isOverBudget(c: { hasTarget: boolean; spent: number; planned: number }): boolean {
+  return c.hasTarget && c.spent > c.planned
+}
+
 /** Ícone "estourou" — círculo vermelho-claro com o `AlertTriangle` dentro,
  * ÚNICO jeito de marcar "isso passou do planejado" em todo o app (pedido do
  * Luiz, 11/09: "joga o icone num círculo vermelho claro, o ícone segue o
