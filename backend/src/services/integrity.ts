@@ -157,18 +157,23 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
     snaps.filter((s) => !s.broker.archivedAt && s.marketValue <= 0 && s.investedAmount > 0).map((s) => `${s.broker.name} ${s.security.name} ${s.month}/${s.year}`)
   );
 
-  // 11. Corretora manual sem atualização no mês (o app repete o último valor).
+  // 11. Corretora manual (sem Pluggy) sem o valor do mês que FECHOU. O Luiz
+  //     atualiza no dia 1 com o valor de fechamento do mês anterior (27/10:
+  //     "a Wise e a INCO eu só devo atualizar no dia 1") — então em outubro o
+  //     esperado é ter o valor de setembro. Só avisa se até o dia 5 o valor
+  //     do mês anterior ainda não entrou (enquanto isso, o patrimônio repete
+  //     o último valor lançado).
   const lastYm = new Map<string, number>();
   for (const s of snaps) lastYm.set(s.brokerId, Math.max(lastYm.get(s.brokerId) ?? 0, s.year * 12 + s.month));
-  const currentYm = now.getFullYear() * 12 + now.getMonth() + 1;
+  const expectedYm = now.getFullYear() * 12 + now.getMonth(); // mês anterior (month 1-based = getMonth())
   push(
     "corretora-manual-desatualizada",
     "aviso",
-    "Corretora manual sem valor deste mês",
-    "Sem Pluggy, o valor é digitado — enquanto não atualiza, o patrimônio repete o do mês anterior.",
-    now.getDate() >= 10
+    "Corretora manual sem o valor do mês passado",
+    "Sem Pluggy, o valor é digitado no dia 1 — enquanto não entra, o patrimônio repete o último valor.",
+    now.getDate() > 5
       ? brokers
-          .filter((b) => b.dataSource === "manual_statement" && (lastYm.get(b.id) ?? 0) > 0 && (lastYm.get(b.id) ?? 0) < currentYm)
+          .filter((b) => b.dataSource === "manual_statement" && (lastYm.get(b.id) ?? 0) > 0 && (lastYm.get(b.id) ?? 0) < expectedYm)
           .map((b) => {
             const ym = lastYm.get(b.id)!;
             const m = ym % 12 || 12;
