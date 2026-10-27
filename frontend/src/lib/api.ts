@@ -98,12 +98,25 @@ export type CategoryKind = 'essential' | 'non_essential' | 'investment'
 // Saúde dos dados (27/10) — regras de integridade conferidas no servidor
 // (ver backend/src/services/integrity.ts). "erro" = número errado na tela;
 // "aviso" = dado incompleto/velho que pode distorcer um número.
+export interface DataHealthRef {
+  kind: 'transaction' | 'installment' | 'broker' | 'snapshot' | 'receipt'
+  id: string
+}
+export interface DataHealthItem {
+  key: string // usado pra "é assim mesmo" (ignorar pra sempre)
+  label: string
+  ref?: DataHealthRef
+}
+// Como resolver cada aviso (27/10) — vira um botão no painel.
+export type DataHealthAction = 'auto-fix' | 'categorize' | 'update-broker' | 'reconnect' | 'review'
 export interface DataHealthIssue {
   id: string
   severity: 'erro' | 'aviso'
   title: string
   detail: string
-  items: string[]
+  action: DataHealthAction
+  items: DataHealthItem[] // no máximo 20
+  total: number
 }
 export interface DataHealth {
   checkedAt: string
@@ -895,6 +908,10 @@ export const api = {
     ),
   fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
   dataHealth: () => request<DataHealth>('/data-health'),
+  fixDataHealth: (issueId: string) => postJson<{ fixed: number; health: DataHealth }>(`/data-health/fix/${issueId}`),
+  ignoreDataHealthItem: (key: string) => postJson<{ health: DataHealth }>('/data-health/ignore', { key }),
+  categorizeDataHealthItems: (refs: DataHealthRef[], categoryId: string) =>
+    postJson<{ updated: number; health: DataHealth }>('/data-health/categorize', { refs, categoryId }),
   // Lançamento manual de provento (11/09) — botão "+ Rendimento" em posição
   // tipo Fundo (a Pluggy não manda dividendo pra esse tipo, ver pluggySync.ts
   // no backend). `date` no formato "AAAA-MM-DD" (só o mês/ano importam — o

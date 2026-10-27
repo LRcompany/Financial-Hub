@@ -200,7 +200,7 @@ export function Dashboard() {
               : 'Tem número errado no app — veja o que quebrou.'}
           </span>
           <Link to="/configuracoes#saude-dos-dados" className={styles.bannerBtn}>
-            Ver
+            Resolver
           </Link>
         </div>
       )}

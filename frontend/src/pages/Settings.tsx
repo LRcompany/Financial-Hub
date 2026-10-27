@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { DataHealthPanel } from '../components/DataHealthPanel'
 import { PluggyConnect } from 'pluggy-connect-sdk'
 import { Plus, RefreshCw, Landmark, Target, PencilLine, Archive, ArchiveRestore } from 'lucide-react'
@@ -34,6 +35,15 @@ export function Settings() {
   const [archiveErrorId, setArchiveErrorId] = useState<{ id: string; message: string } | null>(null)
   const [positionsTarget, setPositionsTarget] = useState<{ id: string; name: string } | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+
+  // Link com âncora (/configuracoes#saude-dos-dados, #conexoes) rola até a
+  // seção — a navegação do React Router não faz isso sozinha.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash) return
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+    return () => clearTimeout(t)
+  }, [hash])
 
   const [dailyGoals, setDailyGoals] = useState<DailyGoalEntry[]>([])
   const [dailyGoalInput, setDailyGoalInput] = useState('')
@@ -227,7 +237,7 @@ export function Settings() {
       </section>
 
       {/* ---------- Conexões ---------- */}
-      <section>
+      <section id="conexoes">
         <h2 className={cards.sectionTitle}>Conexões</h2>
         <div className={styles.headerRow}>
           {/* Único botão de "atualizar tudo" do app (14/09) — sincroniza

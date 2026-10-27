@@ -389,6 +389,31 @@ projectsRouter.post("/project-receipts", async (req, res) => {
   res.status(201).json(receipt);
 });
 
+/** Deixa o recebimento com exatamente UMA entrada no Orçamento, do mesmo valor
+ * e data — o conserto do aviso "Recebimento de projeto sem entrada" (27/10). */
+export async function ensureReceiptTransaction(receiptId: string) {
+  const receipt = await prisma.projectReceipt.findUnique({ where: { id: receiptId }, include: { project: { include: { client: true } }, transactions: true } });
+  if (!receipt) return;
+  const [keep, ...extra] = receipt.transactions;
+  if (extra.length) await prisma.transaction.deleteMany({ where: { id: { in: extra.map((t) => t.id) } } });
+  if (keep) {
+    await prisma.transaction.update({ where: { id: keep.id }, data: { amount: receipt.amount, date: receipt.paymentDate, type: "income" } });
+    return;
+  }
+  const category = await getOrCreateClientIncomeCategory(receipt.project.client.name);
+  await prisma.transaction.create({
+    data: {
+      date: receipt.paymentDate,
+      type: "income",
+      description: `${receipt.project.client.name} — ${receipt.project.name} (parcela ${receipt.installmentNumber})`,
+      amount: receipt.amount,
+      source: "manual",
+      categoryId: category.id,
+      projectReceiptId: receipt.id,
+    },
+  });
+}
+
 projectsRouter.delete("/project-receipts/:id", async (req, res) => {
   await prisma.transaction.deleteMany({ where: { projectReceiptId: req.params.id } });
   await prisma.projectReceipt.delete({ where: { id: req.params.id } });

@@ -37,7 +37,7 @@ async function runSync() {
   // fica registrada no log com o que quebrou (e aparece no app na hora).
   try {
     const health = await runDataHealth();
-    const summary = health.issues.map((i) => `${i.severity}: ${i.title} (${i.items.length})`).join("; ");
+    const summary = health.issues.map((i) => `${i.severity}: ${i.title} (${i.total})`).join("; ");
     console.log(`[saúde dos dados] ${health.ok ? "ok" : "COM ERRO"}${summary ? ` — ${summary}` : ""}`);
   } catch (err) {
     console.error("[saúde dos dados] falhou:", (err as Error).message);

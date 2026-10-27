@@ -590,3 +590,11 @@ model OAuthToken {
   expiresAt DateTime
   createdAt DateTime    @default(now())
 }
+
+// Aviso da "Saúde dos dados" que o Luiz marcou como "é assim mesmo" (27/10)
+// — ex.: dois cafés iguais no mesmo dia. A chave identifica o item exato
+// (regra + o que foi apontado), então o aviso some só pra aquele caso.
+model DataHealthIgnore {
+  key       String   @id
+  createdAt DateTime @default(now())
+}

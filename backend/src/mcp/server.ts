@@ -400,7 +400,11 @@ export function buildMcpServer() {
       inputSchema: {},
       annotations: readOnly,
     },
-    reply(async () => runDataHealth())
+    reply(async () => {
+      // Só o texto de cada item — os ids/refs são pros botões do app.
+      const health = await runDataHealth();
+      return { ...health, issues: health.issues.map((i) => ({ ...i, items: i.items.map((it) => it.label) })) };
+    })
   );
 
   return server;
