@@ -2310,6 +2310,12 @@ Luiz, depois de mais um bug de parcela: *"você realmente precisa dar um check g
    Só olha set/26 em diante. Estado atual: nenhum erro; avisos = Amazon Uptech sem categoria e Wise/INCO sem valor de outubro.
 5. **Testes automáticos** (`backend/test`, `npm test`): 15 testes com os casos que já quebraram (fuso de 3h, milissegundos do BTG, estorno, parcela de mês futuro, compra terminada, dia 31, gasto da noite no último dia do mês).
 
+### Saúde dos dados zerada: Uptech categorizada + regra das corretoras manuais (27/10)
+
+- Amazon Uptech (12x R$ 144,83, "o vinil que comprei") → Moradia > Itens de Casa: 2 lançamentos + 10 parcelas.
+- Luiz: *"a Wise e a INCO eu só devo atualizar no dia 1 de novembro"*. O aviso de corretora manual agora só aparece se, depois do dia 5, faltar o valor do mês que fechou (em outubro, ter o de setembro basta). Antes avisava em qualquer mês sem o valor do próprio mês.
+- Resultado: saúde dos dados sem nenhum erro nem aviso.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
