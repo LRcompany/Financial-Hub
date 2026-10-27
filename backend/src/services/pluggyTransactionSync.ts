@@ -233,9 +233,9 @@ export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean
  * sempre derivadas da parcela MAIS RECENTE já lançada — em TODO sync, não só
  * quando chega transação nova. Reescrito em 02/10 (Bike People Bike Shop e
  * passagem TAP sem parcela futura nenhuma):
- * - "Mesma compra" = descrição + final do cartão + data da compra original.
- *   O valor NÃO entra na chave: varia centavos entre parcelas (Academia
- *   246,99 x 247,00), e a chave antiga com valor nunca juntava as parcelas.
+ * - "Mesma compra" = descrição + final do cartão + total de parcelas + data
+ *   da compra próxima (até 36h). O valor NÃO entra na chave: varia centavos
+ *   entre parcelas (Academia 246,99 x 247,00).
  * - Referência = mês da data da parcela mais recente. Antes dependia de
  *   `billForecastDate`, que só vem na 1ª parcela de cada compra — sem ele a
  *   compra simplesmente não ganhava parcela futura.
@@ -270,22 +270,45 @@ export async function reprojectInstallments(
       .map((t) => `${t.description}|${Math.abs(t.amount).toFixed(2)}|${t.date.slice(0, 10)}`)
   );
 
-  const groups = new Map<string, PluggyTransaction[]>();
+  // "Mesma compra" = descrição + final do cartão + total de parcelas, e data
+  // da compra a até 36h uma da outra. A data da compra NÃO entra exata na
+  // chave: o BTG varia os milissegundos entre parcelas (Usina Solar) e o C6
+  // passou a mandar a data com 3h de fuso a mais a partir de uma fatura
+  // (27/10: Bike 1/10 e 2/10 "14:17", 3/10 "17:17") — com a data exata, a
+  // mesma compra virava duas e cada metade criava suas parcelas (Bike,
+  // Tok&Stok, Academia, TAP... em dobro em out/26). Sem data da compra, cai
+  // pro valor no lugar dela (regra antiga).
+  const CLUSTER_MS = 36 * 60 * 60 * 1000;
+  const buckets = new Map<string, PluggyTransaction[]>();
   for (const tx of transactions) {
     const meta = tx.creditCardMetadata;
     if (!meta?.totalInstallments || !meta?.installmentNumber || tx.type === "CREDIT" || tx.amount < 0) continue;
     // Parcela de fatura futura não é "a mais recente lançada".
     if (isFutureBilled(tx, now)) continue;
-    // `purchaseDate` varia nos milissegundos entre parcelas da MESMA compra
-    // (BTG, Usina Solar) — compara só até o minuto.
-    const key = meta.purchaseDate
-      ? `${tx.description}|${meta.cardNumber ?? ""}|${meta.purchaseDate.slice(0, 16)}`
-      : `${tx.description}|${meta.cardNumber ?? ""}|${tx.amount}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(tx);
+    const key = `${tx.description}|${meta.cardNumber ?? ""}|${meta.totalInstallments}${meta.purchaseDate ? "" : `|${tx.amount}`}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(tx);
+  }
+  const groups: PluggyTransaction[][] = [];
+  for (const list of buckets.values()) {
+    const sorted = [...list].sort((x, y) => (x.creditCardMetadata?.purchaseDate ?? "").localeCompare(y.creditCardMetadata?.purchaseDate ?? ""));
+    let current: PluggyTransaction[] = [];
+    let anchor: number | null = null;
+    for (const tx of sorted) {
+      const pd = tx.creditCardMetadata?.purchaseDate;
+      const t = pd ? new Date(pd).getTime() : null;
+      if (current.length > 0 && t != null && anchor != null && t - anchor > CLUSTER_MS) {
+        groups.push(current);
+        current = [];
+        anchor = null;
+      }
+      current.push(tx);
+      if (anchor == null && t != null) anchor = t;
+    }
+    if (current.length > 0) groups.push(current);
   }
 
-  for (const txs of groups.values()) {
+  for (const txs of groups) {
     const latest = txs.reduce((a, b) => {
       const na = a.creditCardMetadata!.installmentNumber!;
       const nb = b.creditCardMetadata!.installmentNumber!;
