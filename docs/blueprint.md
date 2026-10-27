@@ -2252,6 +2252,64 @@ Luiz confirmou: *"eu sempre mando um Pix para o CNPJ, e nesse Pix vem o DAS, o I
 - **Dados (backup, removido depois):** apagado só o DAS automático de out/26. Imposto out/26: R$ 1.057,54 → R$ 693,77.
 - Em aberto, aguardando o Luiz: o DAS automático de set/26 (R$ 225,02) ficou; o Pix de 21/09 (R$ 580) não tinha DAS dentro. Também aguarda: Pix pro CNPJ de 30/09 (R$ 740,83, Imposto) e os de fim de mês (jun–ago, ~R$ 720–735, sem categoria).
 
+### Auditoria geral + reestruturação dos números (27/10)
+
+Luiz, depois de mais um bug de parcela: *"você realmente precisa dar um check geral no sistema... não quero criar soluções que funcionem apenas para um caso, quero uma solução que funcione para o ambiente todo... não quero depois de 2 meses de uso falar pra você verificar os números novamente."* Decisões dele:
+- **Cartão Caixa:** parcelas continuam manuais até acabarem de ser pagas.
+- **Histórico da planilha:** fica como histórico de patrimônio, nunca entra em conta de mês atual.
+
+**Auditoria (prod):**
+- Lançamentos: ~todos Pluggy; manuais = boleto de contas, recebimentos.
+- Parcelas: C6/BTG Pluggy + 105 manuais do Caixa.
+- Patrimônio: histórico da planilha antes da Pluggy; INCO, Nomad e Wise manuais.
+- Furos achados:
+  - gasto calculado de jeitos diferentes por tela (Orçamento só com meta × gráfico diário com tudo);
+  - parcelas remendadas a partir da "mais recente" (3 bugs em um mês);
+  - fuso: servidor em UTC, gasto das 21h–24h caía no dia/mês seguinte;
+  - parcelas sem categoria;
+  - corretoras manuais desatualizadas.
+
+**Princípios novos do sistema (valem pra todo código daqui pra frente):**
+1. **Um livro-razão de gasto** (`services/ledger.ts`). Toda tela/endpoint que fala de gasto lê daqui:
+   - `budget-summary` (total, categorias, diário, maior compra);
+   - detalhe de categoria;
+   - `upcoming-installments`;
+   - revisão do mês;
+   - relatório;
+   - conector do Claude.
+
+   Total = todo gasto, incluindo categoria sem meta (`hasTarget: false`, tag "sem meta") e sem categoria (linha "Sem categoria"). "Estourou" = só categoria com meta (`isOverBudget`). Aporte (categoria de investimento) nunca é gasto. Verificado em prod: total = soma das categorias = soma do diário, e detalhe = linha em 84/84 e 87/87 categorias.
+2. **Parcelas da Pluggy por reconciliação** (`planInstallments` puro + `reconcileInstallments`). Código fixo `pluggy:p:<compra>:<n>` por compra+parcela; a cada sync o banco fica igual ao plano (cria, atualiza, apaga o que sobra), preservando nota e categoria. Outras regras:
+   - mesma compra = descrição + cartão + total + compra a até 36h;
+   - estorno não tem parcela;
+   - parcela de mês futuro do banco não conta como "a mais recente";
+   - trava contra resposta vazia da Pluggy.
+
+   Duplicata é impossível por construção. Primeira execução: 0 criadas, 0 apagadas, 88 migradas pro código novo.
+3. **Datas = dia do calendário brasileiro ao meio-dia UTC** (`services/dates.ts`).
+   - Pluggy: `brCalendarDay`; dia da compra no Brasil pras parcelas.
+   - Digitado: `parseCalendarInput`.
+   - Migração `scripts/migrate-calendar-dates.ts` (prod e demo): 870 datas no padrão; 9 lançamentos desde set/26 voltaram pro dia certo (eram da noite), nenhum mudou de mês.
+4. **Verificação de integridade diária** (`services/integrity.ts`). Roda depois do sync (log `[saúde dos dados]`), em `GET /api/data-health`, no painel "Saúde dos dados" (Configurações), no aviso do Início e na ferramenta `saude_dos_dados` do conector. Erros:
+   - parcela contada 2x;
+   - parcela manual repetindo Pluggy;
+   - divisão que não fecha;
+   - estorno contando como gasto;
+   - recebimento sem entrada;
+   - investimento zerado com investido;
+   - data fora do padrão.
+
+   Avisos:
+   - manual parecido com Pluggy;
+   - mesmo gasto repetido no dia;
+   - sem categoria;
+   - categoria-mãe;
+   - corretora manual desatualizada;
+   - banco sem sync há 2 dias.
+
+   Só olha set/26 em diante. Estado atual: nenhum erro; avisos = Amazon Uptech sem categoria e Wise/INCO sem valor de outubro.
+5. **Testes automáticos** (`backend/test`, `npm test`): 15 testes com os casos que já quebraram (fuso de 3h, milissegundos do BTG, estorno, parcela de mês futuro, compra terminada, dia 31, gasto da noite no último dia do mês).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

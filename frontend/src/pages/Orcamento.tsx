@@ -958,7 +958,7 @@ function CategoryRow({
         <span className={styles.categoryRowName}>
           {item.name}
           {isOver && <OverBudgetIcon />}
-          {!item.hasTarget && <NoTargetTag />}
+          {!item.hasTarget && item.categoryId !== 'uncategorized' && <NoTargetTag />}
         </span>
         <span className={styles.categoryRowValues}>
           {item.hasTarget ? <SpentPlannedValue spent={item.spent} planned={item.planned} /> : <Money>R$ {currency(item.spent)}</Money>}

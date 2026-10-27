@@ -117,6 +117,8 @@ Convenção de qual hover usar, pela cor de fundo em repouso do elemento (não i
 
 - **Parcela nunca é "previsão" (02/10)**: compra parcelada é certa desde o dia da compra. Nenhuma tela usa "projetado", "previsto", "não confirmado" ou "a vencer" para parcela, nem separa parcela lançada pela Pluggy da ainda não lançada (isso é detalhe interno de dedup). A data da parcela é sempre o dia da compra, no mês dela. Lista de parcelas de um mês mostra todas.
 
+- **"Sem meta" × "estourou" (27/10)**: gasto em categoria sem meta no mês conta no total e aparece com `NoTargetTag` (pill cinza), nunca com `OverBudgetIcon`. A regra de estouro é só `isOverBudget` (`Badge.tsx`): categoria com meta e gasto acima dela. Em grupo, compara só a soma das folhas com meta com a meta. Gasto sem categoria aparece num card próprio "Sem categoria".
+
 ## Popup / tooltip de detalhe (`HoverCard`)
 
 Componente único (`components/HoverCard.tsx` + `.module.css`) — **é o único jeito de fazer hover-detalhe no projeto**, nunca duplicar esse CSS numa página nova. Usos hoje: nome de ativo na tabela de posição (emissor, taxa, vencimento, ISIN, USD quando aplicável) e rótulo de barra/item agrupado em gráfico (quando um bucket junta mais de uma posição). Generalizar pra qualquer lista nova segue sempre `<HoverCard content={...}><span>{nome}</span></HoverCard>` — `content` null renderiza só o filho, sem popup vazio nem sublinhado tracejado.
