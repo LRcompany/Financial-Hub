@@ -2316,6 +2316,41 @@ Luiz, depois de mais um bug de parcela: *"você realmente precisa dar um check g
 - Luiz: *"a Wise e a INCO eu só devo atualizar no dia 1 de novembro"*. O aviso de corretora manual agora só aparece se, depois do dia 5, faltar o valor do mês que fechou (em outubro, ter o de setembro basta). Antes avisava em qualquer mês sem o valor do próprio mês.
 - Resultado: saúde dos dados sem nenhum erro nem aviso.
 
+### Saúde dos dados com botão que resolve (27/10)
+
+Luiz, olhando o painel: *"mas e aí, o que eu faço com isso?!"*. Agora cada aviso diz como resolver e traz o botão ali mesmo:
+
+| Aviso | Botão | O que faz |
+|---|---|---|
+| Data fora do padrão, estorno contando como gasto, parcela contada 2x, parcela digitada repetindo Pluggy, investimento zerado com investido, recebimento sem entrada | **Corrigir agora** | O app conserta sozinho, todos de uma vez (repete de 20 em 20 até zerar). |
+| Gasto sem categoria, gasto em categoria-mãe | **Categorizar** (lista de subcategorias + Salvar) | Aplica na compra inteira: lançamentos e parcelas que ainda vêm (mesmo cartão + compra + valor). Reforça a regra do comerciante. |
+| Corretora manual sem o valor do mês | **Atualizar valor** | Abre o mesmo popup de posições de Configurações. |
+| Banco sem sincronizar | **Reconectar** | Rola até Conexões. |
+| Gasto manual parecido com Pluggy, mesmo gasto repetido no dia | **Apagar o repetido** / **É assim mesmo** | Apagar pede confirmação. "É assim mesmo" esconde o item pra sempre (tabela `DataHealthIgnore`). |
+
+Divisão que não fecha não tem "é assim mesmo": a soma tem que bater, o texto manda ajustar a divisão no Orçamento.
+
+- **Backend**:
+  - `HealthIssue` ganhou `action`, `total` e itens `{key, label, ref}`.
+  - Endpoints `POST /api/data-health/fix/:issueId`, `/ignore` e `/categorize`. O conserto só age nos itens que o check acabou de apontar, nunca num id vindo do navegador.
+  - `ensureReceiptTransaction` em `routes/projects.ts`.
+  - O conector do Claude continua recebendo só o texto dos itens.
+- **Front**:
+  - `DataHealthPanel` com os botões.
+  - O aviso do Início diz "Resolver".
+  - Link com âncora em Configurações (`#saude-dos-dados`, `#conexoes`) agora rola até a seção.
+- **Testado**: localmente, numa cópia antiga do banco com problemas de verdade e alguns criados de propósito.
+  - Corrigir datas: 225 → 0 num clique.
+  - Estorno virou transferência.
+  - "É assim mesmo" escondeu o café repetido.
+  - Categorizar tirou o item da lista.
+  - Categoria-mãe e conserto inexistente são recusados.
+  - Desktop e celular conferidos.
+- **Deployado em produção** (mesmo dia):
+  - Backup de `prod.db` e `demo.db`, depois `prisma migrate deploy` nos dois, generate, build e `pm2 restart`.
+  - Backups apagados depois de confirmar 733/117 transações e o PIN intactos.
+  - Saúde dos dados em produção segue zerada, então nenhum botão aparece até surgir um aviso.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
