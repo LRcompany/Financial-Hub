@@ -2351,6 +2351,17 @@ Divisão que não fecha não tem "é assim mesmo": a soma tem que bater, o texto
   - Backups apagados depois de confirmar 733/117 transações e o PIN intactos.
   - Saúde dos dados em produção segue zerada, então nenhum botão aparece até surgir um aviso.
 
+### Nova categoria Moradia > Higiene e Limpeza (30/10)
+
+Luiz: *"adicionar uma nova categoria em casa, Higiene e Limpeza. Precisa sair de mercado. E aí a compra da Amazon vai pra lá. 454"*.
+
+- **Categoria criada**: Moradia > Higiene e Limpeza, essencial. "Casa" no app é Moradia.
+- **Compras movidas**: as 6 compras da Amazon de outubro que estavam em Alimentação > Supermercado (08 e 13/10, R$ 453,51) foram pra nova categoria.
+- **Supermercado em outubro**: caiu pra R$ 1.268,37. O total do mês não muda.
+- **Regras de categorização**: as dos vendedores ABASTEKLI e SILVEIRAG agora vão pra Higiene e Limpeza. As genéricas "AMAZON MARKETPLACE" e "AMAZON BR" (que mandavam pra Supermercado) foram apagadas. Compra genérica da Amazon pode ser casa, whey ou limpeza, então ela chega sem categoria e a Saúde dos dados pede pra categorizar.
+- **Meta**: nenhuma criada pra nova categoria. Ela aparece como "sem meta" até o Luiz definir uma.
+- **Como foi feito**: direto no `prod.db`, com backup antes, apagado depois de conferir as 739 transações e a saúde dos dados sem avisos.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
