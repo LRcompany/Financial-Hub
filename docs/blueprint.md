@@ -2362,6 +2362,16 @@ Luiz: *"adicionar uma nova categoria em casa, Higiene e Limpeza. Precisa sair de
 - **Meta**: nenhuma criada pra nova categoria. Ela aparece como "sem meta" até o Luiz definir uma.
 - **Como foi feito**: direto no `prod.db`, com backup antes, apagado depois de conferir as 739 transações e a saúde dos dados sem avisos.
 
+### Nova categoria Saúde > Plano Odontológico (03/11)
+
+Luiz: *"além do plano de saúde, vamos criar o plano odontológico também"*.
+
+- **Categoria criada**: Saúde > Plano Odontológico, essencial (igual ao Plano de Saúde).
+- **Cobrança movida**: AMIL DENTAL de 30/10 (R$ 81,80) saiu de Plano de Saúde e foi pra nova categoria.
+- **Regra de categorização**: a do AMIL DENTAL também foi movida. As próximas cobranças já chegam em Plano Odontológico.
+- **Meta**: nenhuma. A categoria aparece como "sem meta" (a do Plano de Saúde também é R$ 0).
+- **Como foi feito**: direto no `prod.db`, com backup antes, apagado depois de conferir as 750 transações e a saúde dos dados sem avisos.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
