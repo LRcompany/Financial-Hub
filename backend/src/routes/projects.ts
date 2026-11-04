@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
+import { isForeignCurrency } from "../services/fx.js";
 
 export const projectsRouter = Router();
 
@@ -287,6 +288,7 @@ projectsRouter.post("/projects", async (req, res) => {
   if (!clientId || !name || !startDate || typeof contractValue !== "number") {
     return res.status(400).json({ error: "Campos obrigatórios: clientId, name, startDate, contractValue" });
   }
+  if (currency && !isForeignCurrency(currency)) return res.status(400).json({ error: "Moeda do contrato precisa ser USD ou EUR" });
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client) return res.status(404).json({ error: "Cliente não encontrado" });
 
@@ -318,7 +320,10 @@ projectsRouter.put("/projects/:id", async (req, res) => {
   if (hasInvoice !== undefined) data.hasInvoice = hasInvoice;
   if (installmentCount !== undefined) data.installmentCount = installmentCount;
   if (contractValueForeign !== undefined) data.contractValueForeign = contractValueForeign;
-  if (currency !== undefined) data.currency = currency || null;
+  if (currency !== undefined) {
+    if (currency && !isForeignCurrency(currency)) return res.status(400).json({ error: "Moeda do contrato precisa ser USD ou EUR" });
+    data.currency = currency || null;
+  }
   if (status !== undefined) {
     if (!["em_andamento", "pausado", "cancelado"].includes(status)) {
       return res.status(400).json({ error: "status precisa ser em_andamento, pausado ou cancelado (finalizado é automático)" });

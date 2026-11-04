@@ -3,7 +3,7 @@ import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
 import { syncBrokerCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
-import { getUsdToBrlRate } from "../services/fx.js";
+import { getRateToBrl, isForeignCurrency, type ForeignCurrency } from "../services/fx.js";
 import { getAccounts } from "../services/pluggy.js";
 
 export const brokersRouter = Router();
@@ -98,7 +98,7 @@ brokersRouter.post("/brokers/:id/unarchive", async (req, res) => {
 // antes de virar item por empreendimento); ficam de fora do popup mas o
 // histórico deles continua no banco, intocado.
 interface PositionFieldConfig {
-  currency: "USD" | "BRL" | "selectable";
+  currency: "USD" | "BRL" | "selectable"; // selectable = BRL, USD ou EUR (EUR desde 04/11)
   showType: boolean;
   showQuantity: boolean;
   showUnitValue: boolean;
@@ -185,7 +185,7 @@ brokersRouter.get("/brokers/:id/positions", async (req, res) => {
       // cotação de HOJE, não essa antiga — é sempre assim que preço
       // convertido funciona aqui.
       const fx = s.fxRateToBRL;
-      const usd = s.security.currency === "USD" && fx;
+      const usd = s.security.currency !== "BRL" && fx; // USD ou EUR
       // Arredonda pra 2 casas na volta — dividir por uma taxa de câmbio
       // sempre sobra resíduo de ponto flutuante (7513.170000000002), e isso
       // ia aparecer digitável no campo, cortado, sem servir pra nada real
@@ -234,7 +234,7 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  let usdRate: number | null = null;
+  const rates = new Map<ForeignCurrency, number>();
   let count = 0;
 
   for (const raw of positions as {
@@ -250,24 +250,26 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
     const name = raw.name?.trim();
     if (!name || typeof raw.marketValue !== "number") continue;
 
-    const assetCurrency = fieldConfig.currency === "selectable" ? (raw.currency === "USD" ? "USD" : "BRL") : fieldConfig.currency;
+    const assetCurrency = fieldConfig.currency === "selectable" ? (isForeignCurrency(raw.currency) ? raw.currency : "BRL") : fieldConfig.currency;
     let marketValue = raw.marketValue;
     let unitValue = fieldConfig.showUnitValue && typeof raw.unitValue === "number" ? raw.unitValue : null;
-    // Valor digitado na MOEDA ORIGINAL (USD, pro caso da Nomad) — NÃO converte
+    // Valor digitado na MOEDA ORIGINAL (USD/EUR, Nomad e Wise) — NÃO converte
     // ainda aqui (ver por quê logo abaixo, no cálculo de investedAmount).
     const investedAmountRawInput = fieldConfig.showInvestedAmount && typeof raw.investedAmount === "number" ? raw.investedAmount : null;
     const quantity = fieldConfig.showQuantity && typeof raw.quantity === "number" ? raw.quantity : null;
 
-    if (assetCurrency === "USD") {
-      if (usdRate == null) {
+    let fxRate: number | null = null;
+    if (assetCurrency !== "BRL") {
+      if (!rates.has(assetCurrency)) {
         try {
-          usdRate = await getUsdToBrlRate();
+          rates.set(assetCurrency, await getRateToBrl(assetCurrency));
         } catch (err) {
-          return res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+          return res.status(502).json({ error: `Falha ao buscar cotação ${assetCurrency}/BRL: ${(err as Error).message}` });
         }
       }
-      marketValue = marketValue * usdRate;
-      if (unitValue != null) unitValue = unitValue * usdRate;
+      fxRate = rates.get(assetCurrency)!;
+      marketValue = marketValue * fxRate;
+      if (unitValue != null) unitValue = unitValue * fxRate;
     }
 
     const type = fieldConfig.fixedType ?? raw.type ?? "Outro";
@@ -286,7 +288,7 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
     let investedAmount: number;
     if (investedAmountRawInput == null) {
       investedAmount = previous?.investedAmount ?? marketValue;
-    } else if (assetCurrency === "USD") {
+    } else if (fxRate != null) {
       // Achado real (05/09, print do Luiz comparando 3 posições da Nomad que
       // subiram todas ~1,39% — a mesma % em ativos sem relação nenhuma entre
       // si, ETF e 2 bonds diferentes): reconverter o valor investido TOTAL
@@ -298,9 +300,9 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       const previousRawInvested = previous ? (previous.fxRateToBRL ? previous.investedAmount / previous.fxRateToBRL : previous.investedAmount) : null;
       if (previous && previousRawInvested != null) {
         const deltaRaw = investedAmountRawInput - previousRawInvested;
-        investedAmount = previous.investedAmount + deltaRaw * usdRate!;
+        investedAmount = previous.investedAmount + deltaRaw * fxRate;
       } else {
-        investedAmount = investedAmountRawInput * usdRate!; // primeira vez — nada pra preservar ainda
+        investedAmount = investedAmountRawInput * fxRate; // primeira vez — nada pra preservar ainda
       }
     } else {
       investedAmount = investedAmountRawInput; // BRL: sem conversão, sem essa pegadinha
@@ -308,8 +310,8 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
 
     await prisma.positionSnapshot.upsert({
       where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId, month, year } },
-      update: { marketValue, investedAmount, quantity, unitValue, fxRateToBRL: assetCurrency === "USD" ? usdRate : null },
-      create: { brokerId: broker.id, securityId, month, year, marketValue, investedAmount, quantity, unitValue, fxRateToBRL: assetCurrency === "USD" ? usdRate : null },
+      update: { marketValue, investedAmount, quantity, unitValue, fxRateToBRL: fxRate },
+      create: { brokerId: broker.id, securityId, month, year, marketValue, investedAmount, quantity, unitValue, fxRateToBRL: fxRate },
     });
     count++;
   }

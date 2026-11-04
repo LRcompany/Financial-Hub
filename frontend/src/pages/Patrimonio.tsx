@@ -222,7 +222,7 @@ export function Patrimonio() {
       .catch(() => {})
     api
       .fxRate()
-      .then((r) => setUsdToBrl(r.usdToBrl))
+      .then((r) => setUsdToBrl(r.rate))
       .catch(() => {})
   }
 

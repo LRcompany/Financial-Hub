@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { getUsdToBrlRate } from "../services/fx.js";
+import { getRateToBrl, isForeignCurrency } from "../services/fx.js";
 import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
 
 export const positionsRouter = Router();
@@ -10,12 +10,15 @@ export const positionsRouter = Router();
 // fxRateToBRL gravado por posição (esse é a taxa histórica de quando aquela
 // posição específica foi registrada — mais precisa pra ela, não serve pra
 // posição que nunca teve uma taxa própria gravada, tipo Cripto).
-positionsRouter.get("/fx-rate", async (_req, res) => {
+// `?currency=EUR` (04/11) devolve a cotação dessa moeda em `rate`; sem
+// parâmetro continua USD (`usdToBrl`, o formato antigo).
+positionsRouter.get("/fx-rate", async (req, res) => {
+  const currency = isForeignCurrency(req.query.currency) ? req.query.currency : "USD";
   try {
-    const usdToBrl = await getUsdToBrlRate();
-    res.json({ usdToBrl });
+    const rate = await getRateToBrl(currency);
+    res.json({ currency, rate, ...(currency === "USD" ? { usdToBrl: rate } : {}) });
   } catch (err) {
-    res.status(502).json({ error: `Falha ao buscar cotação USD/BRL: ${(err as Error).message}` });
+    res.status(502).json({ error: `Falha ao buscar cotação ${currency}/BRL: ${(err as Error).message}` });
   }
 });
 

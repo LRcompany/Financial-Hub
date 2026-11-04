@@ -20,7 +20,7 @@
 
 import { prisma } from "../prisma.js";
 import { getInvestments, getAccounts, getAllInvestmentTransactions } from "./pluggy.js";
-import { getUsdToBrlRate } from "./fx.js";
+import { getRateToBrl, isForeignCurrency, type ForeignCurrency } from "./fx.js";
 
 interface PluggyAccount {
   id: string;
@@ -163,16 +163,18 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
 
   // Só busca a cotação se algum ativo desse sync realmente vier em moeda
   // estrangeira — evita chamada desnecessária pro caso comum (tudo em BRL).
-  const needsFx = results.some((inv) => inv.currencyCode && inv.currencyCode !== "BRL");
-  const usdRate = needsFx ? await getUsdToBrlRate() : null;
+  const rates = new Map<ForeignCurrency, number>();
+  for (const inv of results) {
+    if (isForeignCurrency(inv.currencyCode) && !rates.has(inv.currencyCode)) rates.set(inv.currencyCode, await getRateToBrl(inv.currencyCode));
+  }
 
   for (const inv of results) {
     const currency = inv.currencyCode ?? "BRL";
     const secType = mapSecurityType(inv);
-    // Hoje só sabemos converter USD (é o único caso real — Nomad/Phantom).
-    // Outra moeda estrangeira ainda não suportada: grava sem converter e
-    // deixa fxRateToBRL null, pra não fingir uma conversão que não fizemos.
-    const fxRate = currency === "USD" ? usdRate : null;
+    // Converte USD e EUR (ver services/fx.ts). Outra moeda estrangeira ainda
+    // não suportada: grava sem converter e deixa fxRateToBRL null, pra não
+    // fingir uma conversão que não fizemos.
+    const fxRate = isForeignCurrency(currency) ? rates.get(currency)! : null;
     const convert = (v: number) => (fxRate ? v * fxRate : v);
 
     // id sintético e determinístico (pluggy:<id do ativo>) — garante que o upsert

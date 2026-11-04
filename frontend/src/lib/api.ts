@@ -906,7 +906,7 @@ export const api = {
     request<{ hasData: boolean; byType: PositionsByType[] }>(
       `/positions${params ? `?month=${params.month}&year=${params.year}` : ''}`
     ),
-  fxRate: () => request<{ usdToBrl: number }>('/fx-rate'),
+  fxRate: (currency: 'USD' | 'EUR' = 'USD') => request<{ currency: string; rate: number; usdToBrl?: number }>(`/fx-rate?currency=${currency}`),
   dataHealth: () => request<DataHealth>('/data-health'),
   fixDataHealth: (issueId: string) => postJson<{ fixed: number; health: DataHealth }>(`/data-health/fix/${issueId}`),
   ignoreDataHealthItem: (key: string) => postJson<{ health: DataHealth }>('/data-health/ignore', { key }),

@@ -198,6 +198,7 @@ export function ManualPositionsModal({
                           <Select value={r.currency} onChange={(e) => updateRow(i, { currency: e.target.value })}>
                             <option value="BRL">BRL</option>
                             <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
                           </Select>
                         </td>
                       )}
@@ -266,6 +267,7 @@ export function ManualPositionsModal({
                       <Select value={r.currency} onChange={(e) => updateRow(i, { currency: e.target.value })}>
                         <option value="BRL">BRL</option>
                         <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
                       </Select>
                     </div>
                   )}

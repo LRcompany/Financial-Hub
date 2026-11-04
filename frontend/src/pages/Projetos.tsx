@@ -34,7 +34,7 @@ import { Select } from '../components/Select'
 import { IconButton } from '../components/IconButton'
 import { Money } from '../components/Money'
 import { ModalShell } from '../components/ModalShell'
-import { currency } from '../lib/format'
+import { currency, currencySymbol } from '../lib/format'
 import { MonthNavigator } from '../components/MonthNavigator'
 import { PlannedValue } from '../components/SpentPlannedValue'
 import cards from '../styles/cards.module.css'
@@ -341,6 +341,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
   const [hasInvoice, setHasInvoice] = useState(true)
   const [installmentCount, setInstallmentCount] = useState('1')
   const [contractValueForeign, setContractValueForeign] = useState('')
+  const [contractCurrency, setContractCurrency] = useState<'USD' | 'EUR'>('USD')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -355,9 +356,9 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
     e.preventDefault()
     // Diz O QUE falta (22/10, Luiz: "por que não consigo adicionar um novo
     // projeto?") — antes o Salvar voltava em silêncio com campo vazio. Em
-    // contrato estrangeiro basta o valor em US$ (o R$ sai do câmbio de hoje).
+    // contrato estrangeiro basta o valor em US$/€ (o R$ sai do câmbio de hoje).
     const hasValue = !!contractValue || (isForeignClient && !!contractValueForeign)
-    const missing = [!name.trim() && 'nome do projeto', !startDate && 'início', !hasValue && (isForeignClient ? 'valor (R$ ou US$)' : 'valor do projeto')].filter(Boolean)
+    const missing = [!name.trim() && 'nome do projeto', !startDate && 'início', !hasValue && (isForeignClient ? `valor (R$ ou ${currencySymbol(contractCurrency)})` : 'valor do projeto')].filter(Boolean)
     if (missing.length > 0) {
       setError(`Preencha: ${missing.join(', ')}.`)
       return
@@ -365,13 +366,13 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
     setSaving(true)
     setError(null)
     try {
-      // Só US$ preenchido: estima o R$ pelo câmbio de hoje — num contrato
+      // Só US$/€ preenchido: estima o R$ pelo câmbio de hoje — num contrato
       // estrangeiro o R$ já é estimativa e vira o recebido real quando o
       // projeto fecha (ver `projectClosure` no backend).
       let brlValue = Number(contractValue)
       if (!contractValue && isForeignClient && contractValueForeign) {
-        const { usdToBrl } = await api.fxRate()
-        brlValue = Math.round(Number(contractValueForeign) * usdToBrl * 100) / 100
+        const { rate } = await api.fxRate(contractCurrency)
+        brlValue = Math.round(Number(contractValueForeign) * rate * 100) / 100
       }
       let clientId = clientChoice
       if (clientChoice === NEW_CLIENT) {
@@ -392,7 +393,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         hasInvoice,
         installmentCount: Number(installmentCount) || 1,
         contractValueForeign: isForeignClient && contractValueForeign ? Number(contractValueForeign) : null,
-        currency: isForeignClient && contractValueForeign ? 'USD' : null,
+        currency: isForeignClient && contractValueForeign ? contractCurrency : null,
       })
       onSaved()
     } catch (err) {
@@ -459,8 +460,13 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
         </div>
         {isForeignClient && (
           <div className={styles.formRow}>
+            {/* EUR entrou em 04/11 ("às vezes eu recebo em projetos da gringa em EUR"). */}
+            <Select label="Moeda do contrato" value={contractCurrency} onChange={(e) => setContractCurrency(e.target.value as 'USD' | 'EUR')}>
+              <option value="USD">Dólar (US$)</option>
+              <option value="EUR">Euro (€)</option>
+            </Select>
             <Input
-              label="Valor real do contrato (US$)"
+              label={`Valor real do contrato (${currencySymbol(contractCurrency)})`}
               type="number"
               step="0.01"
               value={contractValueForeign}
@@ -468,7 +474,7 @@ function NewProjectForm({ clients, onCancel, onSaved }: { clients: Client[]; onC
               placeholder="Ex: 9400"
             />
             <p className={styles.helperText}>
-              O projeto fecha quando o recebido em US$ chega a este valor. Se deixar o valor em R$ vazio, ele é estimado
+              O projeto fecha quando o recebido em {currencySymbol(contractCurrency)} chega a este valor. Se deixar o valor em R$ vazio, ele é estimado
               pelo câmbio de hoje; quando o projeto fechar, vira o que realmente caiu na conta.
             </p>
           </div>
@@ -641,7 +647,7 @@ function ProjectCard({
                 <span className={styles.projectSub}>
                   progresso do contrato:{' '}
                   <Money>
-                    {project.currency} {currency(project.receivedForeign ?? 0)} de {project.currency} {currency(project.contractValueForeign)}
+                    {currencySymbol(project.currency)} {currency(project.receivedForeign ?? 0)} de {currencySymbol(project.currency)} {currency(project.contractValueForeign)}
                   </Money>
                 </span>
               )}
@@ -737,7 +743,7 @@ function ReceiptsList({ detail, onChanged }: { detail: ProjectDetail; onChanged:
                 {' '}
                 (
                 <Money>
-                  {detail.currency} {currency(r.grossAmountForeign)} bruto
+                  {currencySymbol(detail.currency)} {currency(r.grossAmountForeign)} bruto
                   {r.feeAmount != null && ` − ${currency(r.feeAmount)} tarifa`}
                   {r.iofAmount != null && ` − ${currency(r.iofAmount)} IOF`}
                 </Money>
@@ -832,14 +838,14 @@ function AddReceiptModal({ detail, onClose, onSaved }: { detail: ProjectDetail; 
             <p className={styles.helperText}>Digite os números exatos do extrato (Wise etc.) — nada aqui é calculado/estimado.</p>
             <div className={styles.formRow}>
               <Input
-                label={`Valor bruto recebido (${detail.currency})`}
+                label={`Valor bruto recebido (${currencySymbol(detail.currency)})`}
                 type="number"
                 step="0.01"
                 value={grossAmountForeign}
                 onChange={(e) => setGrossAmountForeign(e.target.value)}
               />
-              <Input label={`Tarifa (${detail.currency})`} type="number" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} />
-              <Input label={`IOF (${detail.currency})`} type="number" step="0.01" value={iofAmount} onChange={(e) => setIofAmount(e.target.value)} />
+              <Input label={`Tarifa (${currencySymbol(detail.currency)})`} type="number" step="0.01" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} />
+              <Input label={`IOF (${currencySymbol(detail.currency)})`} type="number" step="0.01" value={iofAmount} onChange={(e) => setIofAmount(e.target.value)} />
             </div>
           </>
         )}
