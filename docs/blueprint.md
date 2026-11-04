@@ -2372,6 +2372,30 @@ Luiz: *"além do plano de saúde, vamos criar o plano odontológico também"*.
 - **Meta**: nenhuma. A categoria aparece como "sem meta" (a do Plano de Saúde também é R$ 0).
 - **Como foi feito**: direto no `prod.db`, com backup antes, apagado depois de conferir as 750 transações e a saúde dos dados sem avisos.
 
+### Euro (EUR) em projetos da gringa e na Wise (04/11)
+
+Luiz: *"às vezes eu recebo em projetos da gringa em EUR. Adicione essa opção também. E adiciona a moeda na Wise"*.
+
+- **Câmbio genérico** (`services/fx.ts`):
+  - `getRateToBrl(USD|EUR)` e `getRateToBrlOnDate`, com cache e última cotação guardada por moeda (`FxRateCache`, par `EUR-BRL`).
+  - `getUsdToBrlRate` continua existindo pros usos antigos.
+  - **Fonte reserva**: open.er-api.com, pública, sem chave, atualiza 1x/dia. Entra quando a AwesomeAPI falha. No deploy, a AwesomeAPI estava dando 429 pro IP do droplet, e o euro não tinha cotação guardada pra cair nela.
+  - `GET /api/fx-rate?currency=EUR` devolve `{currency, rate}`. Sem parâmetro continua USD, com `usdToBrl` no formato antigo.
+- **Projetos**:
+  - Projeto novo de cliente estrangeiro escolhe a "Moeda do contrato" (Dólar US$ / Euro €). O valor em R$ vazio é estimado pelo câmbio daquela moeda.
+  - Progresso do contrato e recebimentos (bruto, tarifa, IOF) mostram o símbolo certo (`currencySymbol` em `lib/format.ts`).
+  - O backend recusa moeda que não seja USD ou EUR.
+- **Wise/Nomad (popup de posições)**:
+  - A moeda aceita BRL, USD e EUR. EUR é convertido pela cotação do dia e grava `fxRateToBRL`.
+  - Ao reabrir o popup, o valor volta em €. A regra de aporte em moeda estrangeira (converter só a diferença) vale igual pro euro.
+  - **Saldo em euro**: é uma linha nova no popup, com moeda EUR e nome diferente do "Conta Corrente" em dólar (ex: "Conta Corrente EUR").
+- **Sync da Pluggy**: também converte EUR. Antes gravava sem converter.
+- **Aporte manual** (`ContributionModal`): continua só BRL/USD. Não foi pedido.
+- **Testado**:
+  - Local, num banco de cópia: € 1.000 na Wise gravou R$ 6.163,20 e voltou € 1.000 no popup.
+  - Projeto em EUR criado; moeda inválida recusada; formulário conferido no navegador.
+- **Deployado** (sem migration): build + `pm2 restart` em prod e demo. Cotação de EUR conferida no servidor.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
