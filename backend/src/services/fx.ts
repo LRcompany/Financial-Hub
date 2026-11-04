@@ -12,13 +12,39 @@ export const isForeignCurrency = (c: unknown): c is ForeignCurrency => FOREIGN_C
 
 const cached = new Map<ForeignCurrency, { rate: number; expiresAt: number }>();
 
-async function fetchLiveRate(currency: ForeignCurrency): Promise<number> {
+async function fetchAwesomeRate(currency: ForeignCurrency): Promise<number> {
   const response = await fetch(`https://economia.awesomeapi.com.br/last/${currency}-BRL`);
   if (!response.ok) {
     throw new Error(`Falha ao buscar cotação ${currency}/BRL: ${response.status}`);
   }
   const data = (await response.json()) as Record<string, { bid: string }>;
   return Number(data[`${currency}BRL`].bid);
+}
+
+// Segunda fonte (04/11): a AwesomeAPI vive dando 429 pro IP do droplet, e
+// uma moeda nova (EUR) ainda não tem a última cotação guardada pra cair nela.
+// open.er-api.com é pública, sem chave, atualiza 1x/dia — serve de reserva.
+async function fetchErApiRate(currency: ForeignCurrency): Promise<number> {
+  const response = await fetch(`https://open.er-api.com/v6/latest/${currency}`);
+  if (!response.ok) {
+    throw new Error(`Falha ao buscar cotação ${currency}/BRL (reserva): ${response.status}`);
+  }
+  const data = (await response.json()) as { result: string; rates?: Record<string, number> };
+  const rate = data.rates?.BRL;
+  if (data.result !== "success" || typeof rate !== "number") throw new Error(`Cotação ${currency}/BRL (reserva) sem valor`);
+  return rate;
+}
+
+async function fetchLiveRate(currency: ForeignCurrency): Promise<number> {
+  try {
+    return await fetchAwesomeRate(currency);
+  } catch (err) {
+    try {
+      return await fetchErApiRate(currency);
+    } catch {
+      throw err;
+    }
+  }
 }
 
 export async function getRateToBrl(currency: ForeignCurrency): Promise<number> {
