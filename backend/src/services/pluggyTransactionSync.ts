@@ -22,6 +22,7 @@ import { prisma } from "../prisma.js";
 import { brCalendarDay, brDayString } from "./dates.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
 import { suggestCategory } from "./categorization.js";
+import { purchaseBase } from "./ledger.js";
 
 interface PluggyAccountRaw {
   id: string;
@@ -145,6 +146,39 @@ async function findAwaitingMatch(brokerId: string, amount: number, date: Date) {
 async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> {
   const suggested = await suggestCategory(tx.description);
   return suggested?.id ?? null;
+}
+
+/** Categoria (e nota) que o Luiz já deu pra MESMA compra parcelada (05/11).
+ * Achado real: no sync de 04/11 a parcela 3/10 da TAP, a 4/10 da bike, a
+ * 8/12 da academia... chegaram como lançamento novo "sem categoria" — a
+ * parcela prevista dela estava categorizada, as anteriores também, mas a
+ * Transaction nova só olhava a regra do comerciante. Agora a parcela herda
+ * da compra: primeiro de uma parcela já lançada, senão da parcela prevista
+ * (mesmo cartão + mesma compra + mesmo valor de parcela). */
+export async function inheritFromPurchase(
+  brokerId: string,
+  description: string,
+  amount: number,
+  installments: { installmentNumber: number | null; totalInstallments: number | null }
+): Promise<{ categoryId: string; note: string | null } | null> {
+  if (installments.installmentNumber == null && (installments.totalInstallments ?? 0) <= 1) return null;
+  const base = purchaseBase(description);
+  const same = (d: string, a: number) => purchaseBase(d) === base && Math.abs(a - amount) <= 0.05;
+  const posted = await prisma.transaction.findMany({
+    where: { brokerId, type: "expense", categoryId: { not: null }, OR: [{ installmentNumber: { not: null } }, { totalInstallments: { gt: 1 } }] },
+    orderBy: { date: "desc" },
+    select: { description: true, amount: true, categoryId: true, note: true },
+  });
+  const fromPosted = posted.find((t) => same(t.description, t.amount));
+  if (fromPosted) return { categoryId: fromPosted.categoryId!, note: fromPosted.note };
+  const broker = await prisma.broker.findUnique({ where: { id: brokerId }, select: { name: true } });
+  const upcoming = await prisma.upcomingInstallment.findMany({
+    where: { cardLabel: broker?.name ?? undefined, categoryId: { not: null } },
+    orderBy: { dueDate: "asc" },
+    select: { description: true, amount: true, categoryId: true, note: true },
+  });
+  const fromUpcoming = upcoming.find((u) => same(u.description, u.amount));
+  return fromUpcoming ? { categoryId: fromUpcoming.categoryId!, note: fromUpcoming.note } : null;
 }
 
 // "Pix pra mim mesmo" (entre contas próprias) — mesmo documento (CPF/CNPJ)
@@ -556,7 +590,10 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           // tempo (ex: Luiz categoriza toda "MASTERCARD INTERNACIONAL" antes
           // do sync seguinte confirmar o nome real); só resolve categoria
           // nova se ainda estiver null.
-          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
+          const categoryId =
+            existing.categoryId ??
+            (await inheritFromPurchase(broker.id, tx.description, realAmount(tx), installmentFields(tx)))?.categoryId ??
+            (await resolveCategoryId(tx));
           await prisma.transaction.update({
             where: { id: existing.id },
             data: {
@@ -611,7 +648,9 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         continue;
       }
 
-      const categoryId = await resolveCategoryId(tx);
+      // Parcela de compra que já tem categoria → a mesma; senão, a regra do comerciante.
+      const inherited = await inheritFromPurchase(broker.id, tx.description, realAmount(tx), installmentFields(tx));
+      const categoryId = inherited?.categoryId ?? (await resolveCategoryId(tx));
       if (categoryId) categorizedCount++;
 
       await prisma.transaction.create({
@@ -624,6 +663,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           externalId,
           isTransfer,
           categoryId,
+          note: inherited?.note ?? null,
           brokerId: broker.id,
           pluggyPending: tx.status === "PENDING",
           ...installmentFields(tx),
