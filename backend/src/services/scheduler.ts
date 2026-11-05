@@ -13,6 +13,7 @@
 // transação" seria mais complexo pro mesmo resultado prático.
 import { runDataHealth } from "./integrity.js";
 import { syncAllBrokersCreditCardTransactions } from "./pluggyTransactionSync.js";
+import { linkManualPurchases } from "./purchases.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Espera 1 minuto após o boot antes do primeiro sync — dá tempo do resto do
@@ -32,6 +33,13 @@ async function runSync() {
     // Nunca deixa o agendador matar o processo por causa de uma falha de
     // rede/Pluggy — só loga e tenta de novo no próximo ciclo.
     console.error(`[scheduler] falha no sync automático de ${startedAt}:`, (err as Error).message);
+  }
+  // Parcela digitada (sem Pluggy) também é uma compra só (05/11, ver purchases.ts).
+  try {
+    const log = await linkManualPurchases();
+    if (log.length) console.log(`[compras] ${log.length} compra(s) digitada(s) ligada(s)/ajustada(s)`);
+  } catch (err) {
+    console.error("[compras] falhou:", (err as Error).message);
   }
   // Saúde dos dados logo depois do sync (27/10) — qualquer regra quebrada
   // fica registrada no log com o que quebrou (e aparece no app na hora).

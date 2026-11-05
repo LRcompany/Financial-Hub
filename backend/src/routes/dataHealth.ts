@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { runDataHealth, type HealthRef } from "../services/integrity.js";
+import { runDataHealth, recordMonthTotal, type HealthRef } from "../services/integrity.js";
+import { propagateFromRows, purchaseFields, setPurchaseFields } from "../services/purchases.js";
 import { brCalendarDay } from "../services/dates.js";
-import { purchaseBase } from "../services/ledger.js";
 import { reinforceRule } from "../services/categorization.js";
 import { ensureReceiptTransaction } from "./projects.js";
 
@@ -26,6 +26,16 @@ const fixers: Record<string, (ref: HealthRef) => Promise<unknown>> = {
   "despesa-negativa": (ref) => prisma.transaction.update({ where: { id: ref.id }, data: { isTransfer: true } }),
   "posicao-zerada-com-investido": (ref) => prisma.positionSnapshot.update({ where: { id: ref.id }, data: { investedAmount: 0 } }),
   "recebimento-sem-entrada": (ref) => ensureReceiptTransaction(ref.id),
+  // Parcela com categoria/nota diferente da compra dela → a da compra em todas.
+  "parcela-diferente-da-compra": async (ref) => {
+    const row =
+      ref.kind === "transaction"
+        ? await prisma.transaction.findUnique({ where: { id: ref.id }, select: { purchaseId: true } })
+        : await prisma.upcomingInstallment.findUnique({ where: { id: ref.id }, select: { purchaseId: true } });
+    if (!row?.purchaseId) return;
+    const f = await purchaseFields(row.purchaseId);
+    await setPurchaseFields([row.purchaseId], { categoryId: f.categoryId ?? undefined, note: f.note ?? undefined });
+  },
   "data-fora-do-padrao": async (ref) => {
     if (ref.kind === "transaction") {
       const t = await prisma.transaction.findUnique({ where: { id: ref.id }, select: { date: true } });
@@ -62,13 +72,17 @@ dataHealthRouter.post("/data-health/fix/:issueId", async (req, res) => {
 dataHealthRouter.post("/data-health/ignore", async (req, res) => {
   const { key } = req.body ?? {};
   if (typeof key !== "string" || !key) return res.status(400).json({ error: "key é obrigatório" });
-  await prisma.dataHealthIgnore.upsert({ where: { key }, create: { key }, update: {} });
+  // "Mês fechado mudou" → "É assim mesmo" = o valor de agora passa a ser o
+  // valor fechado daquele mês (se mudar de novo, avisa de novo).
+  const closed = key.match(/^mes-fechado-mudou:(\d{4}-\d{2})$/);
+  if (closed) await recordMonthTotal(closed[1]);
+  else await prisma.dataHealthIgnore.upsert({ where: { key }, create: { key }, update: {} });
   res.json({ health: await runDataHealth() });
 });
 
 // POST /api/data-health/categorize { refs, categoryId } — "Categorizar".
-// Aplica na COMPRA inteira: se é parcelada, todas as parcelas já lançadas e as
-// que ainda vêm (mesmo cartão + compra + valor da parcela), pra não sobrar
+// Parcela de compra parcelada: a categoria é da COMPRA (services/purchases.ts)
+// — vale pra todas as parcelas já lançadas e as que ainda vêm, pra não sobrar
 // parcela "sem categoria" no mês que vem. E reforça a regra do comerciante.
 dataHealthRouter.post("/data-health/categorize", async (req, res) => {
   const { refs, categoryId } = req.body ?? {};
@@ -77,38 +91,26 @@ dataHealthRouter.post("/data-health/categorize", async (req, res) => {
   if (!category || category.type !== "expense") return res.status(404).json({ error: "Categoria de despesa não encontrada" });
   if (category.children.length > 0) return res.status(400).json({ error: "Escolha uma subcategoria (folha), não a categoria-mãe" });
 
-  const txIds = new Set<string>();
-  const instIds = new Set<string>();
-  const purchases: { card: string | null; base: string; amount: number }[] = [];
+  const txIds: string[] = [];
+  const instIds: string[] = [];
   for (const ref of refs as HealthRef[]) {
     if (ref?.kind === "transaction") {
-      const t = await prisma.transaction.findUnique({ where: { id: ref.id }, include: { broker: { select: { name: true } } } });
+      const t = await prisma.transaction.findUnique({ where: { id: ref.id }, select: { id: true, description: true } });
       if (!t) continue;
-      txIds.add(t.id);
-      if ((t.totalInstallments ?? 0) > 1 || t.installmentNumber) purchases.push({ card: t.broker?.name ?? null, base: purchaseBase(t.description), amount: t.amount });
+      txIds.push(t.id);
       await reinforceRule(t.description, categoryId);
     } else if (ref?.kind === "installment") {
-      const u = await prisma.upcomingInstallment.findUnique({ where: { id: ref.id } });
+      const u = await prisma.upcomingInstallment.findUnique({ where: { id: ref.id }, select: { id: true, description: true } });
       if (!u) continue;
-      instIds.add(u.id);
-      purchases.push({ card: u.cardLabel, base: purchaseBase(u.description), amount: u.amount });
+      instIds.push(u.id);
       await reinforceRule(u.description, categoryId);
     }
   }
-  if (purchases.length) {
-    const [txs, upcoming] = await Promise.all([
-      prisma.transaction.findMany({ where: { type: "expense", OR: [{ installmentNumber: { not: null } }, { totalInstallments: { gt: 1 } }] }, include: { broker: { select: { name: true } } } }),
-      prisma.upcomingInstallment.findMany(),
-    ]);
-    const same = (card: string | null, desc: string, amount: number) =>
-      purchases.some((p) => p.card === card && p.base === purchaseBase(desc) && Math.abs(p.amount - amount) < 0.01);
-    for (const t of txs) if (same(t.broker?.name ?? null, t.description, t.amount)) txIds.add(t.id);
-    for (const u of upcoming) if (same(u.cardLabel, u.description, u.amount)) instIds.add(u.id);
-  }
   // Transação dividida mantém as fatias como estão — a categoria é de cada fatia.
   const [a, b] = await Promise.all([
-    prisma.transaction.updateMany({ where: { id: { in: [...txIds] }, splits: { none: {} } }, data: { categoryId } }),
-    prisma.upcomingInstallment.updateMany({ where: { id: { in: [...instIds] } }, data: { categoryId } }),
+    prisma.transaction.updateMany({ where: { id: { in: txIds }, splits: { none: {} } }, data: { categoryId } }),
+    prisma.upcomingInstallment.updateMany({ where: { id: { in: instIds } }, data: { categoryId } }),
   ]);
+  await propagateFromRows({ transactionIds: txIds, installmentIds: instIds }, { categoryId });
   res.json({ updated: a.count + b.count, health: await runDataHealth() });
 });

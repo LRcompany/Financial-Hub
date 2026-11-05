@@ -22,7 +22,6 @@ import { prisma } from "../prisma.js";
 import { brCalendarDay, brDayString } from "./dates.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
 import { suggestCategory } from "./categorization.js";
-import { purchaseBase } from "./ledger.js";
 
 interface PluggyAccountRaw {
   id: string;
@@ -148,39 +147,6 @@ async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> 
   return suggested?.id ?? null;
 }
 
-/** Categoria (e nota) que o Luiz já deu pra MESMA compra parcelada (05/11).
- * Achado real: no sync de 04/11 a parcela 3/10 da TAP, a 4/10 da bike, a
- * 8/12 da academia... chegaram como lançamento novo "sem categoria" — a
- * parcela prevista dela estava categorizada, as anteriores também, mas a
- * Transaction nova só olhava a regra do comerciante. Agora a parcela herda
- * da compra: primeiro de uma parcela já lançada, senão da parcela prevista
- * (mesmo cartão + mesma compra + mesmo valor de parcela). */
-export async function inheritFromPurchase(
-  brokerId: string,
-  description: string,
-  amount: number,
-  installments: { installmentNumber: number | null; totalInstallments: number | null }
-): Promise<{ categoryId: string; note: string | null } | null> {
-  if (installments.installmentNumber == null && (installments.totalInstallments ?? 0) <= 1) return null;
-  const base = purchaseBase(description);
-  const same = (d: string, a: number) => purchaseBase(d) === base && Math.abs(a - amount) <= 0.05;
-  const posted = await prisma.transaction.findMany({
-    where: { brokerId, type: "expense", categoryId: { not: null }, OR: [{ installmentNumber: { not: null } }, { totalInstallments: { gt: 1 } }] },
-    orderBy: { date: "desc" },
-    select: { description: true, amount: true, categoryId: true, note: true },
-  });
-  const fromPosted = posted.find((t) => same(t.description, t.amount));
-  if (fromPosted) return { categoryId: fromPosted.categoryId!, note: fromPosted.note };
-  const broker = await prisma.broker.findUnique({ where: { id: brokerId }, select: { name: true } });
-  const upcoming = await prisma.upcomingInstallment.findMany({
-    where: { cardLabel: broker?.name ?? undefined, categoryId: { not: null } },
-    orderBy: { dueDate: "asc" },
-    select: { description: true, amount: true, categoryId: true, note: true },
-  });
-  const fromUpcoming = upcoming.find((u) => same(u.description, u.amount));
-  return fromUpcoming ? { categoryId: fromUpcoming.categoryId!, note: fromUpcoming.note } : null;
-}
-
 // "Pix pra mim mesmo" (entre contas próprias) — mesmo documento (CPF/CNPJ)
 // como payer E receiver na mesma transação. Funciona pra QUALQUER banco
 // conectado, sem guardar CPF/CNPJ do Luiz em lugar nenhum do código — a
@@ -266,7 +232,7 @@ export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean
   return dateYmIndex(effectiveDate(tx)) > now.getUTCFullYear() * 12 + now.getUTCMonth();
 }
 
-// ---------- Parcelas futuras: plano puro + reconciliação (27/10) ----------
+// ---------- Parcelas futuras: plano puro + reconciliação (27/10, refeito 05/11) ----------
 // Reescrito depois do 3º bug de parcela em um mês (falta de projeção sem
 // `billForecastDate`, duplicação por grupo errado, duplicação por fuso). O
 // desenho antigo ia REMENDANDO linhas a partir de "a parcela mais recente"
@@ -276,9 +242,24 @@ export function isFutureBilled(tx: PluggyTransaction, now = new Date()): boolean
 //      uma com um código fixo `pluggy:p:<compra>:<n>`.
 //   2. `reconcileInstallments` faz o banco ficar IGUAL ao plano, por
 //      corretora: cria o que falta, atualiza o que mudou, apaga o que sobra
-//      (inclusive linhas do formato antigo `pluggy:<txId>:<n>`), levando
-//      junto nota/categoria/total que o Luiz editou.
+//      (inclusive linhas do formato antigo `pluggy:<txId>:<n>`).
 // Duplicata vira impossível por construção: um código por compra+parcela.
+//
+// Refeito em 05/11 (Luiz: "parece um remendo... espero que não tenhamos mais
+// problemas"), por dois furos que apareceram quando ele mudou o vencimento do
+// C6 e o banco passou a lançar a parcela N um a dois meses depois do mês dela:
+//   - A parcela prevista era apagada por IDADE ("antes do mês passado não
+//     planeja") — o mês fechado perdia a parcela até a lançada chegar, e
+//     setembro foi de R$ 24.782 pra R$ 21.059 e voltou. Agora a prevista só
+//     sai quando a LANÇADA daquela mesma parcela existe (nesta resposta da
+//     Pluggy ou já no banco), e a prevista cai no mesmo dia da lançada — a
+//     troca de uma pela outra não mexe no total de mês nenhum.
+//   - A categoria morava em cada linha, e a troca prevista → lançada perdia o
+//     que o Luiz tinha escolhido. Agora a compra é um registro só
+//     (`Purchase`, id "p:<compra>"), e categoria/nota moram nela.
+
+/** O Command OS vale de set/2026 em diante — nunca projeta parcela antes. */
+const PLAN_FLOOR = new Date(Date.UTC(2026, 8, 1));
 
 export type PlannedInstallment = {
   externalId: string;
@@ -290,6 +271,16 @@ export type PlannedInstallment = {
   description: string;
   sourceTxIds: string[]; // todas as transações da Pluggy dessa compra
   latestTxId: string;
+};
+
+export type PurchaseGroup = {
+  purchaseKey: string;
+  purchaseId: string; // id do model Purchase: "p:<purchaseKey>"
+  txs: PluggyTransaction[];
+  latest: PluggyTransaction; // maior parcela lançada nesta resposta
+  current: number;
+  total: number;
+  refunded: boolean;
 };
 
 // Dia (em São Paulo, UTC−3) de uma data ISO — chave estável da compra mesmo
@@ -333,59 +324,103 @@ export function groupPurchases(transactions: PluggyTransaction[], now = new Date
   return groups;
 }
 
-/** Plano PURO das parcelas futuras de um cartão: pra cada compra, as parcelas
- * depois da mais recente já lançada, cada uma no dia da compra do mês dela.
- * - Compra estornada (CREDIT com mesma descrição/valor no dia da compra) não
- *   tem parcela futura.
- * - Nunca planeja parcela antes do mês PASSADO (mês mais antigo já tem o
- *   dado real; uma projeção lá só duplicaria gasto). */
-export function planInstallments(transactions: PluggyTransaction[], brokerId: string, now = new Date()): PlannedInstallment[] {
-  const oldestDue = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+/** Código fixo da compra (a mesma fórmula desde 27/10 — muda-la trocaria o
+ * `externalId` de toda parcela prevista já gravada). */
+export function purchaseKeyOf(brokerId: string, latest: PluggyTransaction): string {
+  const meta = latest.creditCardMetadata!;
+  const anchorDay = meta.purchaseDate ? spDay(meta.purchaseDate) : spDay(effectiveDate(latest).toISOString());
+  return crypto
+    .createHash("sha1")
+    .update(`${brokerId}|${latest.description}|${meta.cardNumber ?? ""}|${meta.totalInstallments}|${anchorDay}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/** Compras parceladas desta resposta da Pluggy, já com o código fixo. Compra
+ * estornada (CREDIT com mesma descrição/valor no dia da compra) vem marcada. */
+export function purchaseGroupsOf(transactions: PluggyTransaction[], brokerId: string, now = new Date()): PurchaseGroup[] {
   const refunds = new Set(
     transactions
       .filter((t) => t.type === "CREDIT" || t.amount < 0)
       .map((t) => `${t.description}|${Math.abs(t.amount).toFixed(2)}|${t.date.slice(0, 10)}`)
   );
-  const planned: PlannedInstallment[] = [];
-  for (const txs of groupPurchases(transactions, now)) {
+  return groupPurchases(transactions, now).map((txs) => {
     const latest = txs.reduce((a, b) => {
       const na = a.creditCardMetadata!.installmentNumber!;
       const nb = b.creditCardMetadata!.installmentNumber!;
       return nb > na || (nb === na && b.date > a.date) ? b : a;
     });
     const meta = latest.creditCardMetadata!;
-    const total = meta.totalInstallments!;
-    const current = meta.installmentNumber!;
-    if (current >= total) continue;
     const purchaseDay = (meta.purchaseDate ?? latest.date).slice(0, 10);
-    if (refunds.has(`${latest.description}|${Math.abs(latest.amount).toFixed(2)}|${purchaseDay}`)) continue;
-    const anchorDay = meta.purchaseDate ? spDay(meta.purchaseDate) : spDay(effectiveDate(latest).toISOString());
-    const purchaseKey = crypto
-      .createHash("sha1")
-      .update(`${brokerId}|${latest.description}|${meta.cardNumber ?? ""}|${total}|${anchorDay}`)
-      .digest("hex")
-      .slice(0, 16);
-    const latestDate = effectiveDate(latest);
-    for (let n = current + 1; n <= total; n++) {
-      const dueDate = meta.purchaseDate ? purchaseDayPlusMonths(meta.purchaseDate, n - 1) : purchaseDayPlusMonths(latestDate.toISOString(), n - current);
-      if (dueDate < oldestDue) continue;
+    const purchaseKey = purchaseKeyOf(brokerId, latest);
+    return {
+      purchaseKey,
+      purchaseId: `p:${purchaseKey}`,
+      txs,
+      latest,
+      current: meta.installmentNumber!,
+      total: meta.totalInstallments!,
+      refunded: refunds.has(`${latest.description}|${Math.abs(latest.amount).toFixed(2)}|${purchaseDay}`),
+    };
+  });
+}
+
+/** Plano PURO das parcelas previstas de um cartão: pra cada compra, toda
+ * parcela depois da maior já LANÇADA, cada uma no dia da compra do mês dela
+ * (o mesmo dia que a lançada vai ter — ver `effectiveDate`).
+ * - "Já lançada" = nesta resposta da Pluggy OU já gravada no banco ligada à
+ *   compra (`postedInDb`: código da compra → números de parcela) — a Pluggy
+ *   pode deixar de mandar uma parcela antiga, e ela não pode "voltar" a ser
+ *   prevista.
+ * - Sem corte por idade: se o banco atrasa a parcela (C6 depois da troca de
+ *   vencimento), a prevista fica no mês dela até a lançada chegar. O único
+ *   piso é set/2026, quando o Command OS passou a valer.
+ * - Compra estornada ou terminada não tem parcela prevista. */
+export function planInstallments(
+  transactions: PluggyTransaction[],
+  brokerId: string,
+  now = new Date(),
+  postedInDb: Map<string, number[]> = new Map()
+): PlannedInstallment[] {
+  const planned: PlannedInstallment[] = [];
+  for (const g of purchaseGroupsOf(transactions, brokerId, now)) {
+    if (g.refunded) continue;
+    const meta = g.latest.creditCardMetadata!;
+    const maxPosted = Math.max(g.current, ...(postedInDb.get(g.purchaseKey) ?? []));
+    if (maxPosted >= g.total) continue;
+    const latestDate = effectiveDate(g.latest);
+    for (let n = maxPosted + 1; n <= g.total; n++) {
+      const dueDate = meta.purchaseDate ? purchaseDayPlusMonths(meta.purchaseDate, n - 1) : purchaseDayPlusMonths(latestDate.toISOString(), n - g.current);
+      if (dueDate < PLAN_FLOOR) continue;
       planned.push({
-        externalId: `pluggy:p:${purchaseKey}:${n}`,
-        purchaseKey,
+        externalId: `pluggy:p:${g.purchaseKey}:${n}`,
+        purchaseKey: g.purchaseKey,
         n,
-        total,
+        total: g.total,
         dueDate,
-        amount: realAmount(latest),
-        description: latest.description,
-        sourceTxIds: txs.map((t) => t.id),
-        latestTxId: latest.id,
+        amount: realAmount(g.latest),
+        description: g.latest.description,
+        sourceTxIds: g.txs.map((t) => t.id),
+        latestTxId: g.latest.id,
       });
     }
   }
   return planned;
 }
 
-/** Deixa as parcelas futuras da Pluggy de UMA corretora iguais ao plano.
+/** Categoria/nota da compra quando ela ainda não tem (1º sync de uma compra,
+ * ou a migração de 05/11): a mais comum entre as parcelas dela — lançadas
+ * (mais recente primeiro) e previstas. Exportada pros testes. */
+export function pickPurchaseValue(values: (string | null)[]): string | null {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best: string | null = null;
+  for (const v of values) if (v && (best === null || counts.get(v)! > counts.get(best)!)) best = v;
+  return best;
+}
+
+/** Deixa as parcelas previstas da Pluggy de UMA corretora iguais ao plano, e
+ * cada compra parcelada (lançadas + previstas) com a categoria/nota dela.
  * Recebe as transações de TODAS as contas de cartão da corretora de uma vez
  * (senão uma conta apagaria as parcelas da outra). Nunca toca em parcela
  * manual (sem `externalId` — ex.: cartão Caixa, digitado). */
@@ -398,11 +433,21 @@ export async function reconcileInstallments(
   let created = 0;
   let updated = 0;
   let deleted = 0;
-  const plan = planInstallments(transactions, broker.id, now);
 
-  const existing = await prisma.upcomingInstallment.findMany({
-    where: { cardLabel: broker.name, externalId: { startsWith: "pluggy:" } },
-  });
+  const groups = purchaseGroupsOf(transactions, broker.id, now);
+  const groupByKey = new Map(groups.map((g) => [g.purchaseKey, g]));
+  const purchaseIds = groups.map((g) => g.purchaseId);
+  const purchaseOfExt = new Map<string, string>(); // "pluggy:<txId>" → purchaseId
+  for (const g of groups) for (const t of g.txs) purchaseOfExt.set(`pluggy:${t.id}`, g.purchaseId);
+
+  const txSelect = { id: true, externalId: true, purchaseId: true, installmentNumber: true, categoryId: true, note: true, date: true, type: true } as const;
+  const [existing, linkedTxs, responseTxs, purchases] = await Promise.all([
+    prisma.upcomingInstallment.findMany({ where: { cardLabel: broker.name, externalId: { startsWith: "pluggy:" } } }),
+    purchaseIds.length ? prisma.transaction.findMany({ where: { purchaseId: { in: purchaseIds } }, select: txSelect }) : [],
+    purchaseOfExt.size ? prisma.transaction.findMany({ where: { externalId: { in: [...purchaseOfExt.keys()] } }, select: txSelect }) : [],
+    purchaseIds.length ? prisma.purchase.findMany({ where: { id: { in: purchaseIds } } }) : [],
+  ]);
+
   // Trava de segurança: lista da Pluggy sem nenhuma parcela, mas com parcelas
   // gravadas = resposta incompleta da Pluggy, não "todas as compras acabaram".
   const hasInstallmentData = transactions.some((t) => (t.creditCardMetadata?.totalInstallments ?? 0) > 1);
@@ -411,77 +456,138 @@ export async function reconcileInstallments(
     return { created, updated, deleted, log };
   }
 
+  // Lançamentos de cada compra: os desta resposta + os já ligados a ela no banco.
+  type TxRow = (typeof linkedTxs)[number];
+  const txsOfPurchase = new Map<string, Map<string, TxRow>>();
+  const addTx = (pid: string, t: TxRow) => {
+    if (!txsOfPurchase.has(pid)) txsOfPurchase.set(pid, new Map());
+    txsOfPurchase.get(pid)!.set(t.id, t);
+  };
+  for (const t of linkedTxs) addTx(t.purchaseId!, t);
+  for (const t of responseTxs) addTx(purchaseOfExt.get(t.externalId!)!, t);
+  const postedInDb = new Map<string, number[]>();
+  for (const [pid, rows] of txsOfPurchase) {
+    const ns = [...rows.values()].filter((t) => t.type === "expense" && t.installmentNumber).map((t) => t.installmentNumber!);
+    postedInDb.set(pid.slice(2), ns);
+  }
+
+  const plan = planInstallments(transactions, broker.id, now, postedInDb);
+
   // Linha antiga (`pluggy:<txId>:<n>`) → compra do plano, via a transação de origem.
   const purchaseOfTx = new Map<string, string>();
-  for (const p of plan) for (const id of p.sourceTxIds) purchaseOfTx.set(id, p.purchaseKey);
-  const legacyKey = (u: (typeof existing)[number]) => {
+  for (const g of groups) for (const t of g.txs) purchaseOfTx.set(t.id, g.purchaseKey);
+  const slotKey = (u: (typeof existing)[number]) => {
     const parts = u.externalId!.split(":");
     if (parts[1] === "p") return `${parts[2]}:${parts[3]}`;
     const pk = purchaseOfTx.get(parts[1]);
     return pk ? `${pk}:${parts[2]}` : null;
   };
 
-  // Categoria de cada compra: a da parcela lançada mais recente que tenha uma.
-  const allSourceIds = [...new Set(plan.flatMap((p) => p.sourceTxIds))].map((id) => `pluggy:${id}`);
-  const posted = allSourceIds.length
-    ? await prisma.transaction.findMany({
-        where: { externalId: { in: allSourceIds } },
-        select: { externalId: true, categoryId: true, date: true },
-        orderBy: { date: "desc" },
-      })
-    : [];
-  const categoryOfPurchase = new Map<string, string>();
-  for (const t of posted) {
-    const pk = purchaseOfTx.get(t.externalId!.slice("pluggy:".length));
-    if (pk && t.categoryId && !categoryOfPurchase.has(pk)) categoryOfPurchase.set(pk, t.categoryId);
-  }
-
-  // Agrupa o que já existe pela mesma "compra:parcela" do plano. Entre cópias,
-  // fica a que tem nota do Luiz, depois a que já está no formato novo.
-  const score = (u: (typeof existing)[number]) => (u.note ? 2 : 0) + (u.externalId!.startsWith("pluggy:p:") ? 1 : 0);
-  const bySlot = new Map<string, (typeof existing)[number][]>();
-  const leftovers: (typeof existing)[number][] = [];
+  // Agrupa o que já existe pela mesma "compra:parcela". Entre cópias, fica a
+  // que tem nota do Luiz, depois a que já está no formato novo.
+  type Row = (typeof existing)[number];
+  const score = (u: Row) => (u.note ? 2 : 0) + (u.externalId!.startsWith("pluggy:p:") ? 1 : 0);
+  const bySlot = new Map<string, Row[]>();
+  const legacy: Row[] = []; // formato antigo sem compra nesta resposta
+  const orphans: Row[] = []; // compra que NÃO veio nesta resposta da Pluggy
   for (const u of existing) {
-    const k = legacyKey(u);
-    if (!k) {
-      leftovers.push(u);
-      continue;
+    const k = slotKey(u);
+    if (!k) legacy.push(u);
+    else if (!groupByKey.has(k.split(":")[0])) orphans.push(u);
+    else {
+      if (!bySlot.has(k)) bySlot.set(k, []);
+      bySlot.get(k)!.push(u);
     }
-    if (!bySlot.has(k)) bySlot.set(k, []);
-    bySlot.get(k)!.push(u);
   }
 
+  // 1ª passada: que linha fica com cada parcela do plano. Sem linha pra essa
+  // compra:parcela, aproveita uma que sobrou com a mesma descrição e data
+  // perto (compra cujo código mudou) — não perde a nota nem a categoria.
   const used = new Set<string>();
-  for (const p of plan) {
-    const slot = `${p.purchaseKey}:${p.n}`;
-    const candidates = (bySlot.get(slot) ?? []).sort((x, y) => score(y) - score(x));
-    // Sem linha pra essa compra:parcela, aproveita uma que sobrou com a mesma
-    // descrição e data perto (compra cujo código mudou) — não perde a nota.
+  const assigned = plan.map((p) => {
+    const candidates = (bySlot.get(`${p.purchaseKey}:${p.n}`) ?? []).sort((x, y) => score(y) - score(x));
     if (candidates.length === 0) {
-      const idx = leftovers.findIndex(
-        (u) => u.description === p.description && Math.abs(u.dueDate.getTime() - p.dueDate.getTime()) < 4 * 864e5 && !used.has(u.id)
-      );
-      if (idx >= 0) candidates.push(leftovers.splice(idx, 1)[0]);
+      for (const pool of [orphans, legacy]) {
+        const idx = pool.findIndex((u) => !used.has(u.id) && u.description === p.description && Math.abs(u.dueDate.getTime() - p.dueDate.getTime()) < 4 * 864e5);
+        if (idx >= 0) {
+          candidates.push(pool[idx]);
+          break;
+        }
+      }
     }
+    for (const c of candidates) used.add(c.id);
+    return { p, candidates };
+  });
+
+  // 2ª passada: categoria e nota de cada compra. Se a compra já tem, vale a
+  // dela (o Luiz escolheu); senão, a mais comum entre as parcelas dela.
+  const purchaseById = new Map(purchases.map((p) => [p.id, p]));
+  const fields = new Map<string, { categoryId: string | null; note: string | null }>();
+  for (const g of groups) {
+    const posted = [...(txsOfPurchase.get(g.purchaseId)?.values() ?? [])].sort((a, b) => b.date.getTime() - a.date.getTime());
+    const upcomingRows = [
+      ...[...bySlot.entries()].filter(([k]) => k.startsWith(`${g.purchaseKey}:`)).flatMap(([, rows]) => rows),
+      ...assigned.filter((a) => a.p.purchaseKey === g.purchaseKey).flatMap((a) => a.candidates),
+    ];
+    const rows = [...posted, ...upcomingRows];
+    const saved = purchaseById.get(g.purchaseId);
+    const categoryId = saved?.categoryId ?? pickPurchaseValue(rows.map((r) => r.categoryId));
+    const note = saved?.note ?? rows.find((r) => r.note)?.note ?? null;
+    fields.set(g.purchaseId, { categoryId, note });
+    const label = g.latest.description.slice(0, 28);
+    const offCategory = categoryId ? posted.filter((t) => t.categoryId !== categoryId).length : 0;
+    const offNote = note ? posted.filter((t) => t.note !== note).length : 0;
+    const unlinked = posted.filter((t) => t.purchaseId !== g.purchaseId).length;
+    if (!saved) log.push(`compra ${label} ${g.current}/${g.total}: nova (categoria ${categoryId ?? "—"})`);
+    if (offCategory || offNote) log.push(`compra ${label}: ${offCategory} lançamento(s) com outra categoria, ${offNote} com outra nota → os da compra`);
+    if (dryRun) continue;
+    const data = {
+      cardLabel: broker.name,
+      description: g.latest.description,
+      installmentAmount: realAmount(g.latest),
+      totalInstallments: g.total,
+      categoryId,
+      note,
+    };
+    await prisma.purchase.upsert({ where: { id: g.purchaseId }, create: { id: g.purchaseId, ...data }, update: data });
+    if (unlinked) {
+      await prisma.transaction.updateMany({ where: { externalId: { in: g.txs.map((t) => `pluggy:${t.id}`) } }, data: { purchaseId: g.purchaseId } });
+    }
+    // Transação dividida mantém as fatias como estão — a categoria é de cada fatia.
+    if (offCategory) {
+      await prisma.transaction.updateMany({
+        where: { purchaseId: g.purchaseId, splits: { none: {} }, OR: [{ categoryId: null }, { categoryId: { not: categoryId! } }] },
+        data: { categoryId },
+      });
+    }
+    if (offNote) {
+      await prisma.transaction.updateMany({ where: { purchaseId: g.purchaseId, OR: [{ note: null }, { note: { not: note! } }] }, data: { note } });
+    }
+  }
+
+  // 3ª passada: grava as parcelas previstas, todas com a compra e os campos dela.
+  for (const { p, candidates } of assigned) {
+    const purchaseId = `p:${p.purchaseKey}`;
+    const f = fields.get(purchaseId)!;
     const keep = candidates[0];
-    const categoryId = categoryOfPurchase.get(p.purchaseKey) ?? candidates.find((c) => c.categoryId)?.categoryId ?? null;
     const label = `${p.description.slice(0, 28)} ${p.n}/${p.total}`;
     if (keep) {
-      used.add(keep.id);
-      const note = keep.note ?? candidates.find((c) => c.note)?.note ?? null;
+      const categoryId = f.categoryId ?? keep.categoryId;
+      const note = f.note ?? keep.note;
       const changed =
         keep.externalId !== p.externalId ||
+        keep.purchaseId !== purchaseId ||
         keep.dueDate.getTime() !== p.dueDate.getTime() ||
         Math.abs(keep.amount - p.amount) > 0.005 ||
         keep.description !== p.description ||
-        (!keep.categoryId && categoryId) ||
+        keep.categoryId !== categoryId ||
         keep.note !== note;
       if (changed) {
         log.push(`ajusta ${label} ${p.dueDate.toISOString().slice(0, 10)} R$${p.amount}`);
         if (!dryRun) {
           await prisma.upcomingInstallment.update({
             where: { id: keep.id },
-            data: { externalId: p.externalId, dueDate: p.dueDate, amount: p.amount, description: p.description, categoryId: keep.categoryId ?? categoryId, note },
+            data: { externalId: p.externalId, purchaseId, dueDate: p.dueDate, amount: p.amount, description: p.description, categoryId, note },
           });
         }
         updated++;
@@ -495,30 +601,37 @@ export async function reconcileInstallments(
       log.push(`cria   ${label} ${p.dueDate.toISOString().slice(0, 10)} R$${p.amount}`);
       if (!dryRun) {
         await prisma.upcomingInstallment.create({
-          data: { externalId: p.externalId, dueDate: p.dueDate, amount: p.amount, description: p.description, cardLabel: broker.name, categoryId },
+          data: { externalId: p.externalId, purchaseId, dueDate: p.dueDate, amount: p.amount, description: p.description, cardLabel: broker.name, categoryId: f.categoryId, note: f.note },
         });
       }
       created++;
     }
   }
 
-  // Tudo que não está no plano sai: parcela já lançada, compra estornada,
-  // compra terminada, cópia de formato antigo.
+  // Parcela prevista de compra que VEIO nesta resposta e não está no plano
+  // sai: a lançada dela chegou, ou a compra foi estornada/terminou.
   const planned = new Set(plan.map((p) => `${p.purchaseKey}:${p.n}`));
   for (const [slot, rows] of bySlot) {
     if (planned.has(slot)) continue;
     for (const u of rows) {
-      log.push(`apaga  ${u.description.slice(0, 28)} ${u.dueDate.toISOString().slice(0, 10)} (fora do plano)`);
+      if (used.has(u.id)) continue;
+      log.push(`apaga  ${u.description.slice(0, 28)} ${u.dueDate.toISOString().slice(0, 10)} (já lançada / compra terminou ou foi estornada)`);
       if (!dryRun) await prisma.upcomingInstallment.delete({ where: { id: u.id } });
       deleted++;
     }
   }
-  for (const u of leftovers) {
+  for (const u of legacy) {
     if (used.has(u.id)) continue;
-    log.push(`apaga  ${u.description.slice(0, 28)} ${u.dueDate.toISOString().slice(0, 10)} (sem compra na Pluggy)`);
+    log.push(`apaga  ${u.description.slice(0, 28)} ${u.dueDate.toISOString().slice(0, 10)} (formato antigo, sem compra na Pluggy)`);
     if (!dryRun) await prisma.upcomingInstallment.delete({ where: { id: u.id } });
     deleted++;
   }
+  // Compra que não veio nesta resposta NUNCA perde parcela por isso — a Pluggy
+  // às vezes manda a lista incompleta. Se ela voltou com outro código, a
+  // parcela já foi aproveitada acima; se ficou repetida, a Saúde dos dados
+  // aponta ("parcela-duplicada").
+  const kept = orphans.filter((u) => !used.has(u.id)).length;
+  if (kept) log.push(`mantém ${kept} parcela(s) de compra que não veio nesta resposta da Pluggy`);
   return { created, updated, deleted, log };
 }
 
@@ -590,10 +703,9 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           // tempo (ex: Luiz categoriza toda "MASTERCARD INTERNACIONAL" antes
           // do sync seguinte confirmar o nome real); só resolve categoria
           // nova se ainda estiver null.
-          const categoryId =
-            existing.categoryId ??
-            (await inheritFromPurchase(broker.id, tx.description, realAmount(tx), installmentFields(tx)))?.categoryId ??
-            (await resolveCategoryId(tx));
+          // Parcela de compra parcelada: o passo 2 (reconcileInstallments) dá
+          // a categoria e a nota da COMPRA logo em seguida (ver purchases.ts).
+          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
           await prisma.transaction.update({
             where: { id: existing.id },
             data: {
@@ -648,9 +760,10 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         continue;
       }
 
-      // Parcela de compra que já tem categoria → a mesma; senão, a regra do comerciante.
-      const inherited = await inheritFromPurchase(broker.id, tx.description, realAmount(tx), installmentFields(tx));
-      const categoryId = inherited?.categoryId ?? (await resolveCategoryId(tx));
+      // Regra do comerciante por enquanto. Se for parcela de uma compra que o
+      // Luiz já categorizou, o passo 2 (reconcileInstallments) troca pela
+      // categoria e nota da COMPRA logo em seguida (ver purchases.ts).
+      const categoryId = await resolveCategoryId(tx);
       if (categoryId) categorizedCount++;
 
       await prisma.transaction.create({
@@ -663,7 +776,6 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           externalId,
           isTransfer,
           categoryId,
-          note: inherited?.note ?? null,
           brokerId: broker.id,
           pluggyPending: tx.status === "PENDING",
           ...installmentFields(tx),

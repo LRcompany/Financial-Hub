@@ -15,14 +15,14 @@ datasource db {
 // ---------- Módulo 1: Financeiro Pessoal ----------
 
 model Transaction {
-  id          String   @id @default(uuid())
-  date        DateTime
-  type        String // income | expense
-  description String
-  amount      Float
-  source      String   @default("manual") // manual | pluggy | ofx_import
-  externalId  String?  @unique // id da transação na Pluggy/OFX, evita duplicar import (upsert)
-  isTransfer  Boolean  @default(false) // true = não conta como gasto/receita real
+  id            String   @id @default(uuid())
+  date          DateTime
+  type          String // income | expense
+  description   String
+  amount        Float
+  source        String   @default("manual") // manual | pluggy | ofx_import
+  externalId    String?  @unique // id da transação na Pluggy/OFX, evita duplicar import (upsert)
+  isTransfer    Boolean  @default(false) // true = não conta como gasto/receita real
   // true = a Pluggy reportou como "PENDING" (comum em compra internacional —
   // entra com descrição genérica tipo "MASTERCARD INTERNACIONAL" antes do
   // banco confirmar o lojista real). Enquanto true, o próximo sync confere
@@ -30,7 +30,7 @@ model Transaction {
   // — sem isso, uma transação pendente ficava presa com o nome genérico pra
   // sempre (nosso sync nunca revisita uma já sincronizada). Nunca mexe numa
   // transação já `false` (poderia sobrescrever categoria corrigida à mão).
-  pluggyPending Boolean @default(false)
+  pluggyPending Boolean  @default(false)
 
   // true só pra lançamento MANUAL feito contra um banco/cartão que TEM sync
   // automático da Pluggy (ideia do Luiz, 06/09: lançar a compra assim que
@@ -53,6 +53,11 @@ model Transaction {
   // já projetada quando dava pra derivar).
   installmentNumber Int?
   totalInstallments Int?
+
+  // Compra parcelada a que essa parcela pertence (05/11) — categoria e nota
+  // moram na compra, ver model Purchase.
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
 
   // Nome real do comerciante às vezes vem ilegível/genérico da Pluggy (ex:
   // "MASTERCARD", "Parcela de compra lojista MasterCard" — confirmado ao
@@ -129,24 +134,24 @@ model TransactionSplit {
 // (vem do próprio livro-razão dele, que já projeta parcela futura). Serve
 // pra responder "quanto ainda tenho comprometido no cartão".
 model UpcomingInstallment {
-  id          String   @id @default(uuid())
-  dueDate     DateTime
-  description String
+  id                String   @id @default(uuid())
+  dueDate           DateTime
+  description       String
   // Nome real do comerciante geralmente vem ilegível da fatura (ex:
   // "AMAZONMKTPLC HEIMONLTD") — `note` é o detalhe que o Luiz mesmo escreve
   // ("fone de ouvido bluetooth") pra lembrar o que a compra foi de verdade.
   // Nunca sobrescreve `description` (que continua batendo com a fatura real).
-  note        String?
-  amount      Float
+  note              String?
+  amount            Float
   // Qual cartão/fatura essa parcela pertence (ex: "Caixa 5709", "C6", "BTG")
   // — null pra parcela que veio da planilha sem essa informação (não dava
   // pra saber o cartão só pelo livro-razão). Permite sintetizar "quanto
   // ainda falta em cada cartão", não só o total geral.
-  cardLabel   String?
+  cardLabel         String?
   // "pluggy:<id da transação>:<parcela N>" pra parcela que veio do sync real
   // da Pluggy — evita recriar a mesma parcela futura toda vez que o sync
   // roda de novo. Null pra parcela importada da planilha (sem esse conceito).
-  externalId String? @unique
+  externalId        String?  @unique
   // Total de parcelas da compra (ex: 10 numa compra parcelada em 10x) —
   // override MANUAL (Luiz corrige na modal "Revisar parcelas"). Pra parcela
   // vinda do sync real da Pluggy, dá pra DERIVAR isso sem esse campo (maior
@@ -159,14 +164,17 @@ model UpcomingInstallment {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id])
 
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+
   createdAt DateTime @default(now())
 
   @@index([dueDate])
 }
 
 model Recurrence {
-  id           String    @id @default(uuid())
-  frequency    String    @default("monthly") // monthly (único usado hoje)
+  id           String   @id @default(uuid())
+  frequency    String   @default("monthly") // monthly (único usado hoje)
   installments Int? // número fixo de parcelas, null = recorrente sem fim
   startDate    DateTime
 
@@ -175,26 +183,27 @@ model Recurrence {
 }
 
 model Category {
-  id       String  @id @default(uuid())
-  name     String
-  type     String // income | expense
+  id   String @id @default(uuid())
+  name String
+  type String // income | expense
   // Só relevante pra expense — 3 estados reais (não dava pra fazer isso com
   // um booleano "essential" só): essential | non_essential | investment.
   // "investment" é a seção separada da planilha do Luiz (Reserva de
   // Emergência, Nomad, Ações...) — não é "gasto" no sentido normal, então
   // nunca deveria ter ficado misturada com Streaming/Cinema em "não
   // essencial" (era exatamente isso que a coluna essential=false fazia).
-  kind     String  @default("non_essential")
+  kind String @default("non_essential")
 
   parentId String?
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
   children Category[] @relation("CategoryToSubcategory")
 
-  transactions   Transaction[]
-  budgetTargets  BudgetTarget[]
-  categorizationRules CategorizationRule[]
+  transactions         Transaction[]
+  budgetTargets        BudgetTarget[]
+  categorizationRules  CategorizationRule[]
   upcomingInstallments UpcomingInstallment[]
-  transactionSplits TransactionSplit[]
+  transactionSplits    TransactionSplit[]
+  purchases            Purchase[]
 
   @@unique([name, parentId])
 }
@@ -255,8 +264,8 @@ model LoanReceivableRepayment {
 }
 
 model Broker {
-  id                String   @id @default(uuid())
-  name              String   @unique // BTG, C6, Caixa, 99, Phantom, Nomad, Mercado Pago, Sofisa, Wise, INCO
+  id                String    @id @default(uuid())
+  name              String    @unique // BTG, C6, Caixa, 99, Phantom, Nomad, Mercado Pago, Sofisa, Wise, INCO
   scope             String // JSON array: ["transactions","credit_card","investments"]
   dataSource        String // pluggy | manual_statement | onchain_query
   pluggyConnectorId String?
@@ -270,28 +279,28 @@ model Broker {
   // true pra corretora que deve virar sua própria box em Patrimônio, em vez
   // de espalhar as posições por tipo de ativo (Nomad: bonds e ETF ficam
   // juntos, não bonds em "Renda Fixa" e ETF em "Fundo" — é uma carteira só).
-  standalone        Boolean  @default(false)
+  standalone        Boolean   @default(false)
   // Conexão que o Luiz não usa mais, mas cujo histórico real (posições,
   // transações) não pode ser apagado sem querer — arquivar tira a corretora
   // das telas ativas (Patrimônio, sync automático, botão Sincronizar) sem
   // perder nenhum registro. Reversível a qualquer momento (desarquivar).
   archivedAt        DateTime?
 
-  transactions     Transaction[]
+  transactions      Transaction[]
   positionSnapshots PositionSnapshot[]
   contributions     Contribution[]
   dividendPayments  DividendPayment[]
 }
 
 model Security {
-  id                   String   @id @default(uuid())
-  name                 String
-  ticker               String?
-  type                 String // FII | Ação | Renda Fixa | Cripto | Moeda | Fundo
-  sector               String?
-  currency             String   @default("BRL") // BRL | USD — Nomad/Phantom são cotados em USD
-  targetAllocationPct  Float?
-  targetDividendYield  Float?
+  id                  String  @id @default(uuid())
+  name                String
+  ticker              String?
+  type                String // FII | Ação | Renda Fixa | Cripto | Moeda | Fundo
+  sector              String?
+  currency            String  @default("BRL") // BRL | USD — Nomad/Phantom são cotados em USD
+  targetAllocationPct Float?
+  targetDividendYield Float?
 
   // Detalhe pro popup de hover — a Pluggy manda isso de verdade pra renda
   // fixa (emissor, vencimento, taxa) e pra ação/FII (ISIN, gestora). Fica
@@ -392,9 +401,9 @@ model DividendPayment {
 // continua sendo algo só ele sabe (intenção futura, não tem como derivar
 // de dado passado).
 model WealthGoal {
-  id                 String @id @default(uuid())
-  targetAmount       Float
-  monthlyContribution Float @default(0)
+  id                  String @id @default(uuid())
+  targetAmount        Float
+  monthlyContribution Float  @default(0)
 }
 
 model CategorizationRule {
@@ -408,8 +417,8 @@ model CategorizationRule {
 // ---------- Módulo 2: Projetos & Freelance ----------
 
 model Client {
-  id       String    @id @default(uuid())
-  name     String    @unique
+  id        String    @id @default(uuid())
+  name      String    @unique
   // Determina o tratamento de imposto do projeto (01/09, confirmado com o
   // Luiz): cliente nacional paga DAS fixo 6% sobre o valor — dá pra mostrar
   // na hora. Cliente estrangeiro tem DAS variável (ele só sabe o valor real
@@ -419,17 +428,17 @@ model Client {
   // (nunca um chute, só o valor real do boleto dividido pela participação
   // de cada projeto no faturamento do mês).
   isForeign Boolean   @default(false)
-  projects Project[]
+  projects  Project[]
 }
 
 model Project {
-  id               String    @id @default(uuid())
-  clientId         String
-  client           Client    @relation(fields: [clientId], references: [id])
-  name             String
-  startDate        DateTime
-  endDate          DateTime?
-  contractValue    Float // sempre em BRL — é o número que alimenta DAS/receita bruta/"a receber" em todo o resto do sistema, nunca muda de significado
+  id                   String    @id @default(uuid())
+  clientId             String
+  client               Client    @relation(fields: [clientId], references: [id])
+  name                 String
+  startDate            DateTime
+  endDate              DateTime?
+  contractValue        Float // sempre em BRL — é o número que alimenta DAS/receita bruta/"a receber" em todo o resto do sistema, nunca muda de significado
   // Contrato de cliente estrangeiro (07/09): valor real combinado na moeda
   // dele (ex: USD) — só informativo, nunca entra em nenhuma soma agregada
   // (DAS, receita, "a receber" continuam 100% em BRL via contractValue
@@ -438,20 +447,20 @@ model Project {
   // bater com o que realmente chega depois de câmbio + tarifa.
   contractValueForeign Float?
   currency             String? // moeda de contractValueForeign, ex: "USD" — null = projeto 100% BRL
-  hasInvoice       Boolean   @default(true)
-  installmentCount Int       @default(1)
-  status           String    @default("em_andamento") // em_andamento | pausado | finalizado | cancelado
+  hasInvoice           Boolean   @default(true)
+  installmentCount     Int       @default(1)
+  status               String    @default("em_andamento") // em_andamento | pausado | finalizado | cancelado
   // Finalizado À MÃO (06/10, pedido do Luiz: "deixa o botão manual caso o
   // cliente pague a menos ou a mais") — fecha o projeto mesmo sem o
   // recebido bater com o contrato. Null = fecha só pela regra automática
   // (recebido >= contrato, na moeda do contrato). Ver `projectClosure`.
-  closedManuallyAt DateTime?
+  closedManuallyAt     DateTime?
 
   recurrenceId String?
   recurrence   Recurrence? @relation(fields: [recurrenceId], references: [id])
 
-  receipts       ProjectReceipt[]
-  supplierCosts  ProjectSupplierCost[]
+  receipts      ProjectReceipt[]
+  supplierCosts ProjectSupplierCost[]
 }
 
 model ProjectReceipt {
@@ -474,12 +483,12 @@ model ProjectReceipt {
 }
 
 model TaxPayment {
-  id               String   @id @default(uuid())
-  competenceMonth  Int
-  competenceYear   Int
-  totalRevenue     Float
-  amountPaid       Float
-  paymentDate      DateTime
+  id              String   @id @default(uuid())
+  competenceMonth Int
+  competenceYear  Int
+  totalRevenue    Float
+  amountPaid      Float
+  paymentDate     DateTime
   // effectiveRate é calculada em runtime: amountPaid / totalRevenue
 
   transactions Transaction[]
@@ -488,9 +497,9 @@ model TaxPayment {
 }
 
 model Supplier {
-  id                String                @id @default(uuid())
-  name              String                @unique
-  projectCosts      ProjectSupplierCost[]
+  id           String                @id @default(uuid())
+  name         String                @unique
+  projectCosts ProjectSupplierCost[]
 }
 
 model ProjectSupplierCost {
@@ -506,12 +515,12 @@ model ProjectSupplierCost {
 }
 
 model SupplierPayment {
-  id                     String              @id @default(uuid())
-  projectSupplierCostId  String
-  projectSupplierCost    ProjectSupplierCost @relation(fields: [projectSupplierCostId], references: [id])
-  installmentNumber      Int                 @default(1)
-  amount                 Float
-  paymentDate            DateTime
+  id                    String              @id @default(uuid())
+  projectSupplierCostId String
+  projectSupplierCost   ProjectSupplierCost @relation(fields: [projectSupplierCostId], references: [id])
+  installmentNumber     Int                 @default(1)
+  amount                Float
+  paymentDate           DateTime
 
   transactions Transaction[]
 }
@@ -597,4 +606,37 @@ model OAuthToken {
 model DataHealthIgnore {
   key       String   @id
   createdAt DateTime @default(now())
+}
+
+// Compra parcelada (05/11) — UMA linha por compra, com a categoria e a nota
+// que valem pra TODAS as parcelas dela, as já lançadas (Transaction) e as que
+// ainda vêm (UpcomingInstallment). Antes a categoria morava em cada linha e se
+// perdia quando a parcela prevista virava lançamento (sync de 04/11: 18
+// parcelas "sem categoria"). Categorizar qualquer parcela = categorizar a
+// compra (services/purchases.ts). id: "p:<código>" (Pluggy, mesmo código de
+// `pluggy:p:<código>:<n>`) ou "m:<código>" (parcela digitada, cartão Caixa).
+model Purchase {
+  id                String    @id
+  cardLabel         String?
+  description       String
+  installmentAmount Float
+  totalInstallments Int?
+  categoryId        String?
+  category          Category? @relation(fields: [categoryId], references: [id])
+  note              String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  transactions Transaction[]
+  installments UpcomingInstallment[]
+}
+
+// Total de gasto de cada mês já fechado (05/11) — "número de mês fechado não
+// muda". Gravado no dia 10 do mês seguinte (tempo das últimas compras do mês
+// chegarem); a Saúde dos dados avisa se o total mudar depois disso.
+model MonthTotal {
+  ym         String   @id // "2026-09"
+  total      Float
+  byCategory String // JSON { categoryId|"uncategorized": total }
+  recordedAt DateTime @default(now())
 }

@@ -1,7 +1,7 @@
 // Parcelas futuras do cartão — casos que JÁ deram errado em produção
 // (out/26). Se algum quebrar, o sync voltaria a duplicar ou sumir parcela.
 import { describe, it, expect } from "vitest";
-import { planInstallments, groupPurchases, effectiveDate } from "../src/services/pluggyTransactionSync.js";
+import { planInstallments, groupPurchases, effectiveDate, purchaseKeyOf, pickPurchaseValue } from "../src/services/pluggyTransactionSync.js";
 
 type Tx = Parameters<typeof planInstallments>[0][number];
 const NOW = new Date("2026-10-27T12:00:00Z");
@@ -89,10 +89,57 @@ describe("planInstallments", () => {
     expect(plan).toHaveLength(12);
   });
 
-  it("nunca planeja parcela antes do mês passado", () => {
+  it("nunca planeja parcela antes de set/2026 (quando o Command OS passou a valer)", () => {
     const txs = [inst("a", "ANTIGA", 10, 1, 12, "2026-01-10T10:00:00.000Z", "2026-01-10T00:00:00Z")];
     const plan = planInstallments(txs, "b", NOW);
+    expect(plan[0].dueDate.toISOString().slice(0, 10)).toBe("2026-09-10");
     expect(plan.every((p) => p.dueDate >= new Date("2026-09-01T00:00:00Z"))).toBe(true);
+  });
+});
+
+// 05/11 — o Luiz mudou o vencimento do C6 e o banco passou a lançar a parcela
+// N um a dois meses depois do mês dela. A prevista era apagada por idade e o
+// mês fechado perdia o gasto até a lançada chegar.
+describe("banco atrasando a parcela (C6 depois da troca de vencimento)", () => {
+  const NOV = new Date("2026-11-05T12:00:00Z");
+  const bike = (n: number, billed: string) => inst(`b${n}`, "PEOPLE BIKE", 100, n, 10, "2026-07-03T14:17:00.000Z", billed);
+
+  it("parcela de setembro ainda não lançada em novembro continua prevista em setembro", () => {
+    const plan = planInstallments([bike(1, "2026-07-17T00:00:00Z"), bike(2, "2026-09-17T00:00:00Z")], "b", NOV);
+    expect(plan[0].n).toBe(3);
+    expect(plan[0].dueDate.toISOString().slice(0, 10)).toBe("2026-09-03");
+  });
+
+  it("parcela já gravada no banco não volta a ser prevista se a Pluggy parar de mandar", () => {
+    const latest = bike(2, "2026-09-17T00:00:00Z");
+    const key = purchaseKeyOf("b", latest);
+    const plan = planInstallments([latest], "b", NOV, new Map([[key, [3, 4]]]));
+    expect(plan[0].n).toBe(5);
+  });
+
+  it("a prevista cai no MESMO dia que a lançada vai ter — trocar uma pela outra não mexe no mês", () => {
+    const plan = planInstallments([bike(2, "2026-09-17T00:00:00Z")], "b", NOV);
+    for (const p of plan) {
+      // a lançada chega até 2 meses depois, numa fatura qualquer
+      const real = bike(p.n, new Date(p.dueDate.getTime() + 60 * 864e5).toISOString());
+      expect(effectiveDate(real).toISOString()).toBe(p.dueDate.toISOString());
+    }
+  });
+
+  it("o código da compra não muda quando chega uma parcela nova (a prevista é atualizada, nunca recriada)", () => {
+    const a = planInstallments([bike(2, "2026-09-17T00:00:00Z")], "b", NOV);
+    const b = planInstallments([bike(2, "2026-09-17T00:00:00Z"), bike(3, "2026-11-17T00:00:00Z")], "b", NOV);
+    const ext = (plan: typeof a, n: number) => plan.find((p) => p.n === n)!.externalId;
+    expect(ext(a, 7)).toBe(ext(b, 7));
+    expect(purchaseKeyOf("b", bike(2, "x"))).toBe(purchaseKeyOf("b", bike(3, "y")));
+  });
+});
+
+describe("pickPurchaseValue", () => {
+  it("a categoria mais comum entre as parcelas; empate → a primeira (mais recente)", () => {
+    expect(pickPurchaseValue(["a", null, "b", "b"])).toBe("b");
+    expect(pickPurchaseValue(["a", "b"])).toBe("a");
+    expect(pickPurchaseValue([null, null])).toBeNull();
   });
 });
 

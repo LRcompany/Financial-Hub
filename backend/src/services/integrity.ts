@@ -37,6 +37,30 @@ export const DATA_START = new Date(2026, 8, 1); // 01/09/2026
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
+const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Total de gasto de um mês ("2026-09") agora, e por categoria — mesma conta
+ * do Orçamento (`expenseLedger`). */
+export async function monthTotalNow(ym: string): Promise<{ total: number; byCategory: Record<string, number> }> {
+  const [y, m] = ym.split("-").map(Number);
+  const items = await expenseLedger(new Date(y, m - 1, 1), new Date(y, m, 1));
+  const byCategory: Record<string, number> = {};
+  for (const i of items) {
+    const k = i.categoryId ?? "uncategorized";
+    byCategory[k] = round2((byCategory[k] ?? 0) + i.amount);
+  }
+  return { total: round2(ledgerTotal(items)), byCategory };
+}
+
+/** Guarda o total de agora como o valor FECHADO do mês (ver regra 15). */
+export async function recordMonthTotal(ym: string): Promise<void> {
+  const { total, byCategory } = await monthTotalNow(ym);
+  const data = { total, byCategory: JSON.stringify(byCategory), recordedAt: new Date() };
+  await prisma.monthTotal.upsert({ where: { ym }, create: { ym, ...data }, update: data });
+}
+
 export async function runDataHealth(now = new Date()): Promise<{ checkedAt: string; ok: boolean; issues: HealthIssue[] }> {
   const ignored = new Set((await prisma.dataHealthIgnore.findMany({ select: { key: true } })).map((i) => i.key));
   const issues: HealthIssue[] = [];
@@ -239,6 +263,88 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
         .filter((u) => !isCalendarNoon(u.dueDate))
         .map((u) => item("data-fora-do-padrao", `parcela ${u.description} ${u.dueDate.toISOString()}`, { kind: "installment", id: u.id })),
     ]
+  );
+
+  // 14. Parcela com categoria/nota diferente da COMPRA dela (05/11). Categoria
+  //     e nota moram na compra (services/purchases.ts) — toda parcela, lançada
+  //     ou prevista, tem que ter a mesma. Se não tem, algum caminho gravou
+  //     direto na linha: o conserto leva a da compra pra todas.
+  const purchases = await prisma.purchase.findMany({
+    where: { OR: [{ categoryId: { not: null } }, { note: { not: null } }] },
+    include: {
+      transactions: { where: { date: { gte: DATA_START } }, select: { id: true, categoryId: true, note: true, description: true, amount: true, date: true, installmentNumber: true, _count: { select: { splits: true } } } },
+      installments: { where: { dueDate: { gte: DATA_START } }, select: { id: true, categoryId: true, note: true, description: true, amount: true, dueDate: true } },
+    },
+  });
+  const differs = (p: { categoryId: string | null; note: string | null }, r: { categoryId: string | null; note: string | null }, split = false) =>
+    (p.categoryId != null && !split && r.categoryId !== p.categoryId) || (p.note != null && r.note !== p.note);
+  push(
+    "parcela-diferente-da-compra",
+    "erro",
+    "auto-fix",
+    "Parcela com categoria diferente da compra",
+    "Toda parcela de uma compra tem a mesma categoria e nota — senão o gasto cai na meta errada. \"Corrigir agora\" usa a da compra em todas.",
+    purchases.flatMap((p) => [
+      ...p.transactions
+        .filter((t) => differs(p, t, t._count.splits > 0))
+        .map((t) => item("parcela-diferente-da-compra", `${t.description} ${t.installmentNumber ? `parcela ${t.installmentNumber} ` : ""}(${day(t.date)}, ${brl(t.amount)})`, { kind: "transaction", id: t.id })),
+      ...p.installments
+        .filter((u) => differs(p, u))
+        .map((u) => item("parcela-diferente-da-compra", `${u.description} prevista (${day(u.dueDate)}, ${brl(u.amount)})`, { kind: "installment", id: u.id })),
+    ])
+  );
+
+  // 15. Mês que já FECHOU mudou de valor (05/11). Pedido do Luiz depois de
+  //     setembro ir de R$ 24.782 pra R$ 21.059 e voltar sem ninguém mexer:
+  //     o total de cada mês fica guardado no dia 10 do mês seguinte
+  //     (`MonthTotal`); se mudar mais de R$ 1 depois disso, avisa — com o que
+  //     mudou. Se foi ele (lançou algo atrasado), "É assim mesmo" guarda o
+  //     valor novo.
+  const changed: HealthItem[] = [];
+  const catNames = new Map((await prisma.category.findMany({ select: { id: true, name: true } })).map((c) => [c.id, c.name]));
+  for (let d = new Date(DATA_START); now >= new Date(d.getFullYear(), d.getMonth() + 1, 10); d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    const ym = ymOf(d);
+    const snap = await prisma.monthTotal.findUnique({ where: { ym } });
+    if (!snap) {
+      await recordMonthTotal(ym);
+      continue;
+    }
+    const cur = await monthTotalNow(ym);
+    const delta = cur.total - snap.total;
+    if (Math.abs(delta) <= 1) continue;
+    const before = JSON.parse(snap.byCategory) as Record<string, number>;
+    const moves = [...new Set([...Object.keys(before), ...Object.keys(cur.byCategory)])]
+      .map((k) => ({ k, d: (cur.byCategory[k] ?? 0) - (before[k] ?? 0) }))
+      .filter((m) => Math.abs(m.d) > 1)
+      .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
+      .slice(0, 3)
+      .map((m) => `${m.k === "uncategorized" ? "Sem categoria" : catNames.get(m.k) ?? "?"} ${m.d > 0 ? "+" : "−"}${brl(Math.abs(m.d))}`);
+    changed.push({
+      key: `mes-fechado-mudou:${ym}`,
+      label: `${MONTHS[d.getMonth()]}/${d.getFullYear()}: era ${brl(snap.total)}, agora ${brl(cur.total)} (${delta > 0 ? "+" : "−"}${brl(Math.abs(delta))})${moves.length ? ` — ${moves.join(", ")}` : ""}`,
+    });
+  }
+  push(
+    "mes-fechado-mudou",
+    "aviso",
+    "review",
+    "Mês fechado mudou de valor",
+    "O total de um mês que já fechou mudou. Se foi você (lançou ou apagou um gasto daquele mês), marque \"é assim mesmo\". Se não foi, me avise — é sinal de problema no sync.",
+    changed
+  );
+
+  // 16. Parcela prevista que o banco ainda não lançou, 75+ dias depois do mês
+  //     dela (05/11). Ela continua contando no mês dela (a prevista só sai
+  //     quando a lançada chega) — o aviso é só pra saber que o banco atrasou.
+  push(
+    "parcela-prevista-atrasada",
+    "aviso",
+    "review",
+    "Parcela que o banco ainda não lançou",
+    "Continua contando no mês dela até o banco lançar. Se a compra foi cancelada ou antecipada, me avise.",
+    upcoming
+      .filter((u) => u.externalId?.startsWith("pluggy:") && now.getTime() - u.dueDate.getTime() > 75 * 864e5)
+      .map((u) => item("parcela-prevista-atrasada", `${u.cardLabel ?? ""} ${u.description.trim()} — prevista pra ${day(u.dueDate)}, ${brl(u.amount)}`, { kind: "installment", id: u.id }))
   );
 
   // Parcela manual vencida que ninguém confirma é normal pro cartão Caixa (sem

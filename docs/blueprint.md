@@ -2396,6 +2396,38 @@ Luiz: *"às vezes eu recebo em projetos da gringa em EUR. Adicione essa opção 
   - Projeto em EUR criado; moeda inválida recusada; formulário conferido no navegador.
 - **Deployado** (sem migration): build + `pm2 restart` em prod e demo. Cotação de EUR conferida no servidor.
 
+### Compra parcelada como uma coisa só (05/11)
+
+Luiz, depois de 18 parcelas aparecerem "sem categoria" no sync de 04/11: *"parece um remendo... pq isso aconteceu?"*. Ele tinha mudado o vencimento do C6, e o banco passou a lançar a parcela N um a dois meses depois do mês dela. Isso expôs dois furos de desenho:
+
+- **A categoria morava em cada linha.** A parcela prevista e a lançada eram linhas separadas, cada uma com a sua categoria. Quando a lançada chegava, ela não sabia o que o Luiz tinha escolhido na prevista.
+  - Primeiro conserto, no mesmo dia: a parcela nova procurava uma parcela parecida (mesma loja e valor) e copiava a categoria. Funcionava, mas era um remendo.
+- **A parcela prevista era apagada por idade.** A regra era "nunca planeja parcela antes do mês passado". Com o C6 atrasando, a prevista de setembro sumia em novembro antes da lançada chegar. Setembro foi de R$ 24.782 pra R$ 21.059 e voltou.
+
+**A solução:**
+
+- **A compra virou um registro** (`Purchase`, migration `20261105131051_add_purchase_and_month_total`):
+  - O id é `p:<código>` pra compra da Pluggy (o mesmo código das parcelas previstas desde 27/10) e `m:<código>` pra compra digitada (cartão Caixa, planilha).
+  - Toda parcela, lançada (`Transaction.purchaseId`) ou prevista (`UpcomingInstallment.purchaseId`), aponta pra compra dela.
+  - A categoria e a nota moram na compra. `services/purchases.ts` é o único lugar que grava categoria/nota de parcela: categorizar ou anotar qualquer parcela (Orçamento, Revisar parcelas, Saúde dos dados) grava na compra e em todas as parcelas dela.
+  - O sync liga a parcela nova à compra e já dá a categoria/nota da compra. Isso acontece no `reconcileInstallments`, logo depois de gravar os lançamentos.
+  - Saiu o "procura uma parcela parecida" (`inheritFromPurchase`) e o script de uma vez que o aplicou.
+- **A parcela prevista só sai quando a lançada daquela mesma parcela existe**, nesta resposta da Pluggy ou já no banco:
+  - Sem corte por idade. O único piso é set/2026.
+  - A prevista cai no mesmo dia que a lançada vai ter (dia da compra no mês da parcela), então a troca de uma pela outra não mexe no total de mês nenhum.
+  - Compra que não veio numa resposta da Pluggy nunca perde parcela por isso.
+- **3 regras novas na Saúde dos dados**:
+  - "Parcela com categoria diferente da compra" (erro, Corrigir agora): usa a da compra em todas.
+  - "Mês fechado mudou de valor" (aviso):
+    - O total de cada mês fica guardado no dia 10 do mês seguinte (`MonthTotal`, também por categoria).
+    - Se mudar mais de R$ 1, avisa com o antes e o depois e as categorias que mudaram.
+    - "É assim mesmo" guarda o valor novo como o fechado.
+  - "Parcela que o banco ainda não lançou" (aviso, 75+ dias depois do mês dela): ela continua contando no mês dela, o aviso é só pra saber.
+- **Testes** (`test/installments.test.ts` + `test/purchase-lag.integration.test.ts`, num banco SQLite de teste):
+  - Reproduzem mês a mês o atraso do C6: setembro não muda de valor, a lançada chega com a categoria e a nota da compra, nada some quando a Pluggy manda a lista incompleta, e o aviso de mês fechado funciona.
+  - Com o corte por idade antigo de volta, 3 deles falham.
+- **Migração dos dados**: `scripts/link-purchases.ts` cria as compras que já existem e liga as parcelas a elas. Roda o mesmo caminho do sync. Sem `--apply` só simula e mostra os totais de set/out/nov antes e depois.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

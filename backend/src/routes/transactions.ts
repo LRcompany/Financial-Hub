@@ -2,6 +2,7 @@ import { Router } from "express";
 import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
 import { reinforceRule, categoryPath, leafExpenseCategories } from "../services/categorization.js";
+import { propagateFromRows } from "../services/purchases.js";
 
 export const transactionsRouter = Router();
 
@@ -142,6 +143,9 @@ transactionsRouter.put("/transactions/:id/note", async (req, res) => {
     where: { id },
     data: { note: trimmed || null },
   });
+  // Parcela de compra parcelada: a nota é da COMPRA — vale pra todas as
+  // parcelas dela, lançadas e previstas (ver services/purchases.ts).
+  await propagateFromRows({ transactionIds: [id] }, { note: transaction.note });
   res.json({ id: transaction.id, note: transaction.note });
 });
 
@@ -169,6 +173,8 @@ transactionsRouter.put("/transactions/group", async (req, res) => {
   if (sample) await reinforceRule(sample.description, categoryId);
 
   const result = await prisma.transaction.updateMany({ where: { id: { in: ids } }, data: { categoryId } });
+  // Parcela de compra parcelada: a categoria é da COMPRA inteira (ver services/purchases.ts).
+  await propagateFromRows({ transactionIds: ids }, { categoryId });
   res.json({ updated: result.count });
 });
 

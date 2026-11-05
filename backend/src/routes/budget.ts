@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { reinforceRule, categoryPath } from "../services/categorization.js";
 import { expenseLedger, sumByCategory, ledgerTotal, purchaseBase, buildInstallmentPositions, type LedgerItem } from "../services/ledger.js";
+import { propagateFromRows } from "../services/purchases.js";
 
 export const budgetRouter = Router();
 
@@ -535,6 +536,11 @@ budgetRouter.put("/upcoming-installments/group", async (req, res) => {
     return res.status(400).json({ error: "Nada pra atualizar — informe cardLabel, amount, categoryId e/ou note" });
   }
   const result = await prisma.upcomingInstallment.updateMany({ where: { id: { in: ids } }, data });
+  // Categoria e nota são da COMPRA: valem também pras parcelas já lançadas e
+  // pras que ainda vêm (ver services/purchases.ts).
+  if (data.categoryId !== undefined || data.note !== undefined) {
+    await propagateFromRows({ installmentIds: ids }, { categoryId: data.categoryId, note: data.note });
+  }
   res.json({ updated: result.count });
 });
 

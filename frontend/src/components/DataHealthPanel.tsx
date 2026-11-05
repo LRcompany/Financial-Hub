@@ -8,6 +8,9 @@ import styles from './DataHealthPanel.module.css'
 
 // Avisos de "revisar" onde o item é um lançamento repetido — dá pra apagar.
 const DELETABLE = new Set(['manual-repete-pluggy', 'pluggy-repetido'])
+// Avisos de "revisar" que só pedem confirmação (05/11): mês fechado que mudou
+// de valor ("É assim mesmo" guarda o valor novo) e parcela que o banco atrasou.
+const ACCEPTABLE = new Set(['mes-fechado-mudou', 'parcela-prevista-atrasada'])
 
 /** "Saúde dos dados" (27/10, pedido do Luiz: "não quero depois de 2 meses de
  * uso falar pra você verificar os números novamente"). Mostra as regras de
@@ -144,8 +147,17 @@ function ItemActions({
 }) {
   const [categoryId, setCategoryId] = useState('')
   const ref = item.ref
-  if (!ref) return null
   const disabled = busy !== null
+  if (issue.action === 'review' && ACCEPTABLE.has(issue.id)) {
+    return (
+      <span className={styles.itemActions}>
+        <button type="button" className={styles.secondaryBtn} disabled={disabled} onClick={() => onRun(item.key, () => api.ignoreDataHealthItem(item.key))}>
+          {busy === item.key ? 'Salvando…' : 'É assim mesmo'}
+        </button>
+      </span>
+    )
+  }
+  if (!ref) return null
 
   if (issue.action === 'categorize') {
     return (
