@@ -2428,6 +2428,36 @@ Luiz, depois de 18 parcelas aparecerem "sem categoria" no sync de 04/11: *"parec
   - Com o corte por idade antigo de volta, 3 deles falham.
 - **Migração dos dados**: `scripts/link-purchases.ts` cria as compras que já existem e liga as parcelas a elas. Roda o mesmo caminho do sync. Sem `--apply` só simula e mostra os totais de set/out/nov antes e depois.
 
+### INCO fora do Command OS (10/11)
+
+Luiz: *"vamos remover o investimento da INCO... eu emprestei o dinheiro e a ideia é que eles me devolvam, logo o valor vai diminuir, então não faz sentido"*.
+
+- **Corretora INCO arquivada**: é a mesma ação do "excluir" em Configurações (`archivedAt`).
+  - Ela sai do Patrimônio em todos os meses, inclusive o histórico. Também sai dos aportes, da meta do primeiro milhão e do aviso "corretora manual sem o valor do mês passado".
+  - Nada foi apagado: as posições continuam no banco, e desarquivar traz tudo de volta.
+- **Números depois**:
+  - Patrimônio de nov/26: R$ 660.904,41 → R$ 625.420,17 (−R$ 35.484,24, as 7 posições da INCO).
+  - Aportes do ano: saem o +R$ 29.072 de ago/26 e o −R$ 40.000 de fev/26.
+  - Projeção do primeiro milhão: set/2030 → mar/2031.
+- **Daqui pra frente**: o dinheiro que a INCO devolver entra no patrimônio quando cair na conta.
+- Direto no `prod.db`, com backup antes, apagado depois de conferir o total.
+
+### Primeiro milhão: aporte planejado é do ano, desde setembro (10/11)
+
+Luiz: *"o aporte planejado... não pode ir diminuindo né?! pq agora está 15k"* e *"se a gente começou em setembro o aporte deveria ser de setembro... esse valor é anual"*.
+
+- **Antes**: a linha do ano corrente mostrava só o que faltava do mês atual até dezembro. Ela encolhia todo mês: R$ 30 mil em setembro, R$ 22,5 mil em outubro, R$ 15 mil em novembro. E o "Aportado real" contava desde janeiro, antes do Command OS existir.
+- **Agora** (`services/wealthProjection.ts`, `PLAN_START` = set/2026):
+  - "Aporte planejado" é o do ano: aporte mensal × os meses do plano naquele ano.
+    - 2026: set a dez = R$ 30.000.
+    - 2027 em diante: R$ 90.000 por ano.
+    - O último ano vai só até o mês em que bate a meta.
+  - A tabela mostra o período quando o ano não é cheio (ex.: "2026 (set–dez)").
+  - "Aportado real" de 2026 conta de setembro em diante: R$ 16.542,17 em nov/26.
+  - O % compara o real com o planejado até o mês consultado (`plannedSoFar`): R$ 22.500 em nov/26, 74%.
+- **A projeção em si não mudou**: ela continua partindo do saldo de hoje, então a data do milhão é a mesma.
+- **Teste**: `test/wealthProjection.test.ts` confere que a linha de 2026 dá o mesmo valor em outubro e em novembro.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

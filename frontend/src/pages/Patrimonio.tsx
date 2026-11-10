@@ -169,6 +169,15 @@ function assetHoverContent(p: Position) {
   return rows.map((r) => <HoverRow key={r.label} label={r.label} value={r.value} />)
 }
 
+const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+/** "set–dez" quando o plano não cobre o ano inteiro (2026 começa em setembro;
+ * o último ano vai até o mês em que bate a meta). Ano cheio = nada. */
+function yearPeriod(row: { fromMonth: number; toMonth: number }): string | null {
+  if (row.fromMonth === 1 && row.toMonth === 12) return null
+  return row.fromMonth === row.toMonth ? MONTH_ABBR[row.fromMonth - 1] : `${MONTH_ABBR[row.fromMonth - 1]}–${MONTH_ABBR[row.toMonth - 1]}`
+}
+
 export function Patrimonio() {
   // Mês consultado (02/10, pedido do Luiz: "pode mostrar o mês anterior em
   // patrimônio... não podemos perder o histórico das coisas") — a carteira
@@ -252,16 +261,6 @@ export function Patrimonio() {
   const total = wealth.total ?? 0
   const goalProgress = wealth.wealthGoal ? Math.min((total / wealth.wealthGoal.targetAmount) * 100, 100) : 0
 
-  // Quanto JÁ deveria ter sido aportado desde janeiro até agora (não o ano
-  // inteiro) — é a base de comparação correta pro `realContribution` da
-  // linha do ano corrente. O `contribution` daquela mesma linha na tabela é
-  // outra coisa (quanto ainda falta aportar dali até dezembro, pra projeção
-  // futura) — comparar `realContribution` com ELE seria comparar períodos
-  // diferentes (jan-agora vs. agora-dezembro), por isso a base separada aqui.
-  // Até o MÊS CONSULTADO (02/10) — o "aportado real" do backend também vai
-  // de janeiro até o mês do seletor.
-  const monthsElapsedThisYear = month
-  const plannedContributionSoFarThisYear = wealth.wealthGoal ? wealth.wealthGoal.monthlyContribution * monthsElapsedThisYear : null
 
   // Mesma regra das boxes abaixo: corretora única vira o nome dela em vez do
   // tipo genérico ("Moeda" não é onde eu invisto, é só classificação do ativo).
@@ -885,26 +884,25 @@ export function Patrimonio() {
                     <tbody>
                       {wealth.yearlyBreakdown.map((row) => (
                         <tr key={row.year}>
-                          <td>{row.year}</td>
+                          <td>
+                            {row.year}
+                            {yearPeriod(row) && <span className={styles.realContributionPct}> ({yearPeriod(row)})</span>}
+                          </td>
                           <td><Money>R$ {currency(row.startBalance)}</Money></td>
                           <td><Money>R$ {currency(row.contribution)}</Money></td>
                           {/* Só o ano corrente tem "real" (histórico ainda
-                           * não existe pros anos futuros da projeção). Base de
-                           * comparação é "planejado de janeiro até agora"
-                           * (`plannedContributionSoFarThisYear`), NÃO a coluna
-                           * "Aporte planejado" ao lado — aquela é o restante
-                           * do ano (agora até dezembro), período diferente do
-                           * "real" (janeiro até agora); comparar os dois seria
-                           * comparar janelas de tempo que não se sobrepõem
-                           * (pedido do Luiz, 04/09: "eu fiz isso?"). */}
+                           * não existe pros anos futuros da projeção). O "%" é
+                           * contra o planejado do início do plano até o mês
+                           * consultado (`plannedSoFar`) — mesmo período do
+                           * "real" (pedido do Luiz, 04/09: "eu fiz isso?"). */}
                           <td>
                             {row.realContribution != null ? (
                               <>
                                 <Money>R$ {currency(row.realContribution)}</Money>
-                                {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                                {row.plannedSoFar != null && row.plannedSoFar > 0 && (
                                   <span className={styles.realContributionPct}>
                                     {' '}
-                                    ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}% da meta até agora)
+                                    ({((row.realContribution / row.plannedSoFar) * 100).toFixed(0)}% da meta até agora)
                                   </span>
                                 )}
                               </>
@@ -924,7 +922,10 @@ export function Patrimonio() {
                 <div className={styles.positionCards}>
                   {wealth.yearlyBreakdown.map((row) => (
                     <div key={row.year} className={styles.positionCard}>
-                      <div className={styles.positionCardTop}>{row.year}</div>
+                      <div className={styles.positionCardTop}>
+                        {row.year}
+                        {yearPeriod(row) && <span className={styles.realContributionPct}> ({yearPeriod(row)})</span>}
+                      </div>
                       <div className={styles.positionCardRow}>
                         <span className={styles.positionCardLabel}>Saldo inicial</span>
                         <span><Money>R$ {currency(row.startBalance)}</Money></span>
@@ -939,10 +940,10 @@ export function Patrimonio() {
                           {row.realContribution != null ? (
                             <>
                               <Money>R$ {currency(row.realContribution)}</Money>
-                              {plannedContributionSoFarThisYear != null && plannedContributionSoFarThisYear > 0 && (
+                              {row.plannedSoFar != null && row.plannedSoFar > 0 && (
                                 <span className={styles.realContributionPct}>
                                   {' '}
-                                  ({((row.realContribution / plannedContributionSoFarThisYear) * 100).toFixed(0)}%)
+                                  ({((row.realContribution / row.plannedSoFar) * 100).toFixed(0)}%)
                                 </span>
                               )}
                             </>
@@ -960,9 +961,9 @@ export function Patrimonio() {
                 </div>
 
                 <p className={styles.helperText}>
-                  "Aporte planejado" do ano corrente é só o que falta aportar dele pra frente (base da projeção) — "Aportado
-                  real" é o que já entrou desde janeiro. São dois períodos diferentes do mesmo ano, não o mesmo valor visto
-                  de duas formas.
+                  "Aporte planejado" é o do ano: aporte mensal × os meses do plano naquele ano. 2026 conta de setembro,
+                  quando o Command OS começou; o último ano, até o mês em que bate a meta. "Aportado real" é o que entrou
+                  desde o início do plano no ano, e o % compara com o planejado até o mês que você está vendo.
                 </p>
               </>
             )}

@@ -37,14 +37,29 @@ export function computeAverageMonthlyReturnPct(monthlyTotals: MonthlyTotal[]): n
 export interface YearBreakdown {
   year: number;
   startBalance: number;
+  // Aporte planejado do ANO (10/11, Luiz: "esse valor é anual"): meses do
+  // plano naquele ano × aporte mensal. Ano corrente = de set/2026 (início do
+  // Command OS) ou janeiro até dezembro — não encolhe a cada mês que passa.
+  // Último ano da projeção = só até o mês em que bate a meta.
   contribution: number;
+  fromMonth: number; // 1–12, primeiro mês do plano nesse ano
+  toMonth: number; // 1–12, último mês do plano nesse ano
   endBalance: number;
   // Quanto REALMENTE entrou de aporte novo nesse ano até agora — só
   // preenchido na linha do ano CORRENTE (nas linhas futuras não existe "real"
   // ainda, ficam null). Pedido do Luiz (04/09): comparar o planejado
   // (`contribution`) com o que ele de fato conseguiu aportar.
   realContribution: number | null;
+  // Planejado do início do plano no ano até o mês consultado — a base de
+  // comparação do `realContribution` (mesmo período). Só no ano corrente.
+  plannedSoFar: number | null;
 }
+
+/** O plano do primeiro milhão vale desde set/2026, quando o Command OS
+ * passou a valer (10/11: "se a gente começou em setembro o aporte deveria
+ * ser de setembro"). */
+export const PLAN_START = { year: 2026, month: 9 };
+export const planStartMonthOf = (year: number) => (year === PLAN_START.year ? PLAN_START.month : 1);
 
 export interface Projection {
   monthsToGoal: number;
@@ -61,10 +76,10 @@ export function projectFirstMillion(
   targetAmount: number | null,
   monthlyContribution: number,
   avgMonthlyReturnPct: number | null,
-  // Aportado REAL no ano corrente até agora (calculado em wealth.ts a partir
-  // do histórico de PositionSnapshot) — só entra na linha do ano corrente do
-  // breakdown, pra comparar com o planejado (pedido do Luiz, 04/09).
-  realContributionThisYear: number | null = null
+  // Aportado REAL no ano corrente, do início do plano até o mês consultado
+  // (`throughMonth`, 1–12) — calculado em wealth.ts a partir do histórico de
+  // PositionSnapshot. Só entra na linha do ano corrente (pedido do Luiz, 04/09).
+  currentYear: { real: number; throughMonth: number } | null = null
 ): { projection: Projection | null; yearlyBreakdown: YearBreakdown[] } {
   if (!targetAmount) {
     return { projection: null, yearlyBreakdown: [] };
@@ -87,6 +102,24 @@ export function projectFirstMillion(
   let yearContribution = 0;
   let curYear = year;
 
+  // A projeção em si parte do saldo de HOJE (o que já foi aportado no ano já
+  // está nele); só o que a linha MOSTRA de aporte do ano corrente é o plano
+  // do ano inteiro.
+  const pushRow = (toMonth: number) => {
+    const isCurrent = curYear === currentCalendarYear;
+    const fromMonth = isCurrent ? planStartMonthOf(curYear) : 1;
+    breakdown.push({
+      year: curYear,
+      startBalance: yearStartBalance,
+      contribution: isCurrent ? monthlyContribution * (toMonth - fromMonth + 1) : yearContribution,
+      fromMonth,
+      toMonth,
+      endBalance: balance,
+      realContribution: isCurrent && currentYear ? currentYear.real : null,
+      plannedSoFar: isCurrent && currentYear ? monthlyContribution * Math.max(0, currentYear.throughMonth - fromMonth + 1) : null,
+    });
+  };
+
   while (balance < targetAmount && monthsElapsed < MAX_MONTHS) {
     balance = balance * (1 + monthlyRate) + monthlyContribution;
     yearContribution += monthlyContribution;
@@ -94,13 +127,7 @@ export function projectFirstMillion(
     month++;
 
     if (month > 11) {
-      breakdown.push({
-        year: curYear,
-        startBalance: yearStartBalance,
-        contribution: yearContribution,
-        endBalance: balance,
-        realContribution: curYear === currentCalendarYear ? realContributionThisYear : null,
-      });
+      pushRow(12);
       month = 0;
       year++;
       curYear = year;
@@ -109,15 +136,7 @@ export function projectFirstMillion(
     }
   }
 
-  if (yearContribution > 0) {
-    breakdown.push({
-      year: curYear,
-      startBalance: yearStartBalance,
-      contribution: yearContribution,
-      endBalance: balance,
-      realContribution: curYear === currentCalendarYear ? realContributionThisYear : null,
-    });
-  }
+  if (yearContribution > 0) pushRow(month);
 
   if (monthsElapsed >= MAX_MONTHS) {
     return { projection: null, yearlyBreakdown: breakdown };

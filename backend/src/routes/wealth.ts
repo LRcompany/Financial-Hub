@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { computeAverageMonthlyReturnPct, projectFirstMillion } from "../services/wealthProjection.js";
+import { computeAverageMonthlyReturnPct, projectFirstMillion, planStartMonthOf } from "../services/wealthProjection.js";
 import { fetchAllSnapshots, activeSnapshotsAsOf, automatedStartYmByBrokerType, yearMonth } from "../services/activePositions.js";
 
 export const wealthRouter = Router();
@@ -142,7 +142,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // `breakdown` (13/10): de onde veio o valor do mês, por corretora+tipo —
   // hover do gráfico "Investido por mês" (positivo = aporte, negativo =
   // resgate), maior primeiro. Só entra variação de pelo menos R$1.
-  const investedByMonthWithYear: { label: string; value: number; year: number; breakdown: { label: string; value: number }[] }[] = [];
+  const investedByMonthWithYear: { label: string; value: number; year: number; ym: number; breakdown: { label: string; value: number }[] }[] = [];
   let prevInvestedByKey = baselineInvestedByKey;
   for (let idx = 0; idx < monthlyTotals.length; idx++) {
     const curByKey = investedByKeyByMonth[idx];
@@ -158,7 +158,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
         if (Math.abs(d) >= 1) breakdown.push({ label: keyLabel.get(key) ?? key, value: d });
       }
       breakdown.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx], breakdown });
+      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, year: monthMetaYear[idx], ym: curYm, breakdown });
     }
     prevInvestedByKey = curByKey;
   }
@@ -172,9 +172,12 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // de 12 meses atrás de "agora").
   // Ano do MÊS CONSULTADO (02/10, Patrimônio com seletor de mês): olhando
   // setembro/2026, é 2026 até setembro; sem query, é o ano de agora.
+  // Desde set/2026 (10/11): o plano começou com o Command OS — aporte de
+  // jan–ago/2026 não entra na conta do plano de 2026.
   const currentCalendarYear = Math.floor((nowYm - 1) / 12);
+  const planStartYm = yearMonth(currentCalendarYear, planStartMonthOf(currentCalendarYear));
   const realContributionThisYear = investedByMonthWithYear
-    .filter((e) => e.year === currentCalendarYear)
+    .filter((e) => e.year === currentCalendarYear && e.ym >= planStartYm)
     .reduce((sum, e) => sum + e.value, 0);
 
   // ---- aportes do mês: variação do total investido, por broker+tipo (não
@@ -395,7 +398,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     wealthGoal?.targetAmount ?? null,
     wealthGoal?.monthlyContribution ?? 0,
     avgMonthlyReturnPct,
-    realContributionThisYear
+    { real: realContributionThisYear, throughMonth: nowYm - currentCalendarYear * 12 }
   );
 
   res.json({

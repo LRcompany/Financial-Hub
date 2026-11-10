@@ -297,11 +297,18 @@ export interface WealthGoal {
 export interface YearBreakdown {
   year: number
   startBalance: number
+  // Aporte planejado do ANO (meses do plano naquele ano × aporte mensal).
+  // 2026 conta de setembro (início do Command OS); o último ano, até o mês
+  // em que bate a meta.
   contribution: number
+  fromMonth: number
+  toMonth: number
   endBalance: number
   // Aportado REAL no ano até agora — só vem preenchido na linha do ano
   // corrente (nos anos futuros da projeção não existe "real" ainda).
   realContribution: number | null
+  // Planejado do início do plano no ano até o mês consultado — base do "%".
+  plannedSoFar: number | null
 }
 
 export interface Projection {
