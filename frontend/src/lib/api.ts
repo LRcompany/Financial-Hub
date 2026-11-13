@@ -470,6 +470,7 @@ export interface ProjectListItem {
   taxEstimated: boolean
   net: number
   yieldPerDay: number | null
+  receiptYears: number[]
   suppliers: ProjectSupplierCostSummary[]
 }
 

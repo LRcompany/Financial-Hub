@@ -247,6 +247,9 @@ projectsRouter.get("/projects", async (_req, res) => {
       taxEstimated: tax.estimated,
       net,
       yieldPerDay,
+      // Anos em que caiu dinheiro do projeto (13/11) — a lista de Projetos
+      // mostra no ano quem começou nele OU recebeu nele.
+      receiptYears: [...new Set(p.receipts.map((r) => r.paymentDate.getUTCFullYear()))].sort(),
       suppliers: p.supplierCosts.map((c) => ({
         id: c.id,
         supplierId: c.supplierId,

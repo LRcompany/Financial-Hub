@@ -90,11 +90,16 @@ export function Projetos() {
 
   useEffect(load, [month, year])
 
-  // Só os projetos do ANO escolhido (13/11, Luiz: "tem que mostrar apenas os
-  // projetos de 2026, não 2025. O sistema usa como base o ano"). O ano do
-  // projeto é o do início dele. Recebimento continua contando no mês em que o
-  // dinheiro entrou ("Recebido em 2026" inclui projeto de 2025 pago em 2026).
-  const projectsOfYear = projects.filter((p) => new Date(p.startDate).getUTCFullYear() === year)
+  // Projetos do ANO escolhido (13/11). Luiz: "o sistema usa como base o ano"
+  // e "se o projeto foi RECEBIDO em 2026, faz sentido manter e mostrar ele".
+  // Entra no ano quem começou nele, quem recebeu dinheiro nele, e — no ano
+  // atual — quem ainda está em aberto com saldo a receber.
+  const projectsOfYear = projects.filter(
+    (p) =>
+      new Date(p.startDate).getUTCFullYear() === year ||
+      p.receiptYears.includes(year) ||
+      (year === now.getFullYear() && p.status === 'em_andamento' && p.remaining > 0),
+  )
 
   if (error) return <div className={cards.emptyState}>Não consegui falar com o backend ainda.</div>
   if (!summary) return null
@@ -239,7 +244,7 @@ export function Projetos() {
           <div className={cards.emptyState}>Nenhum projeto cadastrado ainda — clique em "Novo projeto" pra começar.</div>
         )}
         {projects.length > 0 && projectsOfYear.length === 0 && !showNewProject && (
-          <div className={cards.emptyState}>Nenhum projeto começado em {year}.</div>
+          <div className={cards.emptyState}>Nenhum projeto começado ou recebido em {year}.</div>
         )}
 
         <div className={styles.projectList}>
