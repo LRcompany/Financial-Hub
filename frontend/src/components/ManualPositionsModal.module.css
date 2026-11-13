@@ -1,0 +1,179 @@
+/* overlay/sheet/header/title/subtitle vêm do ModalShell compartilhado
+   (11/09) — `maxWidth={920}` passado na chamada. Aqui só o que é
+   específico dessa modal. */
+
+.helperText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  table-layout: auto;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  min-width: 170px;
+}
+
+/* Select/Input dentro da célula preenchem a célula (largura vem do
+   min-width do <td>, não do próprio campo) — é o min-width da célula que
+   evita o texto cortado que a gente viu ("Renda Fix" virando "R", "BRL"
+   virando "L"), a largura do input sozinho não resolve isso. */
+.table td :is(input, select) {
+  min-width: 0;
+}
+
+.table td.nameCell {
+  min-width: 260px;
+}
+
+.table td:last-child {
+  min-width: 40px;
+  width: 40px;
+}
+
+.lastUpdated {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+.cards {
+  display: none;
+}
+
+/* Tabela vira card por ativo em tela estreita (pedido do Luiz, 11/09) —
+   mesmo padrão/breakpoint de toda tabela do projeto. */
+@media (max-width: 640px) {
+  .tableWrap {
+    display: none;
+  }
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cardTop input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.cardLabel {
+  color: var(--ink-soft);
+}
+
+.addRowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.addRowBtn:hover {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--danger);
+  margin: 0;
+}
+
+.secondaryBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--fill-muted);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.saveBtn {
+  height: 38px;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fill-muted) 90%, var(--ink) 10%);
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.saveBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

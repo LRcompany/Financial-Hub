@@ -42,6 +42,19 @@ async function pluggyGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function pluggyPost<T>(path: string, body: unknown): Promise<T> {
+  const apiKey = await getPluggyApiKey();
+  const response = await fetch(`${PLUGGY_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Pluggy POST ${path} falhou: ${response.status} ${await response.text()}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 /** Detalhes + status de sincronização de uma conexão (item). Não existe endpoint pra listar todos — o itemId vem do Dashboard. */
 export function getItem(itemId: string) {
   return pluggyGet(`/items/${itemId}`);
@@ -53,6 +66,44 @@ export function getAccounts(itemId: string) {
 
 export function getInvestments(itemId: string) {
   return pluggyGet(`/investments?itemId=${itemId}`);
+}
+
+interface PluggyInvestmentTransaction {
+  id: string;
+  date: string; // ISO
+  type: string; // "INTEREST" (provento — dividendo/JCP/rendimento, a Pluggy não separa), "BUY", "SELL", ...
+  movementType: string; // "DEBIT" | "CREDIT"
+  amount: number;
+  netAmount: number | null;
+  quantity: number | null;
+}
+
+// GET /investments/{id}/transactions — extrato de uma posição (compra, venda,
+// provento...). Confirmado ao vivo em 11/09: proventos (dividendo de ação,
+// JCP, rendimento de FII) sempre vêm com `type: "INTEREST"` — a Pluggy não
+// distingue dividendo de JCP entre si, mas separa bem de compra/venda
+// (`type: "BUY"/"SELL"`). Paginado — `getAllInvestmentTransactions` busca
+// todas as páginas de uma vez, uso normal (nunca só a primeira página, senão
+// perde provento de posição antiga com muito histórico).
+function getInvestmentTransactions(investmentId: string, page: number) {
+  return pluggyGet<{ total: number; totalPages: number; page: number; results: PluggyInvestmentTransaction[] }>(
+    `/investments/${investmentId}/transactions?page=${page}`
+  );
+}
+
+export async function getAllInvestmentTransactions(investmentId: string): Promise<PluggyInvestmentTransaction[]> {
+  const first = await getInvestmentTransactions(investmentId, 1);
+  if (first.totalPages <= 1) return first.results;
+  const rest = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, i) => getInvestmentTransactions(investmentId, i + 2))
+  );
+  return [first, ...rest].flatMap((p) => p.results);
+}
+
+// v1 /transactions retorna 410 (deprecado) — confirmado em 29/08. v2 não
+// aceita pageSize (ignora o parâmetro se mandar), então só accountId mesmo.
+export function getTransactions(accountId: string) {
+  return pluggyGet(`/v2/transactions?accountId=${accountId}`);
 }
 
 /**
@@ -73,8 +124,13 @@ export async function createConnectToken(itemId?: string): Promise<{ accessToken
   return response.json() as Promise<{ accessToken: string }>;
 }
 
-// TODO: quando formos ligar o sync de transações —
-// 1. Puxar GET /transactions?accountId= por conta
-// 2. Mapear pra Transaction (source: "pluggy", externalId: id da Pluggy)
-// 3. Rodar a sugestão de categoria (categorization.ts) antes de salvar
-// 4. Detectar pagamento de fatura (Caixa → C6) e marcar isTransfer: true
+// Sync de transação real: ver services/pluggyTransactionSync.ts (31/08).
+
+// Webhook (05/09) — em vez de só esperar o sync 1x/dia (e às vezes bater
+// ANTES da Pluggy ter atualizado o dia com o banco, ficando 1 dia inteiro
+// atrasado sem necessidade), a Pluggy avisa a gente NA HORA que tem
+// transação nova/atualizada (docs.pluggy.ai/docs/webhooks). Direto na API —
+// não existe endpoint de listar webhook por item, só criar/consultar por id.
+export function createWebhook(event: string, url: string, headers?: Record<string, string>) {
+  return pluggyPost<{ id: string; url: string; event: string }>("/webhooks", { event, url, headers });
+}
