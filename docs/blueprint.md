@@ -2458,6 +2458,21 @@ Luiz: *"o aporte planejado... não pode ir diminuindo né?! pq agora está 15k"*
 - **A projeção em si não mudou**: ela continua partindo do saldo de hoje, então a data do milhão é a mesma.
 - **Teste**: `test/wealthProjection.test.ts` confere que a linha de 2026 dá o mesmo valor em outubro e em novembro.
 
+### Texto genérico do cartão nunca vira regra de categoria (13/11)
+
+Luiz: *"pq vc colocou Compra a vista sem juros como mercado?"*.
+
+- **Causa**: o C6 manda a compra de alguns lojistas sem o nome da loja: "Compra a Vista sem Juros MasterCard", "Parcela de compra lojista MasterCard" ou "MASTERCARD".
+  - O app aprende uma regra (`CategorizationRule`) com o texto da compra toda vez que o Luiz categoriza.
+  - Esse texto genérico virou regra: uma compra foi pra Supermercado, outra pra Adobe. A partir daí, toda compra desse tipo caía em Supermercado.
+  - Na revisão, essas compras ainda vinham agrupadas como se fossem do mesmo lojista.
+- **Correção** (`services/categorization.ts`, `isGenericDescription`):
+  - Texto genérico nunca vira regra (`reinforceRule`), nunca recebe sugestão (`suggestCategory`) e nunca casa com regra antiga.
+  - Na revisão de "sem categoria", cada compra genérica fica no seu próprio grupo.
+  - Compra parcelada não muda: a categoria vem da compra (`Purchase`).
+- **Dados**: apagadas as 5 regras com texto genérico. As 6 compras "Compra a Vista sem Juros MasterCard" de novembro (R$ 141,57) voltaram pra "sem categoria", pro Luiz categorizar uma a uma. Feito com backup antes, apagado depois de conferir.
+- **Teste**: `test/categorization.test.ts`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

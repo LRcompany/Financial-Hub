@@ -28,25 +28,37 @@ export async function leafExpenseCategories() {
     .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
 }
 
+// Descrição que NÃO diz quem vendeu (13/11) — o C6 manda compra de alguns
+// lojistas só como "Compra a Vista sem Juros MasterCard" / "Parcela de compra
+// lojista MasterCard" / "MASTERCARD". Achado real: o app aprendeu uma regra
+// com esse texto (uma compra categorizada como Supermercado) e passou a pôr
+// TODA compra desse tipo em Supermercado. Texto genérico nunca vira regra,
+// nunca recebe sugestão e nunca é agrupado com outro na revisão — cada
+// compra é categorizada por si (a nota diz o que foi).
+const GENERIC_DESCRIPTIONS = [/^compra a vista sem juros\b/i, /^parcela de compra lojista\b/i, /^mastercard( internacional)?$/i];
+export const isGenericDescription = (description: string) => GENERIC_DESCRIPTIONS.some((r) => r.test(description.trim()));
+
 /**
  * Sugere uma categoria a partir da descrição de uma transação importada,
  * usando as CategorizationRule já cadastradas (pré-populadas com o padrão
  * real da planilha do Luiz — ver docs/blueprint.md).
  */
 export async function suggestCategory(description: string) {
+  if (isGenericDescription(description)) return null;
   const rules = await prisma.categorizationRule.findMany({
     orderBy: { confidence: "desc" },
     include: { category: true },
   });
 
   const normalized = description.toLowerCase();
-  const match = rules.find((rule) => normalized.includes(rule.pattern.toLowerCase()));
+  const match = rules.find((rule) => !isGenericDescription(rule.pattern) && normalized.includes(rule.pattern.toLowerCase()));
 
   return match?.category ?? null;
 }
 
 /** Chamado quando o usuário confirma (ou corrige) a categoria sugerida — reforça a regra. */
 export async function reinforceRule(pattern: string, categoryId: string) {
+  if (isGenericDescription(pattern)) return;
   const existing = await prisma.categorizationRule.findFirst({ where: { pattern, categoryId } });
 
   if (existing) {

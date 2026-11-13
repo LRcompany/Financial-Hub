@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { parseCalendarInput } from "../services/dates.js";
 import { prisma } from "../prisma.js";
-import { reinforceRule, categoryPath, leafExpenseCategories } from "../services/categorization.js";
+import { reinforceRule, categoryPath, leafExpenseCategories, isGenericDescription } from "../services/categorization.js";
 import { propagateFromRows } from "../services/purchases.js";
 
 export const transactionsRouter = Router();
@@ -82,7 +82,10 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
     }
   >();
   for (const t of transactions) {
-    const existing = groups.get(t.description);
+    // Descrição genérica ("Compra a Vista sem Juros MasterCard") não diz o
+    // lojista — cada compra fica no seu próprio grupo (13/11).
+    const key = isGenericDescription(t.description) ? `${t.description}#${t.id}` : t.description;
+    const existing = groups.get(key);
     if (existing) {
       existing.ids.push(t.id);
       existing.items.push({ id: t.id, amount: t.amount, date: t.date });
@@ -93,7 +96,7 @@ transactionsRouter.get("/transactions/uncategorized-groups", async (_req, res) =
       // uma compra parcelada") vêm da transação mais recente do grupo —
       // uma compra à vista repetida no mesmo comerciante (ex: "Uber") nunca
       // tem esses campos, então não atrapalha o caso comum.
-      groups.set(t.description, {
+      groups.set(key, {
         description: t.description,
         totalAmount: t.amount,
         ids: [t.id],
