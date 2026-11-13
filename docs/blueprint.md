@@ -2473,6 +2473,13 @@ Luiz: *"pq vc colocou Compra a vista sem juros como mercado?"*.
 - **Dados**: apagadas as 5 regras com texto genérico. As 6 compras "Compra a Vista sem Juros MasterCard" de novembro (R$ 141,57) voltaram pra "sem categoria", pro Luiz categorizar uma a uma. Feito com backup antes, apagado depois de conferir.
 - **Teste**: `test/categorization.test.ts`.
 
+### Projetos: só os do ano escolhido (13/11)
+
+Luiz: *"tem que mostrar apenas os projetos de 2026, não 2025. O sistema usa como base o ano"*.
+
+- A lista de projetos (`pages/Projetos.tsx`) mostra só os projetos que começaram no ano do seletor de mês/ano. Antes mostrava todos, inclusive os 5 de 2025.
+- O "Recebido em {ano}" e os demais números continuam contando pelo mês em que o dinheiro entrou. Projeto de 2025 pago em 2026 (UX, UI, Rental Nov/Dez, Enxoval) segue somando no recebido de 2026. Ele aparece na lista ao escolher 2025.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
