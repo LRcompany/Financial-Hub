@@ -2517,6 +2517,11 @@ Pedido do Luiz (5 pontos): o aporte de Tesouro do BTG apareceu com sinal trocado
 
 **Achado que ficou como aviso:** o ETF AOK da Nomad teve o investido caindo de 26.458,13 para 26.218,17 em out/26 sem resgate lançado.
 
+**Sync diário dos investimentos.** Pedido do Luiz: *"ative"*.
+- `startInvestmentSyncScheduler` roda todo dia às 21:00 UTC (18:00 de Brasília) em toda corretora conectada (Pluggy) e carteira on-chain. Antes, só no botão Sincronizar.
+- **Por que o horário fixo:** a Pluggy atualiza os itens entre ~13h e 16h de Brasília. Às 18h ainda é o mesmo dia em UTC e no Brasil, então a foto do último dia do mês cai no mês certo e vira o "valor final" do rendimento.
+- O sync de cartão continua no ciclo próprio, 24h depois da subida do servidor. Corretora manual continua sendo digitada no dia 1. O demo só tem corretora manual, então lá não faz nada.
+
 **Testes:** `test/investmentFlows.test.ts`. **Conferência:** `scripts/check-investments.ts [--sync]` imprime aporte, rendimento, movimentações e os avisos.
 
 ## Decisões de navegação/IA

@@ -17,7 +17,7 @@ import { contributionsRouter } from "./routes/contributions.js";
 import { dataHealthRouter } from "./routes/dataHealth.js";
 import { pluggyWebhookRouter } from "./routes/pluggyWebhook.js";
 import { requireAuth } from "./middleware/requireAuth.js";
-import { startCreditCardSyncScheduler } from "./services/scheduler.js";
+import { startCreditCardSyncScheduler, startInvestmentSyncScheduler } from "./services/scheduler.js";
 import crypto from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { oauthRouter, isValidAccessToken, challengeHeader } from "./services/oauth.js";
@@ -107,4 +107,5 @@ app.delete("/mcp", requireMcpToken, mcpNotAllowed);
 app.listen(port, () => {
   console.log(`Command OS backend rodando em http://localhost:${port}`);
   startCreditCardSyncScheduler();
+  startInvestmentSyncScheduler();
 });
