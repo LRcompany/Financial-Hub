@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { getRateToBrl, isForeignCurrency } from "../services/fx.js";
+import { rateLabel } from "../services/investmentFlows.js";
 import { fetchAllSnapshots, activeSnapshotsAsOf, yearMonth } from "../services/activePositions.js";
 
 export const positionsRouter = Router();
@@ -113,6 +114,7 @@ positionsRouter.get("/positions", async (req, res) => {
       dueDate: string | null;
       fixedAnnualRate: number | null;
       ratePeriodicity: string | null;
+      rateLabel: string | null;
       dividends: number | null;
       previousDividends: number | null;
       totalDividends: number | null;
@@ -151,6 +153,8 @@ positionsRouter.get("/positions", async (req, res) => {
       dueDate: s.security.dueDate ? s.security.dueDate.toISOString() : null,
       fixedAnnualRate: s.security.fixedAnnualRate,
       ratePeriodicity: s.security.ratePeriodicity,
+      // "105% do CDI", "Selic + 0,11% a.a.", "IPCA + 7,3% a.a." (17/11) — ver investmentFlows.ts.
+      rateLabel: rateLabel(s.security),
       // Proventos do mês EXATO (11/09) — só Ação/FII têm valor real (ver
       // pluggySync.ts); vem de `currentDividendsByKey`, não de `s.dividends`
       // direto, pelo mesmo motivo do comentário acima (flow, não estado

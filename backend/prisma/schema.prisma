@@ -290,6 +290,7 @@ model Broker {
   positionSnapshots PositionSnapshot[]
   contributions     Contribution[]
   dividendPayments  DividendPayment[]
+  movements         InvestmentMovement[]
 }
 
 model Security {
@@ -311,10 +312,16 @@ model Security {
   dueDate         DateTime? // vencimento — só renda fixa
   fixedAnnualRate Float? // taxa contratada (% a.a.) — só renda fixa
   ratePeriodicity String? // ex: DAILY
+  // Indexador (17/11): CDB do Sofisa vem com fixedAnnualRate 0 e a taxa de
+  // verdade em `rate` + `rateType` ("105" + "CDI" = 105% do CDI). Tesouro
+  // Selic: SELIC + fixedAnnualRate; IPCA+: IPCA + fixedAnnualRate.
+  rate            Float?
+  rateType        String? // CDI | SELIC | IPCA | null (prefixado)
 
   positionSnapshots PositionSnapshot[]
   contributions     Contribution[]
   dividendPayments  DividendPayment[]
+  movements         InvestmentMovement[]
 }
 
 // Registro de aporte/resgate lançado à mão (05/09) — histórico auditável de
@@ -343,6 +350,34 @@ model Contribution {
   @@index([brokerId])
 }
 
+// Aplicação/resgate REAL de corretora conectada (17/11). Luiz: "hoje o aporte
+// é deduzido pela variação do investido entre meses — passe a registrar cada
+// aplicação/resgate". Achado real: o BTG recalcula o "valor aplicado" do
+// Tesouro sem nenhuma movimentação (nov/26: −R$2.824 de "resgate" que não
+// existiu, quantidade igual). Fonte: extrato da posição na Pluggy
+// (GET /investments/{id}/transactions, BUY/SELL). `source: "manual"` = lançada
+// à mão enquanto a Pluggy não traz — some sozinha quando a da Pluggy chega
+// (mesmo ativo, mesmo tipo, valor e data próximos). Aporte do mês de corretora
+// conectada = soma daqui; rendimento = valor final − valor inicial − aportes.
+model InvestmentMovement {
+  id         String   @id @default(uuid())
+  brokerId   String
+  broker     Broker   @relation(fields: [brokerId], references: [id])
+  securityId String
+  security   Security @relation(fields: [securityId], references: [id])
+  date       DateTime
+  kind       String // aplicacao | resgate
+  amount     Float // sempre positivo, em BRL
+  quantity   Float?
+  source     String // pluggy | manual
+  externalId String?  @unique // id da transação na Pluggy
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([brokerId, date])
+  @@index([securityId])
+}
+
 model PositionSnapshot {
   id             String   @id @default(uuid())
   brokerId       String
@@ -362,6 +397,10 @@ model PositionSnapshot {
   annualRatePct  Float?
   quantity       Float? // nº de cotas/ações — isso sim a Pluggy manda de verdade
   unitValue      Float? // valor de mercado de 1 cota/ação nesse momento
+  // Quando a foto do mês foi tirada pela última vez (17/11). Aplicação feita
+  // DEPOIS disso só aparece no valor do mês seguinte — o rendimento do mês
+  // não pode descontar um aporte que o valor ainda não mostra.
+  syncedAt       DateTime?
 
   @@unique([brokerId, securityId, month, year])
 }

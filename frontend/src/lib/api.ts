@@ -557,6 +557,7 @@ export interface Position {
   issuer: string | null
   dueDate: string | null
   fixedAnnualRate: number | null
+  rateLabel: string | null
   ratePeriodicity: string | null
   // Proventos do mês (11/09) — real via Pluggy pra Ação/FII, lançado à mão
   // pra Fundo (botão "+ Rendimento", pedido do Luiz pro VALORA — a Pluggy

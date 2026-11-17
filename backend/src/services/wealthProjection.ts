@@ -8,6 +8,7 @@
 export interface MonthlyTotal {
   marketValue: number;
   investedAmount: number;
+  contribution?: number; // aporte líquido do mês, quando já calculado
 }
 
 /** Retorno médio mensal REAL, isolando valorização de mercado do dinheiro
@@ -25,7 +26,9 @@ export function computeAverageMonthlyReturnPct(monthlyTotals: MonthlyTotal[]): n
     const prev = monthlyTotals[i - 1];
     const cur = monthlyTotals[i];
     if (prev.marketValue <= 0) continue;
-    const newContribution = cur.investedAmount - prev.investedAmount;
+    // Aporte do mês quando já vem calculado (17/11 — movimentação real, ver
+    // investmentFlows.ts); senão, variação do investido.
+    const newContribution = cur.contribution ?? cur.investedAmount - prev.investedAmount;
     const pureGrowth = cur.marketValue - prev.marketValue - newContribution;
     monthlyReturns.push(pureGrowth / prev.marketValue);
   }

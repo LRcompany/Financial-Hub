@@ -69,6 +69,7 @@ budgetRouter.get("/budget-summary", async (req, res) => {
           kind: "uncategorized",
           parentId: null,
           parentName: null,
+          path: "Sem categoria",
           hasTarget: false,
           planned: 0,
           spent: now.spent,
@@ -83,6 +84,10 @@ budgetRouter.get("/budget-summary", async (req, res) => {
         name: cat.name,
         kind: cat.kind, // essential | non_essential
         ...parentInfo(cat),
+        // Caminho completo, todos os níveis (17/11): "Esportes > Corrida >
+        // Equipamentos". parentName é só a raiz (o front agrupa por ela) e,
+        // sozinho, deixava "Esportes > Equipamentos" repetido 3x no conector.
+        path: categoryPath(cat) ?? cat.name,
         hasTarget: plannedById.has(id),
         planned: plannedById.get(id) ?? 0,
         spent: now.spent,

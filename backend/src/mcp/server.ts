@@ -106,11 +106,11 @@ export function buildMcpServer() {
           maiores_categorias: [...byParent.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([nome, valor]) => ({ nome, gasto: r2(valor) })),
           estouraram: b.categories
             .filter((c: Json) => c.hasTarget && c.spent > c.planned)
-            .map((c: Json) => ({ categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`, gasto: r2(c.spent), planejado: r2(c.planned), passou: r2(c.spent - c.planned) }))
+            .map((c: Json) => ({ categoria: (c.path ?? c.name), gasto: r2(c.spent), planejado: r2(c.planned), passou: r2(c.spent - c.planned) }))
             .sort((x: Json, y: Json) => y.passou - x.passou),
           gasto_sem_meta: b.categories
             .filter((c: Json) => !c.hasTarget && c.spent > 0)
-            .map((c: Json) => ({ categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`, gasto: r2(c.spent) }))
+            .map((c: Json) => ({ categoria: (c.path ?? c.name), gasto: r2(c.spent) }))
             .sort((x: Json, y: Json) => y.gasto - x.gasto),
           maior_compra: b.biggestPurchase ? { descricao: b.biggestPurchase.description, valor: r2(b.biggestPurchase.amount), categoria: b.biggestPurchase.category } : null,
           meta_diaria: b.dailyGoal,
@@ -167,7 +167,7 @@ export function buildMcpServer() {
         periodo: `${String(p.month).padStart(2, "0")}/${p.year}`,
         categorias: b.categories
           .map((c: Json) => ({
-            categoria: `${c.parentName ? c.parentName + " > " : ""}${c.name}`,
+            categoria: (c.path ?? c.name),
             tipo: c.kind === "essential" ? "essencial" : c.kind === "uncategorized" ? "sem categoria" : "não essencial",
             tem_meta: c.hasTarget,
             planejado: r2(c.planned),
@@ -261,7 +261,7 @@ export function buildMcpServer() {
       title: "Patrimônio e investimentos",
       description:
         "Carteira no mês: total, evolução de 12 meses, alocação por classe, cada posição (corretora, tipo, valor de mercado, investido, ganho, taxa, vencimento), " +
-        "aportes por mês com detalhe por corretora, proventos por mês e por ativo, e o que mais rendeu/caiu. Use pra analisar diversificação, liquidez, reserva de emergência e onde alocar aportes e proventos.",
+        "aportes por mês (aplicações − resgates de verdade) com detalhe por corretora e rendimento do mês (valor final − inicial − aportes), cada aplicação/resgate do mês, proventos por mês e por ativo, e o que mais rendeu/caiu. Use pra analisar diversificação, liquidez, reserva de emergência e onde alocar aportes e proventos.",
       inputSchema: { mes, ano },
       annotations: readOnly,
     },
@@ -290,15 +290,24 @@ export function buildMcpServer() {
               valor_mercado: r2(x.marketValue),
               investido: r2(x.investedAmount),
               ganho: r2(x.marketValue - x.investedAmount),
-              taxa_contratada_anual: r2(x.fixedAnnualRate),
+              taxa: x.rateLabel ?? null,
               vencimento: x.dueDate ? String(x.dueDate).slice(0, 10) : null,
               proventos_no_mes: r2(x.dividends),
               proventos_acumulados: r2(x.totalDividends),
             }))
         ),
+        movimentacoes_do_mes: (w.movementsThisMonth ?? []).map((m: Json) => ({
+          data: m.date,
+          corretora: m.broker,
+          ativo: m.asset,
+          tipo: m.kind === "resgate" ? "resgate" : "aplicação",
+          valor: r2(m.amount),
+          origem: m.source === "manual" ? "lançada à mão" : "corretora",
+        })),
         aportes_por_mes: w.investedByMonth.map((m: Json) => ({
           mes: m.label,
           total: r2(m.value),
+          rendimento: r2(m.returnValue),
           detalhe: (m.breakdown ?? []).map((d: Json) => ({ origem: d.label, valor: r2(d.value) })),
         })),
         proventos: {

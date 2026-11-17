@@ -2482,6 +2482,43 @@ Luiz: *"tem que mostrar apenas os projetos de 2026, não 2025. O sistema usa com
 - `GET /projects` devolve `receiptYears` (anos com recebimento) para o filtro.
 - O "Recebido em {ano}" e os demais números continuam contando pelo mês em que o dinheiro entrou.
 
+### Investimentos: aporte por movimentação real, taxa com indexador e 3 avisos novos (17/11)
+
+Pedido do Luiz (5 pontos): o aporte de Tesouro do BTG apareceu com sinal trocado em nov/26, os CDBs do Sofisa vinham com taxa 0, o aporte deveria vir das movimentações reais, o Orçamento do conector mostrava a categoria com 2 níveis em vez de 3, e a Saúde dos dados precisava de 3 regras novas.
+
+**1. "Resgate" de R$2.824 no BTG que não existiu.**
+- **Causa:** o BTG recalculou o "valor aplicado" (`amountOriginal` da Pluggy) de dois títulos com a MESMA quantidade. O Tesouro Selic 2029 (2,93 títulos) foi de 45.711,69 para 44.236,35. O IPCA+ 2040 (19,3 títulos) foi de 30.934,23 para 29.585,55. Juntos dão −2.824,02, o "resgate" que aparecia.
+- **Correção:** com quantidade igual à do mês anterior, o investido não muda (`pluggySync.ts`). Só compra ou venda move o investido.
+- **A aplicação de 13/11** foi de LFT 2031: "Compra de Tesouro Direto: LFT 01/03/2031", −2.829,57, debitada da conta do BTG em 16/11. A Pluggy ainda não tinha atualizado a posição, então entrou à mão (`scripts/add-movement.ts`, `source: "manual"`). Ela some sozinha quando a da Pluggy chegar: mesmo ativo e tipo, valor até 1%/R$5 de diferença, até 7 dias de distância.
+- **Outubro:** a renda fixa do BTG rendeu +R$436 (mercado +5.441 − aplicações 5.005,40). O rendimento negativo vinha de dois descompassos de data:
+  - O CDB de R$20 mil do Sofisa foi comprado em 30/10, mas a última foto de outubro foi tirada antes. O aporte caía em outubro e o valor só aparecia em novembro.
+  - O mesmo acontecia com a aplicação de novembro, que ainda não aparece no valor do título.
+
+**2. CDB do Sofisa "sem taxa".** A Pluggy manda `fixedAnnualRate: 0` com a taxa em `rate: 105` + `rateType: "CDI"`.
+- `Security` ganhou `rate` e `rateType`. O texto da taxa (`rateLabel`) fica: "105% do CDI", "Selic + 0,11% a.a.", "IPCA + 7,3% a.a.", "15,3% a.a.". Bond manual da Nomad usa o cupom do nome.
+- O investido do Sofisa confere com o extrato. O "aporte de R$25.148,54 em novembro" era o CDB de R$20 mil de 30/10 mais o de R$5.148,53 de 09/11; na data certa, os R$20 mil são de outubro. Em novembro também entrou um CDB de R$6.379,88 em 13/11.
+
+**3. Aporte pela movimentação real** (`InvestmentMovement`, `services/investmentFlows.ts`).
+- **Fonte:** cada aplicação ou resgate vem do extrato da posição na Pluggy (`GET /investments/{id}/transactions`, BUY/SELL), com data, ativo, valor e tipo. O sync grava em toda posição que teve valor desde set/26.
+- **Aporte do mês** de Renda Fixa e Fundo de corretora conectada, a partir de set/26, = soma das movimentações pela DATA delas. O resto continua com a variação do investido: manual, on-chain, e Ação/FII. Ali o investido só muda com aporte lançado à mão.
+- **Rendimento do mês** = valor final − valor inicial − aportes que JÁ aparecem no valor.
+  - Uma movimentação entra no rendimento do primeiro mês cuja foto da posição já a mostra.
+  - `PositionSnapshot.syncedAt` (novo) diz quando a foto foi tirada. Foto antes da movimentação → conta no mês seguinte.
+  - Lançada à mão fica fora do rendimento até a da Pluggy chegar.
+- **Onde aparece:** `investedByMonth[].returnValue` e `movementsThisMonth` no `/wealth-overview`, e no conector (`patrimonio`: `movimentacoes_do_mes`, `aportes_por_mes[].rendimento`). O retorno médio da projeção do 1º milhão usa o mesmo aporte.
+- **Ação/FII ficaram de fora de propósito.** O extrato de ações da Pluggy traz evento societário como compra/venda (direitos de subscrição AXIA15–21, restituição de capital AXIA21). E ação alugada some da posição sem venda: VBBR3 está no BTC ("TAXA REMUNERAÇÃO - BTC VBBR3") e sumiu em nov/26 junto com GGBR4. Na regra antiga, isso aparece como "resgate" de R$7.448 em BTG · Ação.
+
+**4. Orçamento no conector com o caminho inteiro.** `/budget-summary` devolve `path` ("Esportes > Corrida > Equipamentos"). `parentName` é só a raiz, para o agrupamento. O conector usa `path`; antes saía "Esportes > Equipamentos" três vezes.
+
+**5. Saúde dos dados — 3 avisos** (botão "É assim mesmo"):
+- **17 `investido-caiu-sem-resgate`:** quantidade igual, investido menor e nenhum resgate no mês.
+- **18 `renda-fixa-sem-taxa`:** título vivo sem taxa conhecida.
+- **19 `rendimento-negativo-pos-fixado`:** Selic/CDI rendendo menos de −0,1% e menos de −R$1 no mês, usando o aporte que já aparece no valor.
+
+**Achado que ficou como aviso:** o ETF AOK da Nomad teve o investido caindo de 26.458,13 para 26.218,17 em out/26 sem resgate lançado.
+
+**Testes:** `test/investmentFlows.test.ts`. **Conferência:** `scripts/check-investments.ts [--sync]` imprime aporte, rendimento, movimentações e os avisos.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

@@ -128,7 +128,11 @@ const BROKER_AS_LABEL_TYPES = new Set(['Moeda'])
 function assetHoverContent(p: Position) {
   const rows: { label: string; value: ReactNode }[] = []
   if (p.issuer) rows.push({ label: 'Emissor/Gestora', value: p.issuer })
-  if (p.fixedAnnualRate != null) {
+  if (p.rateLabel) {
+    // Taxa com indexador (17/11): "105% do CDI", "Selic + 0,11% a.a." — o
+    // CDB do Sofisa vinha "0% a.a." porque a taxa dele é % do CDI.
+    rows.push({ label: 'Taxa contratada', value: p.rateLabel })
+  } else if (p.fixedAnnualRate != null && p.fixedAnnualRate > 0) {
     // Taxa fixa numérica (CDB via Pluggy) — periodicidade é só um detalhe a mais.
     rows.push({ label: 'Taxa contratada', value: `${p.fixedAnnualRate}% a.a.${p.ratePeriodicity ? ` · ${p.ratePeriodicity}` : ''}` })
   } else if (p.ratePeriodicity) {

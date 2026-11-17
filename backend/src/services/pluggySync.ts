@@ -5,7 +5,7 @@
 //
 // Proventos (11/09): dividendos/JCP/rendimento não vêm nesse payload — vêm
 // de GET /investments/{id}/transactions (`type: "INTEREST"`), buscado à
-// parte só pra Ação/FII (ver `fetchAndSyncDividends` abaixo). Renda Fixa/
+// parte só pra Ação/FII (ver `syncDividends` abaixo). Renda Fixa/
 // Fundo/Cripto continuam com `dividends: null` (não é 0 fake, é "não se
 // aplica" — não fazia sentido gastar uma chamada extra da Pluggy por
 // posição pra um tipo que o Luiz nem pediu).
@@ -21,6 +21,9 @@
 import { prisma } from "../prisma.js";
 import { getInvestments, getAccounts, getAllInvestmentTransactions } from "./pluggy.js";
 import { getRateToBrl, isForeignCurrency, type ForeignCurrency } from "./fx.js";
+import { movementFromPluggy, dropSupersededManualMovements } from "./investmentFlows.js";
+
+type InvestmentTransaction = Awaited<ReturnType<typeof getAllInvestmentTransactions>>[number];
 
 interface PluggyAccount {
   id: string;
@@ -48,6 +51,8 @@ interface PluggyInvestment {
   dueDate?: string | null;
   fixedAnnualRate?: number | null;
   ratePeriodicity?: string | null;
+  rate?: number | null;
+  rateType?: string | null;
 }
 
 // Tickers de FII conhecidos da carteira — a Pluggy manda esses como
@@ -83,23 +88,25 @@ function mapSecurityType(inv: PluggyInvestment): string {
 
 /** Soma proventos (type: "INTEREST") de uma posição por mês/ano, a partir do
  * extrato COMPLETO da Pluggy (não só o mês corrente) — usado só pra Ação/FII
- * (Renda Fixa/Fundo/Cripto não têm esse conceito, ver nota no topo do
- * arquivo). Uma chamada extra da Pluggy por posição; erro nela (ex: rate
- * limit) não pode derrubar o sync do resto da carteira — devolve `null`
- * nesse caso (o chamador decide o que fazer, ver `fetchAndSyncDividends`). */
-async function fetchDividendsByMonth(investmentId: string): Promise<Map<string, number> | null> {
+ * (Renda Fixa/Fundo/Cripto não têm esse conceito, ver nota no topo do arquivo). */
+function dividendsByMonth(transactions: InvestmentTransaction[]): Map<string, number> {
+  const byMonth = new Map<string, number>(); // chave "ano-mês", ex: "2026-9"
+  for (const t of transactions) {
+    if (t.type !== "INTEREST") continue;
+    const d = new Date(t.date);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    byMonth.set(key, (byMonth.get(key) ?? 0) + (t.netAmount ?? t.amount));
+  }
+  return byMonth;
+}
+
+/** Extrato completo da posição (compra, venda, provento). Erro pontual (ex:
+ * rate limit) não derruba o sync do resto da carteira — `null`. */
+async function fetchTransactions(investmentId: string): Promise<InvestmentTransaction[] | null> {
   try {
-    const transactions = await getAllInvestmentTransactions(investmentId);
-    const byMonth = new Map<string, number>(); // chave "ano-mês", ex: "2026-9"
-    for (const t of transactions) {
-      if (t.type !== "INTEREST") continue;
-      const d = new Date(t.date);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-      byMonth.set(key, (byMonth.get(key) ?? 0) + (t.netAmount ?? t.amount));
-    }
-    return byMonth;
+    return await getAllInvestmentTransactions(investmentId);
   } catch (err) {
-    console.error(`[pluggySync] falha ao buscar proventos de ${investmentId}:`, err);
+    console.error(`[pluggySync] falha ao buscar extrato de ${investmentId}:`, err);
     return null;
   }
 }
@@ -124,15 +131,15 @@ async function fetchDividendsByMonth(investmentId: string): Promise<Map<string, 
  * `undefined` em erro (Prisma trata como "não mexe nesse campo" no upsert do
  * PositionSnapshot), nunca `null` fake por cima de um provento já coletado
  * num sync anterior. */
-async function fetchAndSyncDividends(
+async function syncDividends(
   brokerId: string,
   securityId: string,
-  investmentId: string,
+  transactions: InvestmentTransaction[] | null,
   month: number,
   year: number
 ): Promise<number | undefined> {
-  const byMonth = await fetchDividendsByMonth(investmentId);
-  if (byMonth === null) return undefined;
+  if (transactions === null) return undefined;
+  const byMonth = dividendsByMonth(transactions);
   await Promise.all(
     [...byMonth.entries()].map(([key, total]) => {
       const [y, m] = key.split("-").map(Number);
@@ -168,6 +175,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     if (isForeignCurrency(inv.currencyCode) && !rates.has(inv.currencyCode)) rates.set(inv.currencyCode, await getRateToBrl(inv.currencyCode));
   }
 
+  let movementsSynced = 0;
   for (const inv of results) {
     const currency = inv.currencyCode ?? "BRL";
     const secType = mapSecurityType(inv);
@@ -194,6 +202,8 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
         fixedAnnualRate: inv.fixedAnnualRate ?? null,
         ratePeriodicity: inv.ratePeriodicity ?? null,
+        rate: inv.rate ?? null,
+        rateType: inv.rateType ?? null,
       },
       create: {
         id: `pluggy:${inv.id}`,
@@ -206,6 +216,8 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
         fixedAnnualRate: inv.fixedAnnualRate ?? null,
         ratePeriodicity: inv.ratePeriodicity ?? null,
+        rate: inv.rate ?? null,
+        rateType: inv.rateType ?? null,
       },
     });
 
@@ -239,9 +251,28 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     // 05/09), então trocar aqui não muda nada pra eles — só corrige Renda
     // Fixa, que é onde `balance` e `amount` de fato divergiam.
     const marketValue = convert(inv.amount ?? inv.balance);
+    const quantity = inv.quantity ?? null;
+    // Último snapshot de um mês ANTERIOR (o do mês corrente é o que este
+    // upsert regrava a cada sync).
+    const previousMonth = await prisma.positionSnapshot.findFirst({
+      where: { brokerId: broker.id, securityId: security.id, OR: [{ year: { lt: year } }, { year, month: { lt: month } }] },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+    });
     let investedAmount: number;
     if (hasRealInvestedAmount) {
       investedAmount = convert(inv.amountOriginal!);
+      // Quantidade igual = nenhuma compra nem venda → o investido não muda
+      // (17/11). Achado real: em nov/26 o BTG passou a mandar `amountOriginal`
+      // menor no Tesouro Selic 2029 (45.711,69 → 44.236,35) e no IPCA+ 2040
+      // (30.934,23 → 29.585,55) com a MESMA quantidade (2,93 e 19,3) — virou
+      // um "resgate" de R$2.824 que não existiu. O recálculo do BTG não é
+      // movimentação; só uma mudança de quantidade deixa o investido andar.
+      const sameQuantity =
+        quantity != null && previousMonth?.quantity != null && Math.abs(previousMonth.quantity - quantity) < 1e-6 && previousMonth.investedAmount > 0;
+      if (sameQuantity && Math.abs(previousMonth!.investedAmount - investedAmount) >= 0.01) {
+        console.log(`[pluggySync] ${inv.name}: investido da corretora mudou sem mudar a quantidade (${previousMonth!.investedAmount.toFixed(2)} → ${investedAmount.toFixed(2)}) — mantém ${previousMonth!.investedAmount.toFixed(2)}`);
+        investedAmount = previousMonth!.investedAmount;
+      }
     } else {
       const previous = await prisma.positionSnapshot.findFirst({
         where: { brokerId: broker.id, securityId: security.id },
@@ -258,17 +289,50 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     if (marketValue <= 0) investedAmount = 0;
     const monthlyRatePct = inv.lastMonthRate ?? null;
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
-    const quantity = inv.quantity ?? null;
     const unitValue = inv.value ?? null;
     // Proventos só fazem sentido pra Ação/FII (pedido do Luiz, 11/09) — pra
     // Renda Fixa/Fundo/Cripto fica null ("não se aplica"), sem gastar uma
     // chamada extra da Pluggy por posição à toa. `undefined` (erro pontual
     // na chamada) preserva o que já tinha sido gravado num sync anterior
-    // desse mesmo mês — ver `fetchAndSyncDividends` (que também preenche
+    // desse mesmo mês — ver `syncDividends` (que também preenche
     // retroativamente todo mês anterior já sincronizado, pro gráfico "por
     // mês do ano" ter histórico completo desde o primeiro dia da feature).
+    // Extrato da posição (17/11): proventos (Ação/FII) e aplicação/resgate
+    // de verdade (todo tipo) — ver InvestmentMovement. Posição zerada há mais
+    // de um mês não tem movimento novo; não gasta chamada da Pluggy com ela.
+    // (Lote antigo que o BTG juntou numa posição só em out/26 continua no
+    // extrato com as compras de set/26 — por isso "teve valor desde set/26",
+    // não só "teve valor no mês passado".)
+    const isLive =
+      marketValue > 0 ||
+      (await prisma.positionSnapshot.count({
+        where: { securityId: security.id, marketValue: { gt: 0 }, OR: [{ year: { gt: 2026 } }, { year: 2026, month: { gte: 9 } }] },
+      })) > 0;
+    const transactions = isLive || secType === "Ação" || secType === "FII" ? await fetchTransactions(inv.id) : [];
+    if (transactions) {
+      for (const t of transactions) {
+        const mv = movementFromPluggy(t);
+        if (!mv) continue;
+        await prisma.investmentMovement.upsert({
+          where: { externalId: `pluggy:${t.id}` },
+          update: { date: new Date(t.date), kind: mv.kind, amount: convert(mv.amount), quantity: t.quantity ?? null, securityId: security.id },
+          create: {
+            brokerId: broker.id,
+            securityId: security.id,
+            date: new Date(t.date),
+            kind: mv.kind,
+            amount: convert(mv.amount),
+            quantity: t.quantity ?? null,
+            source: "pluggy",
+            externalId: `pluggy:${t.id}`,
+          },
+        });
+        movementsSynced++;
+      }
+      if (transactions.length > 0) await dropSupersededManualMovements(security.id);
+    }
     const dividends: number | null | undefined =
-      secType === "Ação" || secType === "FII" ? await fetchAndSyncDividends(broker.id, security.id, inv.id, month, year) : null;
+      secType === "Ação" || secType === "FII" ? await syncDividends(broker.id, security.id, transactions, month, year) : null;
 
     await prisma.positionSnapshot.upsert({
       where: {
@@ -279,12 +343,13 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
           year,
         },
       },
-      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue, dividends },
+      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue, dividends, syncedAt: now },
       create: {
         brokerId: broker.id,
         securityId: security.id,
         month,
         year,
+        syncedAt: now,
         investedAmount,
         marketValue,
         fxRateToBRL: fxRate,
@@ -343,5 +408,5 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     data: { lastSyncedAt: now },
   });
 
-  return { count: results.length + autoInvestCount, investmentsCount: results.length, autoInvestCount, month, year };
+  return { count: results.length + autoInvestCount, investmentsCount: results.length, autoInvestCount, movementsSynced, month, year };
 }

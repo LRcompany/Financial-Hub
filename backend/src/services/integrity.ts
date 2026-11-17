@@ -11,6 +11,7 @@
 // Só olha de set/2026 em diante — o Command OS passou a valer ali.
 
 import { prisma } from "../prisma.js";
+import { rateLabel, isPostFixed, loadMovements } from "./investmentFlows.js";
 import { expenseLedger, ledgerTotal, purchaseBase } from "./ledger.js";
 import { isCalendarNoon } from "./dates.js";
 
@@ -349,6 +350,95 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
 
   // Parcela manual vencida que ninguém confirma é normal pro cartão Caixa (sem
   // Pluggy, o Luiz paga a fatura) — não é aviso.
+
+  // 17–19 (17/11): investimento. Luiz, depois do "resgate" de R$2.824 no BTG
+  // que não existiu: "investido caiu sem resgate registrado", "renda fixa com
+  // taxa contratada = 0" e "rendimento mensal negativo em título pós-fixado".
+  // Compara cada ativo com ele mesmo no mês anterior, de set/26 em diante.
+  const movements = await prisma.investmentMovement.findMany({ where: { date: { gte: DATA_START } } });
+  const flows = await loadMovements();
+  const contributions = await prisma.contribution.findMany({ where: { date: { gte: DATA_START } } });
+  const ymNum = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth() + 1;
+  const flowOf = new Map<string, { net: number; resgates: number }>(); // `${securityId}|${ym}`
+  for (const m of movements) {
+    const k = `${m.securityId}|${ymNum(m.date)}`;
+    const cur = flowOf.get(k) ?? { net: 0, resgates: 0 };
+    cur.net += m.kind === "resgate" ? -m.amount : m.amount;
+    if (m.kind === "resgate") cur.resgates += m.amount;
+    flowOf.set(k, cur);
+  }
+  for (const c of contributions) {
+    const k = `${c.securityId}|${ymNum(c.date)}`;
+    const cur = flowOf.get(k) ?? { net: 0, resgates: 0 };
+    cur.net += c.amountBRL;
+    if (c.amountBRL < 0) cur.resgates += -c.amountBRL;
+    flowOf.set(k, cur);
+  }
+  const startYm = DATA_START.getFullYear() * 12 + DATA_START.getMonth() + 1;
+  const invSnaps = snaps.filter((s) => !s.broker.archivedAt && s.security.type !== "Conta Corrente" && s.year * 12 + s.month >= startYm);
+  const snapByKey = new Map(invSnaps.map((s) => [`${s.securityId}|${s.year * 12 + s.month}`, s]));
+  const monthLabel = (ym: number) => `${MONTHS[(ym - 1) % 12]}/${Math.floor((ym - 1) / 12)}`;
+  const fell: HealthItem[] = [];
+  const negative: HealthItem[] = [];
+  for (const cur of invSnaps) {
+    const ym = cur.year * 12 + cur.month;
+    const prev = snapByKey.get(`${cur.securityId}|${ym - 1}`);
+    if (!prev || prev.marketValue <= 0 || cur.marketValue <= 0) continue;
+    const flow = flowOf.get(`${cur.securityId}|${ym}`) ?? { net: 0, resgates: 0 };
+    const sameQuantity = cur.quantity == null || prev.quantity == null || Math.abs(cur.quantity - prev.quantity) < 1e-6;
+    const drop = prev.investedAmount - cur.investedAmount;
+    if (drop >= 1 && sameQuantity && flow.resgates < 1) {
+      fell.push({
+        key: `investido-caiu-sem-resgate:${cur.securityId}:${ym}`,
+        label: `${cur.broker.name} ${cur.security.name} — ${monthLabel(ym)}: investido ${brl(prev.investedAmount)} → ${brl(cur.investedAmount)}, sem resgate`,
+        ref: { kind: "snapshot", id: cur.id },
+      });
+    }
+    if (isPostFixed(cur.security)) {
+      // Corretora conectada: aporte = movimentação real; manual: variação do investido.
+      const added = cur.broker.dataSource === "pluggy" ? flows.returnOfSecurity(cur.securityId, ym) : cur.investedAmount - prev.investedAmount;
+      const gain = cur.marketValue - prev.marketValue - added;
+      if (gain < -1 && gain < -0.001 * prev.marketValue) {
+        negative.push({
+          key: `rendimento-negativo-pos-fixado:${cur.securityId}:${ym}`,
+          label: `${cur.broker.name} ${cur.security.name} — ${monthLabel(ym)}: ${brl(gain)} (de ${brl(prev.marketValue)} pra ${brl(cur.marketValue)}, aporte ${brl(added)})`,
+          ref: { kind: "snapshot", id: cur.id },
+        });
+      }
+    }
+  }
+  push(
+    "investido-caiu-sem-resgate",
+    "aviso",
+    "review",
+    "Investido caiu sem resgate",
+    "A quantidade do título não mudou e não há resgate registrado — a corretora recalculou o valor aplicado. O app mantém o investido anterior nas próximas sincronizações.",
+    fell
+  );
+  const nowYmNum = now.getFullYear() * 12 + now.getMonth() + 1;
+  const liveRf = new Map<string, (typeof snaps)[number]>();
+  for (const s of invSnaps) {
+    if (s.security.type !== "Renda Fixa" || s.marketValue <= 0 || s.year * 12 + s.month < nowYmNum - 1) continue;
+    liveRf.set(s.securityId, s);
+  }
+  push(
+    "renda-fixa-sem-taxa",
+    "aviso",
+    "review",
+    "Renda fixa sem taxa contratada",
+    "Sem a taxa (ex: 105% do CDI, IPCA + 7%), não dá pra conferir se o título está rendendo o combinado.",
+    [...liveRf.values()]
+      .filter((s) => rateLabel(s.security) === null && !/\d/.test(s.security.ratePeriodicity ?? ""))
+      .map((s) => ({ key: `renda-fixa-sem-taxa:${s.securityId}`, label: `${s.broker.name} ${s.security.name}${s.security.ticker ? ` (${s.security.ticker})` : ""}`, ref: { kind: "snapshot" as const, id: s.id } }))
+  );
+  push(
+    "rendimento-negativo-pos-fixado",
+    "aviso",
+    "review",
+    "Título pós-fixado rendeu negativo no mês",
+    "Selic/CDI não deveria render negativo num mês — geralmente é aporte ou resgate faltando, ou valor de mercado errado.",
+    negative
+  );
 
   return { checkedAt: now.toISOString(), ok: !issues.some((i) => i.severity === "erro"), issues };
 }
