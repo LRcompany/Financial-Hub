@@ -313,7 +313,14 @@ export function buildMcpServer() {
         proventos: {
           no_mes: r2(w.dividendsThisMonth),
           no_ano: r2(w.dividendsThisYear),
-          por_mes: (w.dividendsByMonth ?? []).map((m: Json) => ({ mes: m.label, total: r2(m.value) })),
+          // Soma por tipo (17/11): o mês vem separado em acao/fii/fundo — `value` não existe.
+          por_mes: (w.dividendsByMonth ?? []).map((m: Json) => ({
+            mes: m.label,
+            total: r2((m.acao ?? 0) + (m.fii ?? 0) + (m.fundo ?? 0)),
+            acoes: r2(m.acao),
+            fiis: r2(m.fii),
+            fundos: r2(m.fundo),
+          })),
           por_ativo_no_mes: (w.dividendsBreakdown ?? []).map((d: Json) => ({ ativo: d.label, tipo: d.type, valor: r2(d.value) })),
         },
         mais_renderam: (w.positionMovers ?? []).slice(0, 5).map((m: Json) => ({ ativo: m.label, tipo: m.type, variacao_pct: r2(m.changePct) })),
