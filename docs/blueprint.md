@@ -2532,6 +2532,9 @@ Luiz: *"está vindo muitas compras escrito mastercard. tem certeza que você est
 - **O erro:** o sync só revisitava a descrição na virada pendente → confirmada. Em nov/26, 7 compras ficaram presas no nome genérico. A explicação dada em 16/11 ("só resta esperar o banco confirmar") estava errada.
 - **Correção** (`pluggyTransactionSync.ts`): transação ainda pendente cuja descrição mudou na Pluggy ganha a descrição nova a cada sync. Categoria e nota que o Luiz já deu ficam como estão; sem categoria, tenta a regra do lojista.
 - O log do scheduler passou a contar "N com o nome do lojista atualizado".
+- **Categoria do palpite (19/11, Luiz: "isso não pode mais se repetir").** 3 corridas de Uber chegaram sem nome e ficaram em Supermercado e Farmácia; quando o nome real chegou, a categoria errada ficou. Regra nova (`categoryAfterRename`): se o nome ERA genérico e o novo não é, e existe regra pro lojista real, vale a regra (ex: UBER → Transporte › Uber, 99). Sem regra, fica a que estava. Compra parcelada fica de fora (a categoria é da compra inteira). Nome que já era real nunca perde a categoria dada pelo Luiz.
+- **Nome cortado casa com a regra (`ruleMatches`).** A compra pendente chega com o nome curto ("UBER UBER *TRIP HELP.U"), e a regra foi aprendida com o nome completo de uma confirmada ("… SAO PAULO BRA"). Antes só casava se a descrição CONTIVESSE o padrão; agora também casa se a descrição for o começo do padrão (10+ letras; espaços repetidos contam como um). Conferido nas 339 descrições de produção: só esse caso muda.
+- Dados corrigidos à mão: as 4 corridas de nov/26 (10,97 · 7,88 · 3,99 · 28,60) foram para Transporte › Uber, 99.
 
 ## Decisões de navegação/IA
 

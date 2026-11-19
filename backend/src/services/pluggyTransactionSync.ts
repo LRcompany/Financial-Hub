@@ -21,7 +21,7 @@ import crypto from "node:crypto";
 import { prisma } from "../prisma.js";
 import { brCalendarDay, brDayString } from "./dates.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
-import { suggestCategory } from "./categorization.js";
+import { suggestCategory, isGenericDescription } from "./categorization.js";
 
 interface PluggyAccountRaw {
   id: string;
@@ -145,6 +145,24 @@ async function findAwaitingMatch(brokerId: string, amount: number, date: Date) {
 async function resolveCategoryId(tx: PluggyTransaction): Promise<string | null> {
   const suggested = await suggestCategory(tx.description);
   return suggested?.id ?? null;
+}
+
+// Categoria dada enquanto o nome era genérico é PALPITE (19/11). Achado real:
+// 3 corridas de Uber chegaram como "Compra a Vista sem Juros MasterCard" /
+// "MASTERCARD" e ficaram em Supermercado e Farmácia; quando o nome real
+// ("UBER *TRIP") chegou, a categoria errada ficou — o sync nunca sobrescreve
+// categoria. Agora: se o nome ERA genérico e o novo não é, e já existe regra
+// pro lojista real (o que o Luiz mesmo categorizou antes — ex: Uber → Uber, 99),
+// vale a regra. Sem regra, fica a categoria que estava. Compra parcelada fica
+// de fora: a categoria é da compra inteira (ver services/purchases.ts).
+export function categoryAfterRename(
+  existing: { description: string; categoryId: string | null; purchaseId: string | null },
+  newDescription: string,
+  suggestedId: string | null
+): string | null {
+  if (!existing.categoryId) return suggestedId;
+  const wasGuess = isGenericDescription(existing.description) && !isGenericDescription(newDescription) && !existing.purchaseId;
+  return wasGuess && suggestedId ? suggestedId : existing.categoryId;
 }
 
 // "Pix pra mim mesmo" (entre contas próprias) — mesmo documento (CPF/CNPJ)
@@ -699,14 +717,14 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
         // não sobrescrever categoria que o usuário já corrigiu à mão.
         if (existing.pluggyPending && tx.status === "POSTED") {
           const isTransfer = tx.type === "CREDIT" || isSelfCancelingCharge(tx.description);
-          // NUNCA sobrescreve uma categoria já definida — "sem categoria"
-          // enquanto pendente pode já ter sido corrigida à mão nesse meio
-          // tempo (ex: Luiz categoriza toda "MASTERCARD INTERNACIONAL" antes
-          // do sync seguinte confirmar o nome real); só resolve categoria
-          // nova se ainda estiver null.
+          // Não sobrescreve categoria já definida — "sem categoria" enquanto
+          // pendente pode já ter sido corrigida à mão nesse meio tempo. A
+          // exceção (19/11): categoria dada enquanto o nome era genérico dá
+          // lugar à regra do lojista real, se houver (ver categoryAfterRename).
           // Parcela de compra parcelada: o passo 2 (reconcileInstallments) dá
           // a categoria e a nota da COMPRA logo em seguida (ver purchases.ts).
-          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
+          const categoryId = categoryAfterRename(existing, tx.description, await resolveCategoryId(tx));
+          if (categoryId !== existing.categoryId) categorizedCount++;
           await prisma.transaction.update({
             where: { id: existing.id },
             data: {
@@ -727,14 +745,14 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
           // passa a vir como "ACAI*BESSA JOAO PESSOA" / "UBER *TRIP" — só que
           // o sync só revisitava a descrição na virada pendente → confirmada, e
           // 7 compras de nov/26 ficaram presas no nome genérico. Atualiza a
-          // descrição; categoria/nota que o Luiz já deu ficam como estão (só
-          // resolve categoria nova se ainda estiver sem).
-          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
+          // descrição; categoria dada enquanto o nome era genérico dá lugar à
+          // regra do lojista real, se houver (ver categoryAfterRename).
+          const categoryId = categoryAfterRename(existing, tx.description, await resolveCategoryId(tx));
           await prisma.transaction.update({
             where: { id: existing.id },
             data: { description: tx.description, isTransfer: tx.type === "CREDIT" || isSelfCancelingCharge(tx.description), categoryId },
           });
-          if (!existing.categoryId && categoryId) categorizedCount++;
+          if (categoryId !== existing.categoryId) categorizedCount++;
           descriptionsUpdated++;
         } else if (!existing.pluggyPending) {
           transactionsSkipped++;

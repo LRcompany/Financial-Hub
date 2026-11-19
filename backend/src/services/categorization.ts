@@ -38,6 +38,20 @@ export async function leafExpenseCategories() {
 const GENERIC_DESCRIPTIONS = [/^compra a vista sem juros\b/i, /^parcela de compra lojista\b/i, /^mastercard( internacional)?$/i];
 export const isGenericDescription = (description: string) => GENERIC_DESCRIPTIONS.some((r) => r.test(description.trim()));
 
+/** A regra vale pra descrição se a descrição CONTÉM o padrão — ou se a
+ * descrição é o começo do padrão (19/11): a compra ainda pendente chega com o
+ * nome cortado ("UBER UBER *TRIP HELP.U") e a regra foi aprendida com o nome
+ * completo de uma já confirmada ("UBER UBER *TRIP HELP.U SAO PAULO BRA"). Só
+ * com 10+ letras, pra "UBER" sozinho não casar com qualquer coisa. Espaços
+ * repetidos contam como um. */
+export function ruleMatches(description: string, pattern: string): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  const d = norm(description);
+  const p = norm(pattern);
+  if (!p) return false;
+  return d.includes(p) || (d.length >= 10 && p.startsWith(d));
+}
+
 /**
  * Sugere uma categoria a partir da descrição de uma transação importada,
  * usando as CategorizationRule já cadastradas (pré-populadas com o padrão
@@ -50,8 +64,7 @@ export async function suggestCategory(description: string) {
     include: { category: true },
   });
 
-  const normalized = description.toLowerCase();
-  const match = rules.find((rule) => !isGenericDescription(rule.pattern) && normalized.includes(rule.pattern.toLowerCase()));
+  const match = rules.find((rule) => !isGenericDescription(rule.pattern) && ruleMatches(description, rule.pattern));
 
   return match?.category ?? null;
 }
