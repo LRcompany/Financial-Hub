@@ -29,7 +29,7 @@ async function runSync() {
     const result = await syncAllBrokersCreditCardTransactions();
     console.log(
       `[scheduler] sync de transação de cartão em ${startedAt}: ${result.transactionsSynced} nova(s), ` +
-        `${result.transactionsReconciled} reconciliada(s) (pendente virou confirmada), ` +
+        `${result.transactionsReconciled} reconciliada(s) (pendente virou confirmada), ${result.descriptionsUpdated} com o nome do lojista atualizado, ` +
         `${result.installmentsCreated} parcela(s) futura(s), ${result.datesUpdated} data(s) corrigida(s), ${result.futureBilledRemoved} parcela(s) de fatura futura removida(s), ${result.categorizedCount} categorizada(s) sozinha(s).`
     );
   } catch (err) {

@@ -2524,6 +2524,15 @@ Pedido do Luiz (5 pontos): o aporte de Tesouro do BTG apareceu com sinal trocado
 
 **Testes:** `test/investmentFlows.test.ts`. **Conferência:** `scripts/check-investments.ts [--sync]` imprime aporte, rendimento, movimentações e os avisos.
 
+### Nome do lojista que chega com a compra ainda pendente (19/11)
+
+Luiz: *"está vindo muitas compras escrito mastercard. tem certeza que você está trazendo elas certo?"* Não estava.
+
+- **O que acontece:** o C6 manda a compra no primeiro dia como "Compra a Vista sem Juros MasterCard" ou "MASTERCARD". Um ou dois dias depois, a MESMA transação na Pluggy (mesmo id, ainda `PENDING`) passa a vir com o lojista: "ACAI*BESSA JOAO PESSOA", "UBER *TRIP", "CANTINHO REGIONAL", "MERCADINHO LACANTO".
+- **O erro:** o sync só revisitava a descrição na virada pendente → confirmada. Em nov/26, 7 compras ficaram presas no nome genérico. A explicação dada em 16/11 ("só resta esperar o banco confirmar") estava errada.
+- **Correção** (`pluggyTransactionSync.ts`): transação ainda pendente cuja descrição mudou na Pluggy ganha a descrição nova a cada sync. Categoria e nota que o Luiz já deu ficam como estão; sem categoria, tenta a regra do lojista.
+- O log do scheduler passou a contar "N com o nome do lojista atualizado".
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

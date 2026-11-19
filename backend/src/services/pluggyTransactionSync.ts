@@ -645,6 +645,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
   let transactionsSynced = 0;
   let transactionsSkipped = 0;
   let transactionsReconciled = 0;
+  let descriptionsUpdated = 0;
   let installmentsCreated = 0;
   let datesUpdated = 0; // data corrigida porque a Pluggy mudou (ver effectiveDate)
   let futureBilledRemoved = 0; // parcela de fatura futura gravada por versão antiga
@@ -719,6 +720,22 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
             },
           });
           transactionsReconciled++;
+        } else if (existing.pluggyPending && tx.description !== existing.description) {
+          // Nome do lojista chegou com a compra AINDA pendente (19/11). Achado
+          // real: o C6 manda "Compra a Vista sem Juros MasterCard" no 1º dia e,
+          // um ou dois dias depois, a MESMA transação (mesmo id, ainda PENDING)
+          // passa a vir como "ACAI*BESSA JOAO PESSOA" / "UBER *TRIP" — só que
+          // o sync só revisitava a descrição na virada pendente → confirmada, e
+          // 7 compras de nov/26 ficaram presas no nome genérico. Atualiza a
+          // descrição; categoria/nota que o Luiz já deu ficam como estão (só
+          // resolve categoria nova se ainda estiver sem).
+          const categoryId = existing.categoryId ?? (await resolveCategoryId(tx));
+          await prisma.transaction.update({
+            where: { id: existing.id },
+            data: { description: tx.description, isTransfer: tx.type === "CREDIT" || isSelfCancelingCharge(tx.description), categoryId },
+          });
+          if (!existing.categoryId && categoryId) categorizedCount++;
+          descriptionsUpdated++;
         } else if (!existing.pluggyPending) {
           transactionsSkipped++;
         }
@@ -865,7 +882,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
 
   await prisma.broker.update({ where: { id: broker.id }, data: { lastSyncedAt: new Date() } });
 
-  return { transactionsSynced, transactionsSkipped, transactionsReconciled, installmentsCreated, datesUpdated, futureBilledRemoved, categorizedCount, pixSynced, pixIgnored, utilityBoletoSynced };
+  return { transactionsSynced, transactionsSkipped, transactionsReconciled, descriptionsUpdated, installmentsCreated, datesUpdated, futureBilledRemoved, categorizedCount, pixSynced, pixIgnored, utilityBoletoSynced };
 }
 
 /**
@@ -881,6 +898,7 @@ export async function syncAllBrokersCreditCardTransactions() {
     transactionsSynced: number;
     transactionsSkipped: number;
     transactionsReconciled: number;
+    descriptionsUpdated: number;
     installmentsCreated: number;
     datesUpdated: number;
     futureBilledRemoved: number;
@@ -901,6 +919,7 @@ export async function syncAllBrokersCreditCardTransactions() {
         transactionsSynced: 0,
         transactionsSkipped: 0,
         transactionsReconciled: 0,
+        descriptionsUpdated: 0,
         installmentsCreated: 0,
         datesUpdated: 0,
         futureBilledRemoved: 0,
@@ -918,6 +937,7 @@ export async function syncAllBrokersCreditCardTransactions() {
       transactionsSynced: acc.transactionsSynced + r.transactionsSynced,
       transactionsSkipped: acc.transactionsSkipped + r.transactionsSkipped,
       transactionsReconciled: acc.transactionsReconciled + r.transactionsReconciled,
+      descriptionsUpdated: acc.descriptionsUpdated + r.descriptionsUpdated,
       installmentsCreated: acc.installmentsCreated + r.installmentsCreated,
       datesUpdated: acc.datesUpdated + r.datesUpdated,
       futureBilledRemoved: acc.futureBilledRemoved + r.futureBilledRemoved,
@@ -930,6 +950,7 @@ export async function syncAllBrokersCreditCardTransactions() {
       transactionsSynced: 0,
       transactionsSkipped: 0,
       transactionsReconciled: 0,
+      descriptionsUpdated: 0,
       installmentsCreated: 0,
       datesUpdated: 0,
       futureBilledRemoved: 0,
