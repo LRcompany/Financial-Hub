@@ -1,9 +1,32 @@
 import { useState } from 'react'
+import { Money } from './Money'
 import styles from './ClientPieChart.module.css'
 
 // Paleta categórica própria — evita verde/vermelho de propósito, essas cores
-// já têm significado (status) no resto do sistema.
-const PALETTE = ['#3E5BFA', '#7C6FF0', '#3FB6A8', '#F2934A', '#C98A1D', '#9B8AFB', '#4FA8D8', '#6B7076']
+// já têm significado (status) no resto do sistema. 14 cores (16/10, pedido do
+// Luiz: "está repetindo muito as cores... adicione um roxo, rosa e suas
+// variações, visualmente estou me confundindo") — antes eram 8, com dois
+// roxos e dois azuis quase iguais, e com 10 clientes a cor repetia. A ORDEM
+// importa: as fatias vêm do maior pro menor, então cores vizinhas aqui são
+// fatias vizinhas na pizza — cada uma troca de família (azul → laranja →
+// teal → roxo → rosa...) pra duas fatias lado a lado nunca se parecerem. O
+// cinza fica por último (costuma ser a fatia "Outros"/menor).
+const PALETTE = [
+  '#3E5BFA', // azul (accent)
+  '#F2934A', // laranja
+  '#3FB6A8', // teal
+  '#A855F7', // roxo
+  '#EC4899', // rosa
+  '#C98A1D', // âmbar
+  '#4FA8D8', // azul-céu
+  '#6D28D9', // violeta escuro
+  '#F9A8D4', // rosa claro
+  '#0F766E', // teal escuro
+  '#C4B5FD', // lilás
+  '#BE185D', // framboesa
+  '#F0C24B', // amarelo
+  '#6B7076', // cinza
+]
 
 interface Slice {
   label: string
@@ -42,7 +65,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
   return (
     <div className={styles.wrap}>
       <div className={styles.svgBox}>
-        <svg viewBox="0 0 160 160" width="160" height="160">
+        <svg viewBox="0 0 160 160">
           {slices.map((s, i) => (
             <path
               key={s.label}
@@ -60,7 +83,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
           <div className={styles.tooltip}>
             <div className={styles.tooltipLabel}>{active.label}</div>
             <div className={styles.tooltipValue}>
-              R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <Money>R$ {active.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Money>
             </div>
             <div className={styles.tooltipLabel}>{((active.value / total) * 100).toFixed(0)}%</div>
           </div>
@@ -79,7 +102,7 @@ export function ClientPieChart({ data }: { data: Slice[] }) {
             <span className={styles.legendDot} style={{ background: s.color }} />
             <span className={styles.legendName}>{s.label}</span>
             <span className={styles.legendValue}>
-              R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <Money>R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Money>
             </span>
           </div>
         ))}

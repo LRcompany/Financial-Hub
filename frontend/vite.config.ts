@@ -9,8 +9,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Financial Hub',
-        short_name: 'Financial Hub',
+        name: 'Command OS',
+        short_name: 'Command OS',
         description: 'Financeiro Pessoal e Projetos/Freelance, num lugar só.',
         theme_color: '#3E5BFA',
         background_color: '#FFFFFF',
