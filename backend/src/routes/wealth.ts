@@ -41,8 +41,8 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   const previousSnaps = activeSnapshotsAsOf(all, nowYm - 1);
   const beforePreviousSnaps = activeSnapshotsAsOf(all, nowYm - 2);
 
-  const total = latestSnaps.reduce((sum, s) => sum + s.marketValue, 0);
-  const previousTotal = previousSnaps.reduce((sum, s) => sum + s.marketValue, 0);
+  const rawTotal = latestSnaps.reduce((sum, s) => sum + s.marketValue, 0);
+  const rawPreviousTotal = previousSnaps.reduce((sum, s) => sum + s.marketValue, 0);
 
   // ---- alocação por tipo de ativo (posições ativas hoje) ----
   // Mesma regra de agrupamento do /api/positions (broker "standalone" vira
@@ -96,7 +96,44 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     }
     return map;
   }
+  // Valor de mercado por corretora+tipo (20/11) — pro "saldo inicial": a
+  // corretora/classe que aparece pela primeira vez (ou muda de fonte manual →
+  // automática) entra com o valor que já tinha, nem aporte nem rendimento.
+  function marketByKey(snaps: typeof all) {
+    const map = new Map<string, number>();
+    for (const s of snaps) {
+      if (s.security.type === "Conta Corrente") continue;
+      const key = `${s.brokerId}:${s.security.type}`;
+      map.set(key, (map.get(key) ?? 0) + s.marketValue);
+    }
+    return map;
+  }
+  const firstYmByKey = new Map<string, number>();
+  for (const s of all) {
+    if (s.security.type === "Conta Corrente" || s.marketValue <= 0) continue;
+    const key = `${s.brokerId}:${s.security.type}`;
+    const ym = yearMonth(s.year, s.month);
+    if (!firstYmByKey.has(key) || ym < firstYmByKey.get(key)!) firstYmByKey.set(key, ym);
+  }
+  const flows = await loadMovements();
+  const emptyMap = new Map<string, number>();
+  /** Aplicação/resgate em trânsito do mês (ver investmentFlows.ts) — só de
+   * corretora+tipo que já existia antes desse mês (no 1º mês, é saldo inicial). */
+  function transitOf(ym: number) {
+    let sum = 0;
+    for (const [key, v] of flows.transitByKey(ym)) {
+      const first = firstYmByKey.get(key);
+      if (first !== undefined && first < ym) sum += v;
+    }
+    return sum;
+  }
+  // Total do mês com o que está em trânsito (aplicação feita que a corretora ainda não mostra).
+  const transitNow = transitOf(nowYm);
+  const total = rawTotal + transitNow;
+  const previousTotal = rawPreviousTotal + transitOf(nowYm - 1);
+  if (Math.abs(transitNow) >= 0.01) allocation.push({ label: "Em trânsito", value: transitNow });
   const investedByKeyByMonth: Map<string, number>[] = [];
+  const marketByKeyByMonth: Map<string, number>[] = [];
   // Conta corrente separada (17/11): o rendimento do mês é calculado sem ela
   // (saldo que entra e sai não é rendimento nem aporte).
   const marketExCashByMonth: number[] = [];
@@ -109,7 +146,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     if (snaps.length === 0) continue; // nada existia ainda nesse mês, não polui o gráfico com zero fake
     evolution.push({
       label: new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-      value: snaps.reduce((sum, s) => sum + s.marketValue, 0),
+      value: snaps.reduce((sum, s) => sum + s.marketValue, 0) + transitOf(ym),
     });
     monthlyTotals.push({
       marketValue: snaps.reduce((sum, s) => sum + s.marketValue, 0),
@@ -118,6 +155,7 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     monthMetaYear.push(year);
     monthYms.push(ym);
     investedByKeyByMonth.push(investedByKey(snaps));
+    marketByKeyByMonth.push(marketByKey(snaps));
     marketExCashByMonth.push(snaps.reduce((sum, s) => sum + (s.security.type === "Conta Corrente" ? 0 : s.marketValue), 0));
     cashByMonth.push(snaps.reduce((sum, s) => sum + (s.security.type === "Conta Corrente" ? s.marketValue : 0), 0));
   }
@@ -157,50 +195,90 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
   // set/26, = soma das aplicações/resgates de verdade (InvestmentMovement);
   // o resto = variação do investido, como sempre foi (manual/on-chain só muda
   // o investido com aporte lançado à mão). Ver services/investmentFlows.ts.
-  const flows = await loadMovements();
-  function monthFlow(curByKey: Map<string, number>, curYm: number, priorByKey: Map<string, number>) {
+  function monthFlow(
+    curByKey: Map<string, number>,
+    curYm: number,
+    priorByKey: Map<string, number>,
+    curMarket: Map<string, number> = emptyMap,
+    priorMarket: Map<string, number> = emptyMap
+  ) {
     const keys = new Set([...priorByKey.keys(), ...curByKey.keys(), ...flows.keysWithFlow(curYm)]);
     let total = 0;
-    let inValue = 0; // parte do aporte que já aparece no valor (régua do rendimento)
+    let initial = 0; // saldo inicial: corretora/classe nova ou troca de fonte — nem aporte nem rendimento
     const breakdown: { label: string; value: number }[] = [];
     for (const key of keys) {
-      let d: number;
-      if (keyFed.get(key) && curYm >= FLOW_START_YM) {
-        d = flows.ofKey(key, curYm);
-        inValue += flows.returnOfKey(key, curYm);
-      } else if (automatedStartYm.get(key) === curYm) continue; // mês da migração — artefato, não aporte
-      else {
-        d = (curByKey.get(key) ?? 0) - (priorByKey.get(key) ?? 0);
-        inValue += d;
+      const first = firstYmByKey.get(key);
+      if (first === undefined || curYm <= first || automatedStartYm.get(key) === curYm) {
+        initial += (curMarket.get(key) ?? 0) - (priorMarket.get(key) ?? 0);
+        continue;
       }
+      const d = keyFed.get(key) && curYm >= FLOW_START_YM ? flows.ofKey(key, curYm) : (curByKey.get(key) ?? 0) - (priorByKey.get(key) ?? 0);
       total += d;
       if (Math.abs(d) >= 1) breakdown.push({ label: keyLabel.get(key) ?? key, value: d });
     }
     breakdown.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-    return { total, inValue, breakdown };
+    return { total, initial, breakdown };
   }
-  // `returnValue` (17/11): rendimento do mês = valor final − valor inicial −
-  // aportes líquidos (sem conta corrente).
-  const investedByMonthWithYear: { label: string; value: number; returnValue: number | null; year: number; ym: number; breakdown: { label: string; value: number }[] }[] = [];
-  const contributionByIdx: (number | undefined)[] = [];
+  // Rendimento do mês (20/11, Luiz): carteira no fim − carteira no início −
+  // aporte líquido − saldo inicial, SEM conta corrente (saldo que entra e sai
+  // com o dia a dia não é rendimento nem aporte) e COM o que está em trânsito.
+  // Fecha exato todo mês: rendimento + aporte + saldo inicial = variação.
+  type MonthEntry = {
+    label: string;
+    value: number;
+    returnValue: number | null;
+    initialBalance: number;
+    startValue: number | null;
+    endValue: number;
+    year: number;
+    ym: number;
+    breakdown: { label: string; value: number }[];
+  };
+  const investedByMonthWithYear: MonthEntry[] = [];
+  const avgInputs: { marketValue: number; investedAmount: number; contribution?: number }[] = [];
   let prevInvestedByKey = baselineInvestedByKey;
-  let prevMarketExCash: number | null = baselineSnaps.length > 0 ? baselineSnaps.reduce((sum, s) => sum + (s.security.type === "Conta Corrente" ? 0 : s.marketValue), 0) : null;
+  let prevMarketByKey = baselineSnaps.length > 0 ? marketByKey(baselineSnaps) : emptyMap;
+  let prevPortfolio: number | null =
+    baselineSnaps.length > 0 ? baselineSnaps.reduce((sum, s) => sum + (s.security.type === "Conta Corrente" ? 0 : s.marketValue), 0) + transitOf(nowYm - 12) : null;
   for (let idx = 0; idx < monthlyTotals.length; idx++) {
     const curByKey = investedByKeyByMonth[idx];
     const curYm = monthYms[idx];
+    const portfolio = marketExCashByMonth[idx] + transitOf(curYm);
+    let contribution: number | undefined;
     if (prevInvestedByKey !== null) {
-      const { total: delta, inValue, breakdown } = monthFlow(curByKey, curYm, prevInvestedByKey);
-      const returnValue = prevMarketExCash !== null ? marketExCashByMonth[idx] - prevMarketExCash - inValue : null;
-      investedByMonthWithYear.push({ label: evolution[idx].label, value: delta, returnValue, year: monthMetaYear[idx], ym: curYm, breakdown });
+      const { total: delta, initial, breakdown } = monthFlow(curByKey, curYm, prevInvestedByKey, marketByKeyByMonth[idx], prevMarketByKey);
+      const returnValue = prevPortfolio !== null ? portfolio - prevPortfolio - delta - initial : null;
+      investedByMonthWithYear.push({
+        label: evolution[idx].label,
+        value: delta,
+        returnValue,
+        initialBalance: initial,
+        startValue: prevPortfolio,
+        endValue: portfolio,
+        year: monthMetaYear[idx],
+        ym: curYm,
+        breakdown,
+      });
       // Retorno médio (projeção do 1º milhão): total COM conta corrente, então
       // a variação do saldo dela entra como "dinheiro que entrou", não ganho.
-      contributionByIdx[idx] = inValue + (idx > 0 ? cashByMonth[idx] - cashByMonth[idx - 1] : 0);
+      contribution = delta + initial + (idx > 0 ? cashByMonth[idx] - cashByMonth[idx - 1] : 0);
     }
+    avgInputs.push({ marketValue: portfolio + cashByMonth[idx], investedAmount: monthlyTotals[idx].investedAmount, contribution });
     prevInvestedByKey = curByKey;
-    prevMarketExCash = marketExCashByMonth[idx];
+    prevMarketByKey = marketByKeyByMonth[idx];
+    prevPortfolio = portfolio;
   }
-  const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(monthlyTotals.map((m, idx) => ({ ...m, contribution: contributionByIdx[idx] })));
-  const investedByMonth = investedByMonthWithYear.map(({ label, value, returnValue, breakdown }) => ({ label, value, returnValue, breakdown }));
+  const avgMonthlyReturnPct = computeAverageMonthlyReturnPct(avgInputs);
+  const investedByMonth = investedByMonthWithYear.map(({ label, value, returnValue, initialBalance, startValue, endValue, breakdown }) => ({
+    label,
+    value,
+    returnValue,
+    initialBalance,
+    startValue,
+    endValue,
+    breakdown,
+  }));
+  const thisMonthEntry = investedByMonthWithYear.find((e) => e.ym === nowYm) ?? null;
 
   // ---- aportado REAL no ano corrente até agora — comparação com a coluna
   // "contribution" (planejada) do yearlyBreakdown da "Primeira Milhão"
@@ -475,6 +553,12 @@ wealthRouter.get("/wealth-overview", async (req, res) => {
     investedThisMonth,
     investedLastMonth,
     investedByMonth,
+    // Rendimento do mês (20/11) — carteira sem conta corrente, com o que está em trânsito.
+    returnThisMonth: thisMonthEntry?.returnValue ?? null,
+    initialBalanceThisMonth: thisMonthEntry?.initialBalance ?? 0,
+    portfolioStart: thisMonthEntry?.startValue ?? null,
+    portfolioEnd: thisMonthEntry?.endValue ?? null,
+    transitThisMonth: transitNow,
     movementsThisMonth,
     dividendsThisMonth,
     dividendsLastMonth,

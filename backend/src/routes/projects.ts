@@ -611,6 +611,22 @@ projectsRouter.get("/projects-summary", async (req, res) => {
   const monthsWithData = monthlyReceived.filter((m) => m.value > 0).length || 1;
   const avgMonthlyThisYear = monthlyReceived.reduce((sum, m) => sum + m.value, 0) / monthsWithData;
 
+  // Média de renda (20/11, Luiz): soma dos últimos 12 meses ÷ 12, SEMPRE —
+  // em qualquer mês do ano (a de cima, "desde janeiro", encolhia a base em
+  // janeiro/fevereiro). Mês antes do primeiro recebimento registrado no
+  // sistema é "sem dado" — continua dividindo por 12, mas a tela avisa.
+  const firstReceipt = allReceipts.reduce<Date | null>((min, r) => (!min || r.paymentDate < min ? r.paymentDate : min), null);
+  const firstDataMonth = firstReceipt ? new Date(firstReceipt.getFullYear(), firstReceipt.getMonth(), 1) : null;
+  let last12Total = 0;
+  const last12MissingMonths: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const start = new Date(year, month - 1 - i, 1);
+    const end = new Date(year, month - i, 1);
+    last12Total += allReceipts.filter((r) => r.paymentDate >= start && r.paymentDate < end).reduce((sum, r) => sum + r.amount, 0);
+    if (!firstDataMonth || start < firstDataMonth) last12MissingMonths.push(start.toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(" de ", "/").replace(".", ""));
+  }
+  const avgMonthlyLast12 = last12Total / 12;
+
   // saldo a receber = valor de contrato - já recebido, projetos não cancelados.
   // `asOf` (02/10, Projetos com seletor de mês): saldo como estava no FIM de
   // um mês passado — só projeto que já tinha começado e só recebimento até
@@ -773,6 +789,8 @@ projectsRouter.get("/projects-summary", async (req, res) => {
     receivedLastMonth: receivedLastMonthAgg._sum.amount ?? 0,
     receivedThisYear: receivedThisYearAgg._sum.amount ?? 0,
     avgMonthlyThisYear,
+    avgMonthlyLast12,
+    last12MissingMonths,
     taxPaidThisYear: taxAgg._sum.amountPaid ?? 0,
     outstanding,
     outstandingLastMonth,

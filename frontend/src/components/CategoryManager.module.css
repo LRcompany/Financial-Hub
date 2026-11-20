@@ -84,7 +84,9 @@
 }
 
 .kindBadge,
-.incomeBadge {
+.incomeBadge,
+.goalBadgeOn,
+.goalBadgeOff {
   font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
@@ -195,3 +197,23 @@
   font-size: 12.5px;
 }
 
+
+/* "Conta na meta diária" (20/11) — botão-pílula; fora fica tracejado. */
+.goalBadgeOn,
+.goalBadgeOff {
+  border: 1px solid transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+span.goalBadgeOff {
+  cursor: default;
+}
+.goalBadgeOff {
+  background: transparent;
+  border-color: var(--border);
+  border-style: dashed;
+}
+.goalBadgeOn:hover,
+button.goalBadgeOff:hover {
+  color: var(--ink);
+}

@@ -2536,6 +2536,42 @@ Luiz: *"está vindo muitas compras escrito mastercard. tem certeza que você est
 - **Nome cortado casa com a regra (`ruleMatches`).** A compra pendente chega com o nome curto ("UBER UBER *TRIP HELP.U"), e a regra foi aprendida com o nome completo de uma confirmada ("… SAO PAULO BRA"). Antes só casava se a descrição CONTIVESSE o padrão; agora também casa se a descrição for o começo do padrão (10+ letras; espaços repetidos contam como um). Conferido nas 339 descrições de produção: só esse caso muda.
 - Dados corrigidos à mão: as 4 corridas de nov/26 (10,97 · 7,88 · 3,99 · 28,60) foram para Transporte › Uber, 99.
 
+### Rendimento que fecha, ação que some, Farmácia, projeção, livre hoje e média de 12 meses (20/11)
+
+Pedido do Luiz em 6 itens ("opah, temos umas novas melhorias aqui").
+
+**1. Rendimento da carteira** (`routes/wealth.ts`). Luiz: *"rendimento = total − total anterior − aporte líquido"*; corretora ou posição nova entra como saldo inicial.
+- `monthFlow` devolve `{ total, initial, breakdown }`. Chave corretora+tipo no seu primeiro mês com valor (ou no mês em que a automação começa) vira **saldo inicial**, não aporte nem rendimento.
+- **Em trânsito:** dinheiro que saiu num mês e só aparece na posição no mês seguinte (ex.: CDB comprado em 30/10) conta no mês da compra. Decisão do Luiz: "contar no mês da compra". Entra no total, na alocação ("Em trânsito") e na evolução.
+- Conta corrente fica fora do cálculo (decisão do Luiz). Identidade fechada mês a mês: carteira fim − carteira início = aporte + saldo inicial + rendimento.
+- **Por que os 19.225,58 do exemplo não batiam:** eram os 20 mil em trânsito (CDB de 30/10 que só apareceu em novembro) mais as ações que sumiram da BTG. Com os dois corrigidos, nov/26 em cópia de produção: carteira sem conta corrente 616.465,43 → 628.413,40, aporte 14.471,54, rendimento −2.523,57. Fecha. Outubro e setembro também fecham.
+- Card "Investido por mês": "Rendimento do mês ±R$ X · carteira sem conta corrente R$ A → R$ B". MCP `patrimonio`: `rendimento_do_mes`, `saldo_inicial` por mês e carteira início e fim.
+
+**2. −R$ 13.135 em BTG · Ação.** Não era a troca AXIA: troca de nome chega como SELL "TROCA DE NOME" e a soma por corretora+tipo se anula. O que houve: DIRR3 (501 cotas), VBBR3 (233) e GGBR4 (137) **sumiram da Pluggy sem venda**, provavelmente por empréstimo de ações.
+- `pluggySync.ts`: ação ou FII que volta com valor 0, tinha cotas no mês anterior e não teve SELL desde então mantém o último valor, cotas e investido, com `PositionSnapshot.carriedForward = true`. Decisão do Luiz: "manter na carteira".
+- Saúde dos dados, check 20 `acao-mantida-sem-dado`: "Ação sumiu da corretora sem venda", com ticker, cotas e último valor.
+
+**3. Categoria errada em Farmácia** (Outback, dois "99 RIDE", Derby Lanches em out/26).
+- **Causa:** chegaram pendentes como "MASTERCARD" quando ainda existia a regra genérica "MASTERCARD → Farmácia" (apagada em 13/11). O log do sync de 07/10 diz "4 nova(s), 4 categorizada(s)". Quando o nome real chegou, a categoria errada ficou. É o mesmo bug das Ubers, já fechado por `categoryAfterRename` e pela trava de regra genérica.
+- Regras novas em produção: "99 RIDE" e "99 L2L" → Uber, 99; Outback → Restaurante; "LANCHES" → Lanches. Seis lançamentos foram corrigidos e Farmácia de out/26 ficou em R$ 210,07.
+- `ruleMatches`: padrão com menos de 4 letras nunca casa. Empate de confiança vai para o padrão mais longo (mais específico), então "MANUS LANCHES" continua em Supermercado.
+
+**4. Gasto projetado do mês** (`/budget-summary`). Luiz: *"projetado = gasto já lançado + contas fixas com meta que ainda não foram lançadas no mês"*.
+- Conta fixa ainda não lançada = categoria com meta e nada gasto nela. Só no mês corrente pelo calendário brasileiro.
+- Card do Orçamento: "Fecha em ~R$ X (R$ Y acima/abaixo do planejado)"; o tooltip lista as contas que faltam. MCP `resumo_financeiro`: `gasto_projetado_do_mes`, `projetado_menos_planejado`, `contas_com_meta_ainda_nao_lancadas`.
+- Nov/26 em 20/11: 20.814,78 + 3.304,67 = ~24.119, R$ 1.922 acima do planejado.
+
+**5. Livre para gastar hoje** (`services/dailyAllowance.ts`, testes em `test/dailyAllowance.test.ts`). Luiz: *"(meta diária × dias do mês − gasto variável até ontem − parcelas variáveis que ainda vão cair no mês) ÷ dias que faltam, contando hoje"*.
+- `Category.countsForDailyGoal` (padrão: conta) vale para a árvore: mãe fora tira as filhas junto. Em Configurações → Categorias, a pílula "Conta na meta diária / Fora da meta diária" liga e desliga.
+- Seed em produção (fora): Moradia > Aluguel, Luz, Água, Gás, Internet, Telefonia, Seguro Residência; Outros > Usina Solar.
+- A meta diária (gráfico, calendário, "dias abaixo da meta") passou a ver só gasto variável. Parcela entra **diluída pelo mês inteiro**, então o dia em que cai não fica vermelho. `dailyDays[].amount` = variável do dia + parcelas do mês ÷ dias do mês; `fullAmount` = tudo; `variable` = só o variável lançado (é por ele que se acha o "último dia com gasto").
+- Negativo aparece como "passou R$ X". Teste: mês de 30 dias, parcela de R$ 80, meta de R$ 150 → R$ 147,33.
+- **Achado:** em nov/26 as parcelas variáveis somam R$ 6.768,87 (passagem TAP, bike, itens de casa, móveis, Dell, hospedagem…). Diluídas, dão R$ 225,63 por dia, acima da meta de R$ 150, então todo dia fica acima.
+
+**6. Média de renda** (`/projects-summary`). Luiz: *"soma dos últimos 12 meses ÷ 12, sempre"*.
+- `avgMonthlyLast12` e `last12MissingMonths` (meses antes do primeiro recebimento, hoje dez/2025).
+- Cards: "Média dos últimos 12 meses · dez/2025 sem dado". MCP: `media_mensal_12_meses`, `meses_sem_dado_na_media`.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

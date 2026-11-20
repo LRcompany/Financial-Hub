@@ -80,6 +80,14 @@ export async function loadMovements() {
     signed: m.kind === "resgate" ? -m.amount : m.amount,
   }));
   const add = (map: Map<string, number>, k: string, v: number) => map.set(k, (map.get(k) ?? 0) + v);
+  // Em trânsito (20/11): aplicação/resgate do mês que a foto de fim do mês
+  // ainda não mostra (`returnYm` ≠ mês da data). Achado real: o CDB de R$20 mil
+  // do Sofisa comprado em 30/10 não estava na foto de outubro — o total de
+  // outubro ficava R$20 mil menor e o rendimento ia −20 mil em out e +20 mil
+  // em nov. Entra no total do mês da data pelo valor aplicado (resgate: sai),
+  // e o aporte fica no mês da data. Só Renda Fixa/Fundo (os que têm aporte por
+  // movimentação — Ação/FII é variação do investido, ver FLOW_TYPES).
+  const transitByYmKey = new Map<number, Map<string, number>>();
   const byKeyYm = new Map<string, number>(); // `${brokerId}:${type}|${ym}`
   const returnByKeyYm = new Map<string, number>();
   const returnBySecurityYm = new Map<string, number>(); // `${securityId}|${ym}`
@@ -90,6 +98,11 @@ export async function loadMovements() {
       add(returnByKeyYm, `${key}|${m.returnYm}`, m.signed);
       add(returnBySecurityYm, `${m.securityId}|${m.returnYm}`, m.signed);
     }
+    if (m.returnYm !== m.ym && m.ym >= FLOW_START_YM && FLOW_TYPES.has(m.securityType)) {
+      const byKey = transitByYmKey.get(m.ym) ?? new Map<string, number>();
+      add(byKey, key, m.signed);
+      transitByYmKey.set(m.ym, byKey);
+    }
   }
   return {
     /** Aporte líquido (aplicação − resgate) de uma corretora+tipo no mês da data. */
@@ -97,6 +110,8 @@ export async function loadMovements() {
     /** Aporte que já aparece no valor da foto desse mês (régua do rendimento). */
     returnOfKey: (key: string, ym: number) => returnByKeyYm.get(`${key}|${ym}`) ?? 0,
     returnOfSecurity: (securityId: string, ym: number) => returnBySecurityYm.get(`${securityId}|${ym}`) ?? 0,
+    /** Aplicação (+) / resgate (−) do mês que a foto de fim do mês ainda não mostra, por corretora+tipo. */
+    transitByKey: (ym: number) => transitByYmKey.get(ym) ?? new Map<string, number>(),
     keysWithFlow: (ym: number) => [...new Set(list.filter((m) => m.ym === ym || m.returnYm === ym).map((m) => `${m.brokerId}:${m.securityType}`))],
   };
 }

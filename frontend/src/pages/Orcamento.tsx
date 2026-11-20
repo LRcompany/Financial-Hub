@@ -40,6 +40,7 @@ import { InstallmentBadge, OverBudgetIcon, NoTargetTag, isOverBudget } from '../
 import { SpentPlannedValue, PlannedValue } from '../components/SpentPlannedValue'
 import { MonthNavigator } from '../components/MonthNavigator'
 import { Money } from '../components/Money'
+import { FreeTodayLine, ProjectedMonthLine } from '../components/DailyAllowance'
 import { currency } from '../lib/format'
 import cards from '../styles/cards.module.css'
 import styles from './Orcamento.module.css'
@@ -310,6 +311,7 @@ export function Orcamento() {
             <span>
               {budget.categories.filter((c) => c.hasTarget).length} categorias com meta
             </span>
+            <ProjectedMonthLine budget={budget} />
           </div>
           {pieData.length > 0 ? (
             <div style={{ marginTop: 'var(--space-5)' }}>
@@ -374,6 +376,7 @@ export function Orcamento() {
             </span>
             <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
           </div>
+          <FreeTodayLine budget={budget} className={cards.chartMeta} />
           <div style={{ marginTop: 'var(--space-5)' }}>
             <div className={styles.chartLabelRow}>
               <h4 className={styles.chartLabel} style={{ margin: 0 }}>

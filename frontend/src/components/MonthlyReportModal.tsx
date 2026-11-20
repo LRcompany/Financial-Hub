@@ -866,7 +866,8 @@ export function MonthlyReportModal({
                   height={80}
                 />
                 <p className={styles.chartCaption}>
-                  <Money>R$ {currency(projects!.receivedThisYear)}</Money> recebidos no ano · média de <Money>R$ {currency(projects!.avgMonthlyThisYear)}</Money> por mês
+                  <Money>R$ {currency(projects!.receivedThisYear)}</Money> recebidos no ano · média dos últimos 12 meses <Money>R$ {currency(projects!.avgMonthlyLast12)}</Money>
+                  {projects!.last12MissingMonths.length > 0 && ` (${projects!.last12MissingMonths.join(', ')} sem dado)`}
                 </p>
               </Box>
             )}

@@ -38,6 +38,7 @@ import { TransactionEditModal } from '../components/TransactionEditModal'
 import { InstallmentBadge, OverBudgetIcon } from '../components/Badge'
 import { SpentPlannedValue } from '../components/SpentPlannedValue'
 import { Money } from '../components/Money'
+import { FreeTodayLine } from '../components/DailyAllowance'
 import { currency } from '../lib/format'
 import styles from '../styles/cards.module.css'
 
@@ -307,6 +308,7 @@ export function Dashboard() {
                   </span>
                   <MonthDelta current={budget.monthlyAvgDailySpend} previous={budget.previousMonthlyAvgDailySpend} higherIsBetter={false} />
                 </div>
+                <FreeTodayLine budget={budget} className={styles.chartMeta} />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
                   {/* Duas formas de ver o MESMO `dailyDays` (15/09, mesmo
                       toggle de Orçamento — "isso tem que aparecer no
@@ -573,6 +575,19 @@ export function Dashboard() {
                     <MonthDelta current={wealth.investedThisMonth ?? 0} previous={wealth.investedLastMonth} />
                   )}
                 </div>
+                {/* Rendimento do mês (20/11, Luiz): carteira no fim − no início − aporte
+                    (− saldo inicial de corretora nova), sem conta corrente — fecha exato. */}
+                {wealth.returnThisMonth != null && wealth.portfolioStart != null && wealth.portfolioEnd != null && (
+                  <div className={styles.chartMeta} title={`Carteira sem conta corrente: R$ ${currency(wealth.portfolioEnd)} − R$ ${currency(wealth.portfolioStart)} − aporte R$ ${currency(wealth.investedThisMonth ?? 0)}${wealth.initialBalanceThisMonth ? ` − saldo inicial R$ ${currency(wealth.initialBalanceThisMonth)}` : ''} = R$ ${currency(wealth.returnThisMonth)}`}>
+                    <span>
+                      Rendimento do mês{' '}
+                      <Money>{`${wealth.returnThisMonth < 0 ? '−' : '+'}R$ ${currency(Math.abs(wealth.returnThisMonth))}`}</Money>
+                    </span>
+                    <span>
+                      carteira sem conta corrente <Money>{`R$ ${currency(wealth.portfolioStart)}`}</Money> → <Money>{`R$ ${currency(wealth.portfolioEnd)}`}</Money>
+                    </span>
+                  </div>
+                )}
                 {wealth.investedByMonth.length >= 2 ? (
                   <SmoothLineChart
                     values={wealth.investedByMonth.map((e) => e.value)}
@@ -719,8 +734,11 @@ export function Dashboard() {
                   <Money>R$ {currency(projects.receivedThisYear)}</Money>
                 </div>
                 <div className={styles.chartMeta}>
-                  <span>Média mensal (desde janeiro)</span>
-                  <span className={styles.statValue}><Money>R$ {currency(projects.avgMonthlyThisYear)}</Money></span>
+                  <span>
+                    Média dos últimos 12 meses
+                    {projects.last12MissingMonths.length > 0 && ` · ${projects.last12MissingMonths.join(', ')} sem dado`}
+                  </span>
+                  <span className={styles.statValue}><Money>R$ {currency(projects.avgMonthlyLast12)}</Money></span>
                 </div>
                 <SmoothLineChart
                   values={projects.monthlyReceived.map((m) => m.value)}

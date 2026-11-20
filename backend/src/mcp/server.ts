@@ -100,6 +100,10 @@ export function buildMcpServer() {
           gasto: r2(b.totalSpent),
           planejado: r2(b.totalPlanned),
           sobra_do_planejado: r2(b.totalPlanned - b.totalSpent),
+          // 20/11: já lançado + contas com meta que ainda não caíram (só mês corrente).
+          gasto_projetado_do_mes: b.projectedMonthTotal == null ? null : r2(b.projectedMonthTotal),
+          projetado_menos_planejado: b.projectedMonthTotal == null ? null : r2(b.projectedMonthTotal - b.totalPlanned),
+          contas_com_meta_ainda_nao_lancadas: (b.pendingBills ?? []).map((c: Json) => ({ categoria: c.path, planejado: r2(c.planned) })),
           entradas: r2(b.totalIncome),
           entradas_de_projetos: r2(b.incomeFromProjects),
           entradas_mes_anterior: r2(b.previousTotalIncome),
@@ -114,6 +118,10 @@ export function buildMcpServer() {
             .sort((x: Json, y: Json) => y.gasto - x.gasto),
           maior_compra: b.biggestPurchase ? { descricao: b.biggestPurchase.description, valor: r2(b.biggestPurchase.amount), categoria: b.biggestPurchase.category } : null,
           meta_diaria: b.dailyGoal,
+          // 20/11: (meta × dias do mês − gasto variável até ontem − parcelas do
+          // mês) ÷ dias que faltam contando hoje. Negativo = passou. Só gasto
+          // variável: categoria "fora da meta diária" (aluguel, contas) não entra.
+          livre_para_gastar_hoje: b.freeToday ? r2(b.freeToday.amount) : null,
           dias_abaixo_da_meta: `${b.daysUnderGoal} de ${b.daysWithGoal}`,
           gasto_medio_por_dia: r2(b.monthlyAvgDailySpend),
         },
@@ -144,7 +152,8 @@ export function buildMcpServer() {
         projetos: {
           recebido_no_mes: r2(pr.receivedThisMonth),
           recebido_no_ano: r2(pr.receivedThisYear),
-          media_mensal_no_ano: r2(pr.avgMonthlyThisYear),
+          media_mensal_12_meses: r2(pr.avgMonthlyLast12), // soma dos últimos 12 meses ÷ 12 (20/11)
+          meses_sem_dado_na_media: pr.last12MissingMonths,
           a_receber: r2(pr.outstanding),
           valor_da_diaria: r2(pr.dailyRateThisMonth),
         },
@@ -261,7 +270,7 @@ export function buildMcpServer() {
       title: "Patrimônio e investimentos",
       description:
         "Carteira no mês: total, evolução de 12 meses, alocação por classe, cada posição (corretora, tipo, valor de mercado, investido, ganho, taxa, vencimento), " +
-        "aportes por mês (aplicações − resgates de verdade) com detalhe por corretora e rendimento do mês (valor final − inicial − aportes), cada aplicação/resgate do mês, proventos por mês e por ativo, e o que mais rendeu/caiu. Use pra analisar diversificação, liquidez, reserva de emergência e onde alocar aportes e proventos.",
+        "aportes por mês (aplicações − resgates de verdade) com detalhe por corretora e rendimento do mês (carteira sem conta corrente: valor final − inicial − aporte − saldo inicial de corretora nova; fecha exato), cada aplicação/resgate do mês, proventos por mês e por ativo, e o que mais rendeu/caiu. Use pra analisar diversificação, liquidez, reserva de emergência e onde alocar aportes e proventos.",
       inputSchema: { mes, ano },
       annotations: readOnly,
     },
@@ -304,10 +313,16 @@ export function buildMcpServer() {
           valor: r2(m.amount),
           origem: m.source === "manual" ? "lançada à mão" : "corretora",
         })),
+        // Rendimento (20/11) = carteira_fim − carteira_inicio − aporte − saldo_inicial,
+        // carteira SEM conta corrente e com aplicação em trânsito. Fecha exato.
+        rendimento_do_mes: r2(w.returnThisMonth),
         aportes_por_mes: w.investedByMonth.map((m: Json) => ({
           mes: m.label,
           total: r2(m.value),
           rendimento: r2(m.returnValue),
+          saldo_inicial: r2(m.initialBalance),
+          carteira_inicio_sem_conta_corrente: r2(m.startValue),
+          carteira_fim_sem_conta_corrente: r2(m.endValue),
           detalhe: (m.breakdown ?? []).map((d: Json) => ({ origem: d.label, valor: r2(d.value) })),
         })),
         proventos: {
@@ -348,7 +363,8 @@ export function buildMcpServer() {
         recebido_no_mes: r2(s.receivedThisMonth),
         recebido_mes_anterior: r2(s.receivedLastMonth),
         recebido_no_ano: r2(s.receivedThisYear),
-        media_mensal_no_ano: r2(s.avgMonthlyThisYear),
+        media_mensal_12_meses: r2(s.avgMonthlyLast12), // soma dos últimos 12 meses ÷ 12 (20/11)
+        meses_sem_dado_na_media: s.last12MissingMonths,
         recebido_por_mes: s.monthlyReceived.map((m: Json) => ({ mes: m.label, valor: r2(m.value) })),
         a_receber: r2(s.outstanding),
         valor_da_diaria: r2(s.dailyRateThisMonth),

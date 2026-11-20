@@ -27,11 +27,12 @@ const server = app.listen(0);
 const port = (server.address() as { port: number }).port;
 const get = (path: string) => fetch(`http://127.0.0.1:${port}${path}`).then((r) => r.json() as Promise<any>);
 
-for (const [month, year] of [[10, 2026], [11, 2026]]) {
+for (const [month, year] of [[11, 2026]]) {
   const w = await get(`/wealth-overview?month=${month}&year=${year}`);
-  console.log(`\n== ${month}/${year} total ${brl(w.total)} | aporte do mês ${brl(w.investedThisMonth)} | retorno médio ${w.avgMonthlyReturnPct?.toFixed(3)}%`);
+  console.log(`\n== ${month}/${year} total ${brl(w.total)} (em trânsito ${brl(w.transitThisMonth)}) | aporte do mês ${brl(w.investedThisMonth)} | rendimento ${brl(w.returnThisMonth)} | retorno médio ${w.avgMonthlyReturnPct?.toFixed(3)}%`);
   for (const m of w.investedByMonth.slice(-3)) {
-    console.log(`  ${m.label}: aporte ${brl(m.value)} | rendimento ${brl(m.returnValue)}`);
+    const fecha = m.startValue != null && Math.abs(m.endValue - m.startValue - m.value - m.initialBalance - m.returnValue) < 0.005 ? "fecha" : "NÃO FECHA";
+    console.log(`  ${m.label}: carteira ${brl(m.startValue)} → ${brl(m.endValue)} | aporte ${brl(m.value)} | saldo inicial ${brl(m.initialBalance)} | rendimento ${brl(m.returnValue)} (${fecha})`);
     for (const d of m.breakdown) console.log(`     ${d.label}: ${brl(d.value)}`);
   }
   console.log("  movimentações:");
@@ -44,7 +45,7 @@ for (const g of pos.byType) for (const p of g.positions) if (g.type === "Renda F
 
 const health = await runDataHealth();
 console.log("\n== saúde dos dados (investimento)");
-for (const i of health.issues.filter((x) => ["investido-caiu-sem-resgate", "renda-fixa-sem-taxa", "rendimento-negativo-pos-fixado"].includes(x.id))) {
+for (const i of health.issues.filter((x) => ["investido-caiu-sem-resgate", "renda-fixa-sem-taxa", "rendimento-negativo-pos-fixado", "acao-mantida-sem-dado"].includes(x.id))) {
   console.log(`  ${i.title} (${i.total})`);
   for (const it of i.items) console.log(`     ${it.label}`);
 }

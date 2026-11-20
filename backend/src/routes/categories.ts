@@ -71,8 +71,8 @@ categoriesRouter.put("/categories/:id", async (req, res) => {
   const category = await prisma.category.findUnique({ where: { id: req.params.id } });
   if (!category) return res.status(404).json({ error: "Categoria não encontrada" });
 
-  const { name, kind } = req.body ?? {};
-  const data: { name?: string; kind?: string } = {};
+  const { name, kind, countsForDailyGoal } = req.body ?? {};
+  const data: { name?: string; kind?: string; countsForDailyGoal?: boolean } = {};
 
   if (name !== undefined) {
     if (typeof name !== "string" || !name.trim()) return res.status(400).json({ error: "Nome não pode ser vazio" });
@@ -81,6 +81,12 @@ categoriesRouter.put("/categories/:id", async (req, res) => {
   if (kind !== undefined) {
     if (!VALID_KINDS.includes(kind)) return res.status(400).json({ error: "kind inválido" });
     data.kind = kind;
+  }
+  // "Conta pra meta diária" (20/11) — desmarcar tira a categoria e as filhas
+  // do "livre pra gastar hoje" (aluguel, contas, usina).
+  if (countsForDailyGoal !== undefined) {
+    if (typeof countsForDailyGoal !== "boolean") return res.status(400).json({ error: "countsForDailyGoal precisa ser true/false" });
+    data.countsForDailyGoal = countsForDailyGoal;
   }
 
   const updated = await prisma.category.update({ where: { id: category.id }, data });

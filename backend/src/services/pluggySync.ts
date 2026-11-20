@@ -250,8 +250,8 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     // Pra Ação/FII `amount` já era sempre === `balance` (comentário acima,
     // 05/09), então trocar aqui não muda nada pra eles — só corrige Renda
     // Fixa, que é onde `balance` e `amount` de fato divergiam.
-    const marketValue = convert(inv.amount ?? inv.balance);
-    const quantity = inv.quantity ?? null;
+    let marketValue = convert(inv.amount ?? inv.balance);
+    let quantity = inv.quantity ?? null;
     // Último snapshot de um mês ANTERIOR (o do mês corrente é o que este
     // upsert regrava a cada sync).
     const previousMonth = await prisma.positionSnapshot.findFirst({
@@ -289,7 +289,7 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     if (marketValue <= 0) investedAmount = 0;
     const monthlyRatePct = inv.lastMonthRate ?? null;
     const annualRatePct = inv.lastTwelveMonthsRate ?? null;
-    const unitValue = inv.value ?? null;
+    let unitValue = inv.value ?? null;
     // Proventos só fazem sentido pra Ação/FII (pedido do Luiz, 11/09) — pra
     // Renda Fixa/Fundo/Cripto fica null ("não se aplica"), sem gastar uma
     // chamada extra da Pluggy por posição à toa. `undefined` (erro pontual
@@ -334,6 +334,28 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
     const dividends: number | null | undefined =
       secType === "Ação" || secType === "FII" ? await syncDividends(broker.id, security.id, transactions, month, year) : null;
 
+    // Ação/FII que some sem venda continua sua (20/11). Achado real: DIRR3,
+    // GGBR4 e VBBR3 vieram zeradas da Pluggy em nov/26 ("TOTAL_WITHDRAWAL"),
+    // sem venda no extrato e sem dinheiro entrando no BTG — a VBBR3 ainda
+    // pagou taxa de aluguel (BTC) em 16/11. Contava como resgate de R$13.135 e
+    // tirava R$14,8 mil do total. Agora: zerada, sem SELL desde a foto
+    // anterior → mantém a última quantidade/custo/valor, marcada
+    // (`carriedForward`), até voltar ou a venda aparecer. Troca de nome (AXIA)
+    // vem como SELL no extrato, então não cai aqui.
+    let carriedForward = false;
+    if ((secType === "Ação" || secType === "FII") && marketValue <= 0 && previousMonth && (previousMonth.quantity ?? 0) > 0 && previousMonth.marketValue > 0) {
+      const since = previousMonth.syncedAt ?? new Date(Date.UTC(previousMonth.year, previousMonth.month - 1, 1));
+      const sold = (transactions ?? []).some((t) => t.type === "SELL" && new Date(t.date).getTime() >= since.getTime());
+      if (!sold) {
+        carriedForward = true;
+        marketValue = previousMonth.marketValue;
+        investedAmount = previousMonth.investedAmount;
+        quantity = previousMonth.quantity;
+        unitValue = previousMonth.unitValue;
+        console.log(`[pluggySync] ${inv.name}: a corretora zerou sem venda no extrato — mantém ${quantity} cotas (R$ ${marketValue.toFixed(2)}) da foto de ${previousMonth.month}/${previousMonth.year}`);
+      }
+    }
+
     await prisma.positionSnapshot.upsert({
       where: {
         brokerId_securityId_month_year: {
@@ -343,13 +365,14 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
           year,
         },
       },
-      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue, dividends, syncedAt: now },
+      update: { investedAmount, marketValue, fxRateToBRL: fxRate, monthlyRatePct, annualRatePct, quantity, unitValue, dividends, syncedAt: now, carriedForward },
       create: {
         brokerId: broker.id,
         securityId: security.id,
         month,
         year,
         syncedAt: now,
+        carriedForward,
         investedAmount,
         marketValue,
         fxRateToBRL: fxRate,

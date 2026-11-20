@@ -3,6 +3,8 @@ import { prisma } from "../prisma.js";
 import { reinforceRule, categoryPath } from "../services/categorization.js";
 import { expenseLedger, sumByCategory, ledgerTotal, purchaseBase, buildInstallmentPositions, type LedgerItem } from "../services/ledger.js";
 import { propagateFromRows } from "../services/purchases.js";
+import { brDayString } from "../services/dates.js";
+import { countsForDailyGoal, freeToSpendToday, installmentShare, type DailyItem } from "../services/dailyAllowance.js";
 
 export const budgetRouter = Router();
 
@@ -158,20 +160,47 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   const DAY = 24 * 60 * 60 * 1000;
   const onDay = (items: LedgerItem[], day: Date) => items.filter((i) => i.date >= day && i.date.getTime() < day.getTime() + DAY);
 
-  const dailyDays: { date: string; amount: number; projected: number; goal: number | null; breakdown: { label: string; value: number; projected: boolean }[] }[] = [];
+  // Meta diária só vê gasto VARIÁVEL (20/11): categoria marcada "fora da meta"
+  // (aluguel, contas, usina — `Category.countsForDailyGoal`, vale pra árvore)
+  // não entra; parcela entra diluída pelo mês inteiro, não no dia em que cai
+  // (Luiz: "o dia em que ela cai não fica vermelho"). `amount` do dia = o que
+  // pesa na meta; `fullAmount` = tudo que saiu naquele dia.
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const isInstallmentItem = (i: LedgerItem) => i.kind === "installment" || (i.totalInstallments ?? 0) > 1;
+  const counts = (i: LedgerItem) => countsForDailyGoal(i.categoryId, catById);
+  const dayOfMonth = (i: LedgerItem) => Number(brDayString(i.date).slice(8, 10));
+  const goalItems: DailyItem[] = ledgerMonth.map((i) => ({ day: dayOfMonth(i), amount: i.amount, isInstallment: isInstallmentItem(i), counts: counts(i) }));
+  const share = installmentShare(goalItems, daysInMonth);
+  const monthInstallments = ledgerMonth.filter((i) => counts(i) && isInstallmentItem(i)).reduce((s, i) => s + i.amount, 0);
+
+  const dailyDays: {
+    date: string;
+    amount: number;
+    fullAmount: number;
+    variable: number;
+    projected: number;
+    goal: number | null;
+    breakdown: { label: string; value: number; projected: boolean }[];
+  }[] = [];
   for (let day = new Date(monthStart); day < windowEnd; day.setDate(day.getDate() + 1)) {
     const items = onDay(ledgerMonth, day);
+    const variableItems = items.filter((i) => counts(i) && !isInstallmentItem(i));
     const groups = new Map<string, { value: number; projected: boolean }>();
-    for (const i of items) {
+    for (const i of variableItems) {
       const cur = groups.get(i.label);
       groups.set(i.label, { value: (cur?.value ?? 0) + i.amount, projected: cur ? cur.projected && i.kind === "installment" : i.kind === "installment" });
     }
+    const breakdown = [...groups.entries()].map(([label, v]) => ({ label, value: v.value, projected: v.projected })).sort((a, b) => b.value - a.value);
+    if (share > 0) breakdown.push({ label: `Parcelas do mês (R$ ${monthInstallments.toFixed(2).replace(".", ",")} ÷ ${daysInMonth} dias)`, value: share, projected: false });
+    const variable = ledgerTotal(variableItems);
     dailyDays.push({
       date: day.toISOString().slice(0, 10),
-      amount: ledgerTotal(items),
+      amount: variable + share,
+      fullAmount: ledgerTotal(items),
+      variable,
       projected: items.filter((i) => i.kind === "installment").reduce((s, i) => s + i.amount, 0),
       goal: goalAt(dailyGoals, day),
-      breakdown: [...groups.entries()].map(([label, v]) => ({ label, value: v.value, projected: v.projected })).sort((a, b) => b.value - a.value),
+      breakdown,
     });
   }
   // "vs. mês anterior": mesmo NÚMERO de dias (dia 1 ao dia 1...), não o mês inteiro.
@@ -188,8 +217,10 @@ budgetRouter.get("/budget-summary", async (req, res) => {
 
   // Último dia da janela com gasto (a Pluggy atrasa — "hoje" quase sempre R$0).
   let lastDayWithSpend: { date: string; amount: number } | null = null;
+  // Pelo gasto variável lançado: a fatia diluída das parcelas é > 0 todo dia
+  // e faria "hoje" parecer ter chegado.
   for (let i = dailyDays.length - 1; i >= 0; i--) {
-    if (dailyDays[i].amount > 0) {
+    if (dailyDays[i].variable > 0) {
       lastDayWithSpend = { date: dailyDays[i].date, amount: dailyDays[i].amount };
       break;
     }
@@ -204,6 +235,35 @@ budgetRouter.get("/budget-summary", async (req, res) => {
   // Meta vigente no fim da janela (hoje, ou o último dia de um mês passado).
   const dailyGoal = goalAt(dailyGoals, new Date(windowEnd.getTime() - 1));
 
+  // Livre pra gastar hoje (20/11) — só no mês corrente pelo calendário
+  // brasileiro (servidor roda em UTC: depois das 21h aqui já é amanhã lá).
+  // Luiz: "(meta diária × dias do mês − gasto variável até ontem − parcelas
+  // variáveis que ainda vão cair no mês) ÷ dias que faltam, contando hoje".
+  const brToday = brDayString(now);
+  const isCurrentBrMonth = brToday.slice(0, 7) === `${year}-${String(month).padStart(2, "0")}`;
+  const todayGoal = isCurrentBrMonth ? goalAt(dailyGoals, now) : null;
+  const freeToday =
+    isCurrentBrMonth && todayGoal != null
+      ? {
+          amount: freeToSpendToday(todayGoal, daysInMonth, Number(brToday.slice(8, 10)), goalItems),
+          goal: todayGoal,
+          daysLeft: daysInMonth - Number(brToday.slice(8, 10)) + 1,
+          installmentsThisMonth: monthInstallments,
+          variableSpentUntilYesterday: goalItems
+            .filter((i) => i.counts && !i.isInstallment && i.day < Number(brToday.slice(8, 10)))
+            .reduce((s, i) => s + i.amount, 0),
+        }
+      : null;
+
+  // Gasto projetado do mês (20/11) — Luiz: "projetado = gasto já lançado +
+  // contas fixas com meta que ainda não foram lançadas no mês". Conta fixa
+  // ainda não lançada = categoria com meta e nada gasto nela ainda. Só faz
+  // sentido no mês corrente (mês passado já fechou; o que não veio não vem).
+  const pendingBills = isCurrentBrMonth
+    ? categories.filter((c) => c.planned > 0 && c.spent <= 0).map((c) => ({ categoryId: c.categoryId, path: c.path, planned: c.planned }))
+    : [];
+  const projectedMonthTotal = isCurrentBrMonth ? totalSpent + pendingBills.reduce((s, c) => s + c.planned, 0) : null;
+
   res.json({
     month,
     year,
@@ -217,6 +277,9 @@ budgetRouter.get("/budget-summary", async (req, res) => {
     dailyDays,
     totalPlanned,
     totalSpent,
+    freeToday,
+    projectedMonthTotal,
+    pendingBills,
     // Total do mês anterior inteiro, pelo mesmo livro-razão — somar o
     // `previousSpent` das linhas perdia categoria que só teve gasto lá.
     previousTotalSpent: ledgerTotal(ledgerPrev),

@@ -439,6 +439,27 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
     "Selic/CDI não deveria render negativo num mês — geralmente é aporte ou resgate faltando, ou valor de mercado errado.",
     negative
   );
+  // 20. Ação/FII mantida sem dado da corretora (20/11) — ver `carriedForward`
+  // em pluggySync.ts. Só a foto mais recente de cada ativo.
+  const latestBySecurity = new Map<string, (typeof snaps)[number]>();
+  for (const s of invSnaps) {
+    const cur = latestBySecurity.get(s.securityId);
+    if (!cur || s.year * 12 + s.month > cur.year * 12 + cur.month) latestBySecurity.set(s.securityId, s);
+  }
+  push(
+    "acao-mantida-sem-dado",
+    "aviso",
+    "review",
+    "Ação sumiu da corretora sem venda",
+    "A corretora zerou a posição mas não há venda no extrato (ex: ação alugada no BTC). O app mantém a última quantidade e o último valor até ela voltar ou a venda aparecer — se você vendeu, avise.",
+    [...latestBySecurity.values()]
+      .filter((s) => s.carriedForward)
+      .map((s) => ({
+        key: `acao-mantida-sem-dado:${s.securityId}`,
+        label: `${s.broker.name} ${s.security.ticker ?? s.security.name} — ${s.quantity ?? "?"} cotas, último valor ${brl(s.marketValue)}`,
+        ref: { kind: "snapshot" as const, id: s.id },
+      }))
+  );
 
   return { checkedAt: now.toISOString(), ok: !issues.some((i) => i.severity === "erro"), issues };
 }

@@ -193,6 +193,9 @@ model Category {
   // nunca deveria ter ficado misturada com Streaming/Cinema em "não
   // essencial" (era exatamente isso que a coluna essential=false fazia).
   kind String @default("non_essential")
+  // Conta pra meta diária de gasto (20/11, Luiz: "aluguel, contas e usina
+  // ficam de fora"). Vale pra árvore: categoria fora tira as filhas junto.
+  countsForDailyGoal Boolean @default(true)
 
   parentId String?
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
@@ -401,6 +404,11 @@ model PositionSnapshot {
   // DEPOIS disso só aparece no valor do mês seguinte — o rendimento do mês
   // não pode descontar um aporte que o valor ainda não mostra.
   syncedAt       DateTime?
+  // Mantida da foto anterior (20/11): ação/FII que a corretora parou de mostrar
+  // (quantidade zero) sem venda nenhuma no extrato — achado real: DIRR3, GGBR4
+  // e VBBR3 alugadas (BTC) sumiram da Pluggy em nov/26. Fica com a última
+  // quantidade/custo/valor até voltar ou aparecer a venda; aviso na Saúde dos dados.
+  carriedForward Boolean   @default(false)
 
   @@unique([brokerId, securityId, month, year])
 }

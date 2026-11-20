@@ -146,8 +146,10 @@ export function Projetos() {
             </div>
             <div className={cards.statGrid} style={{ marginTop: 'var(--space-3)' }}>
               <div className={cards.statTile}>
-                <span className={cards.heroLabel}>Média mensal (desde jan)</span>
-                <span className={cards.statTileValue}><Money>R$ {currency(summary.avgMonthlyThisYear)}</Money></span>
+                <span className={cards.heroLabel} title={summary.last12MissingMonths.length > 0 ? `Soma ÷ 12 — ${summary.last12MissingMonths.join(', ')} sem dado` : 'Soma dos últimos 12 meses ÷ 12'}>
+                  Média dos últimos 12 meses{summary.last12MissingMonths.length > 0 && ` (${summary.last12MissingMonths.join(', ')} sem dado)`}
+                </span>
+                <span className={cards.statTileValue}><Money>R$ {currency(summary.avgMonthlyLast12)}</Money></span>
               </div>
               <div className={cards.statTile}>
                 <span className={cards.heroLabel}>Dias trabalhados</span>

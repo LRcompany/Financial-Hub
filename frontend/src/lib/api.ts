@@ -27,6 +27,9 @@ export interface Category {
   name: string
   type: 'income' | 'expense'
   kind: CategoryKind
+  // Conta pra meta diária de gasto (20/11). Fora = aluguel, contas, usina;
+  // vale pra árvore (mãe fora tira as filhas junto).
+  countsForDailyGoal?: boolean
   children?: Category[]
 }
 
@@ -194,15 +197,33 @@ export interface BudgetSummary {
   // Um item por dia da janela. `breakdown` = de onde veio o gasto daquele
   // dia, maior primeiro (15/09), agrupado por compra; `projected: true`
   // quando é parcela ainda não confirmada pela Pluggy (já soma no `amount`).
+  // `amount` = o que pesa na meta diária (20/11): gasto variável do dia + a
+  // fatia diluída das parcelas do mês; categoria fora da meta não entra.
+  // `fullAmount` = tudo que saiu no dia; `variable` = só o variável lançado.
   dailyDays: {
     date: string
     amount: number
+    fullAmount: number
+    variable: number
     projected: number
     goal: number | null
     breakdown: { label: string; value: number; projected: boolean }[]
   }[]
   totalPlanned: number
   totalSpent: number
+  // Livre pra gastar hoje (20/11) — só no mês corrente com meta. Negativo =
+  // "passou R$ X". Ver backend/src/services/dailyAllowance.ts.
+  freeToday: {
+    amount: number
+    goal: number
+    daysLeft: number
+    installmentsThisMonth: number
+    variableSpentUntilYesterday: number
+  } | null
+  // Gasto projetado (20/11): já lançado + contas com meta ainda não lançadas
+  // no mês. null fora do mês corrente.
+  projectedMonthTotal: number | null
+  pendingBills: { categoryId: string; path: string; planned: number }[]
   previousTotalSpent: number // mês anterior inteiro, mesmo livro-razão (27/10)
   totalProjected: number
   totalIncome: number
@@ -329,7 +350,22 @@ export interface WealthOverview {
   // "Investido por mês" no Dashboard.
   // `breakdown` (13/10): de onde veio o valor do mês, por "Corretora · Tipo"
   // (positivo = aporte, negativo = resgate). Conta corrente fica de fora.
-  investedByMonth: { label: string; value: number; breakdown: { label: string; value: number }[] }[]
+  investedByMonth: {
+    label: string
+    value: number
+    // Rendimento do mês (20/11) = endValue − startValue − value − initialBalance,
+    // carteira sem conta corrente e com aplicação em trânsito.
+    returnValue?: number | null
+    initialBalance?: number
+    startValue?: number | null
+    endValue?: number
+    breakdown: { label: string; value: number }[]
+  }[]
+  returnThisMonth?: number | null
+  initialBalanceThisMonth?: number
+  portfolioStart?: number | null
+  portfolioEnd?: number | null
+  transitThisMonth?: number
   // Proventos (dividendo/JCP/rendimento) recebidos no período — dado real
   // via GET /investments/{id}/transactions (11/09), só existe pra Ação/FII;
   // null = "não se aplica" ou "ainda não sincronizado", nunca 0 fake.
@@ -379,6 +415,10 @@ export interface ProjectsSummary {
   // Média mensal do ano corrente (janeiro até o mês atual) — nunca mistura
   // mês do ano passado, mesmo critério de receivedThisYear.
   avgMonthlyThisYear: number
+  // Média de renda (20/11): últimos 12 meses ÷ 12, sempre. `last12MissingMonths`
+  // = meses da janela antes do primeiro recebimento registrado ("dez/2025").
+  avgMonthlyLast12: number
+  last12MissingMonths: string[]
   taxPaidThisYear: number
   outstanding: number
   outstandingLastMonth: number
@@ -784,7 +824,7 @@ export const api = {
     if (!response.ok) throw new Error(data.error ?? `Falha ao criar categoria (${response.status})`)
     return data as Category
   },
-  updateCategory: async (id: string, input: { name?: string; kind?: CategoryKind }) => {
+  updateCategory: async (id: string, input: { name?: string; kind?: CategoryKind; countsForDailyGoal?: boolean }) => {
     const response = await fetch(`${API_URL}/categories/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

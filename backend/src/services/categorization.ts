@@ -48,7 +48,7 @@ export function ruleMatches(description: string, pattern: string): boolean {
   const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
   const d = norm(description);
   const p = norm(pattern);
-  if (!p) return false;
+  if (p.length < 4) return false; // "BRA", "" ou só espaço casariam com quase tudo
   return d.includes(p) || (d.length >= 10 && p.startsWith(d));
 }
 
@@ -64,7 +64,13 @@ export async function suggestCategory(description: string) {
     include: { category: true },
   });
 
-  const match = rules.find((rule) => !isGenericDescription(rule.pattern) && ruleMatches(description, rule.pattern));
+  // Empate de confiança (20/11): a regra mais específica (texto mais longo)
+  // ganha — "MANUS LANCHES" → Supermercado vale antes de "LANCHES" → Lanches.
+  // Antes o empate saía na ordem do banco.
+  const len = (p: string) => p.replace(/\s+/g, " ").trim().length;
+  const match = rules
+    .filter((rule) => !isGenericDescription(rule.pattern) && ruleMatches(description, rule.pattern))
+    .sort((a, b) => b.confidence - a.confidence || len(b.pattern) - len(a.pattern))[0];
 
   return match?.category ?? null;
 }

@@ -78,7 +78,17 @@ function CategoryForm({
   )
 }
 
-function CategoryNode({ category, depth, onChanged }: { category: Category; depth: number; onChanged: () => void }) {
+function CategoryNode({
+  category,
+  depth,
+  onChanged,
+  parentOutOfDailyGoal = false,
+}: {
+  category: Category
+  depth: number
+  onChanged: () => void
+  parentOutOfDailyGoal?: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
   const [mode, setMode] = useState<'view' | 'edit' | 'addChild'>('view')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -88,6 +98,22 @@ function CategoryNode({ category, depth, onChanged }: { category: Category; dept
   const children = category.children ?? []
   const hasChildren = children.length > 0
   const canAddChild = depth < 3 // mãe(1) > filho(2) > neto(3) — neto não tem filho
+
+  // "Conta pra meta diária" (20/11): fora = aluguel, contas, usina. Mãe fora
+  // tira as filhas junto — aí a filha só mostra o estado, sem botão.
+  const selfOut = category.countsForDailyGoal === false
+  const outOfDailyGoal = parentOutOfDailyGoal || selfOut
+  async function toggleDailyGoal() {
+    setBusy(true)
+    try {
+      await api.updateCategory(category.id, { countsForDailyGoal: selfOut })
+      onChanged()
+    } catch (err) {
+      setDeleteError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirmDelete) {
@@ -134,7 +160,28 @@ function CategoryNode({ category, depth, onChanged }: { category: Category; dept
           <>
             <span className={styles.name}>{category.name}</span>
             {category.type === 'expense' ? (
-              <span className={styles.kindBadge}>{KIND_LABELS[category.kind]}</span>
+              <>
+                <span className={styles.kindBadge}>{KIND_LABELS[category.kind]}</span>
+                {parentOutOfDailyGoal ? (
+                  <span className={styles.goalBadgeOff} title="A categoria-mãe está fora da meta diária">
+                    Fora da meta diária
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className={outOfDailyGoal ? styles.goalBadgeOff : styles.goalBadgeOn}
+                    onClick={toggleDailyGoal}
+                    disabled={busy}
+                    title={
+                      outOfDailyGoal
+                        ? 'Não entra no "livre pra gastar hoje". Clique pra voltar a contar.'
+                        : 'Entra no "livre pra gastar hoje". Clique pra tirar (aluguel, contas fixas...).'
+                    }
+                  >
+                    {outOfDailyGoal ? 'Fora da meta diária' : 'Conta na meta diária'}
+                  </button>
+                )}
+              </>
             ) : (
               <span className={styles.incomeBadge}>Receita</span>
             )}
@@ -185,7 +232,7 @@ function CategoryNode({ category, depth, onChanged }: { category: Category; dept
       {expanded && hasChildren && (
         <div>
           {children.map((child) => (
-            <CategoryNode key={child.id} category={child} depth={depth + 1} onChanged={onChanged} />
+            <CategoryNode key={child.id} category={child} depth={depth + 1} onChanged={onChanged} parentOutOfDailyGoal={outOfDailyGoal} />
           ))}
         </div>
       )}
