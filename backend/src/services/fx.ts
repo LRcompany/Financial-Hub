@@ -108,3 +108,34 @@ export async function getRateToBrlOnDate(currency: ForeignCurrency, dateISO: str
 }
 
 export const getUsdToBrlRateOnDate = (dateISO: string) => getRateToBrlOnDate("USD", dateISO);
+
+/**
+ * PTAX de venda do Banco Central no fechamento do mês (25/11, Luiz: "Use a
+ * PTAX de venda do Banco Central como fonte principal para o fechamento do
+ * mês, e a API atual como reserva"). Boletim "Fechamento" do último dia útil
+ * do mês. Pública, sem chave (Olinda/BCB) — e responde do droplet, onde a
+ * AwesomeAPI histórica dá 429.
+ * Devolve null se o mês não tem boletim de fechamento; lança em erro de rede.
+ */
+export async function getPtaxClosingOfMonth(currency: ForeignCurrency, year: number, month: number): Promise<{ rate: number; day: string } | null> {
+  const last = new Date(Date.UTC(year, month, 0));
+  const first = new Date(last.getTime() - 10 * 86400000);
+  const mdy = (d: Date) => `${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}-${d.getUTCFullYear()}`;
+  const url =
+    "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)" +
+    `?@moeda='${currency}'&@dataInicial='${mdy(first)}'&@dataFinalCotacao='${mdy(last)}'&$format=json&$filter=tipoBoletim%20eq%20'Fechamento'`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error(`PTAX ${currency} ${month}/${year}: HTTP ${response.status}`);
+  const data = (await response.json()) as { value?: { cotacaoVenda: number; dataHoraCotacao: string; tipoBoletim: string }[] };
+  return pickPtaxClosing(data.value ?? [], year, month);
+}
+
+/** Último boletim "Fechamento" dentro do mês (separado pra testar). */
+export function pickPtaxClosing(rows: { cotacaoVenda: number; dataHoraCotacao: string; tipoBoletim: string }[], year: number, month: number) {
+  const prefix = `${year}-${String(month).padStart(2, "0")}-`;
+  const inMonth = rows
+    .filter((r) => r.tipoBoletim === "Fechamento" && r.dataHoraCotacao.startsWith(prefix) && r.cotacaoVenda > 0)
+    .sort((a, b) => a.dataHoraCotacao.localeCompare(b.dataHoraCotacao));
+  const lastRow = inMonth.at(-1);
+  return lastRow ? { rate: lastRow.cotacaoVenda, day: lastRow.dataHoraCotacao.slice(0, 10) } : null;
+}

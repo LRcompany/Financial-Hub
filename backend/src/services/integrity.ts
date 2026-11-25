@@ -13,7 +13,9 @@
 import { prisma } from "../prisma.js";
 import { rateLabel, isPostFixed, loadMovements } from "./investmentFlows.js";
 import { expenseLedger, ledgerTotal, purchaseBase } from "./ledger.js";
-import { isCalendarNoon } from "./dates.js";
+import { isCalendarNoon, brDayString } from "./dates.js";
+import { FX_CLOSE_START_YM, closingPair } from "./foreignFx.js";
+import { FOREIGN_CURRENCIES, type ForeignCurrency } from "./fx.js";
 
 export type HealthRef = { kind: "transaction" | "installment" | "broker" | "snapshot" | "receipt"; id: string };
 export type HealthItem = { key: string; label: string; ref?: HealthRef };
@@ -500,6 +502,34 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
         label: `${s.broker.name} ${s.security.ticker ?? s.security.name} — ${s.quantity} cotas, ${brl(s.marketValue)} de mercado, investido R$ 0,00`,
         ref: { kind: "snapshot" as const, id: s.id },
       }))
+  );
+
+  // Fechamento do mês sem cotação (25/11, Luiz: "Se as duas falharem, avise
+  // na saúde dos dados em vez de fechar com cotação de outro dia"): foto de
+  // mês fechado da Nomad/Wise que ainda não está no dólar de fechamento (PTAX
+  // de venda ou, na reserva, AwesomeAPI). Some sozinho quando uma das duas
+  // responder no próximo sync (ver services/foreignFx.ts).
+  const closings = new Map((await prisma.fxRateCache.findMany({ where: { pair: { contains: "@" } } })).map((c) => [c.pair, c.rate]));
+  const today = brDayString(now);
+  const nowYmFx = Number(today.slice(0, 4)) * 12 + Number(today.slice(5, 7));
+  const fxPending = snaps.filter((s) => {
+    const ym = s.year * 12 + s.month;
+    if (s.broker.dataSource !== "manual_statement" || !FOREIGN_CURRENCIES.includes(s.security.currency as ForeignCurrency)) return false;
+    if (!s.fxRateToBRL || ym < FX_CLOSE_START_YM || ym >= nowYmFx) return false;
+    const closing = closings.get(closingPair(s.security.currency as ForeignCurrency, s.year, s.month));
+    return closing == null || Math.abs(closing - s.fxRateToBRL) > 1e-6;
+  });
+  push(
+    "cotacao-fechamento-pendente",
+    "aviso",
+    "review",
+    "Mês fechado sem dólar de fechamento",
+    "Nem a PTAX do Banco Central nem a API de reserva responderam. A posição continua com a cotação de outro dia; o app tenta de novo todo dia às 18h e o aviso some quando conseguir.",
+    fxPending.map((s) => ({
+      key: `cotacao-fechamento-pendente:${s.id}`,
+      label: `${s.broker.name} ${s.security.ticker ?? s.security.name} — ${String(s.month).padStart(2, "0")}/${s.year}, cotação ${s.fxRateToBRL!.toFixed(4)}`,
+      ref: { kind: "snapshot" as const, id: s.id },
+    }))
   );
 
   return { checkedAt: now.toISOString(), ok: !issues.some((i) => i.severity === "erro"), issues };

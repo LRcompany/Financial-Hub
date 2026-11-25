@@ -2648,7 +2648,30 @@ O que muda e o que não muda:
 - Do droplet, a cotação histórica da AwesomeAPI não respondeu, e o script deixou set e out como estavam.
 - Os fechamentos de 30/09 (5,1840) e 30/10 (5,4397) foram buscados na mesma API, de outra máquina, e gravados em `FxRateCache`; depois o script rodou de novo.
 - Resultado: out/26 = R$ 629.824,31.
-- Risco: se a API continuar bloqueando o droplet, o fechamento de cada mês fica com a última cotação do dia que o agendador pegou (perto do fechamento) até a histórica responder.
+- Risco: se a API continuar bloqueando o droplet, o fechamento de cada mês fica com a última cotação do dia que o agendador pegou (perto do fechamento) até a histórica responder. Resolvido logo abaixo com a PTAX.
+
+**PTAX de venda como fonte do fechamento (25/11).** Luiz: *"Use a PTAX de venda do Banco Central como fonte principal para o fechamento do mês, e a API atual como reserva. Se as duas falharem, avise na saúde dos dados em vez de fechar com cotação de outro dia."*
+
+`foreignFx.closingRate` (o fechamento de um mês fechado), em ordem:
+1. PTAX de venda já guardada;
+2. PTAX de venda do Banco Central (`fx.getPtaxClosingOfMonth`: API Olinda, boletim "Fechamento" do último dia útil do mês). Responde do droplet; a AwesomeAPI histórica dá 429 lá;
+3. AwesomeAPI, como reserva, só se ainda não houver fechamento guardado;
+4. nenhuma das duas respondeu: a foto não é recotada.
+
+Detalhes:
+- Um fechamento guardado que não veio da PTAX é tentado de novo na PTAX a cada rodada, e só é trocado se ela responder.
+- `FxRateCache.source` (coluna nova) guarda de onde veio: `ptax_venda` | `awesomeapi` | `manual`.
+- O mês corrente continua com o dólar do dia (AwesomeAPI ao vivo).
+- Saúde dos dados, aviso novo **`cotacao-fechamento-pendente`**: foto de mês fechado da Nomad/Wise sem dólar de fechamento. Não tem botão; some sozinho quando uma fonte responder.
+
+**Conferido em cópia de produção:**
+
+| | Cotação | Valor |
+|---|---|---|
+| set/26 | 5,1840 → **5,1809** (PTAX) | −24,23 |
+| out/26 | 5,4397 → **5,4212** (PTAX) | −140,02 |
+
+Sem fechamento guardado, o aviso aparece em todas as posições do mês.
 
 ## Decisões de navegação/IA
 

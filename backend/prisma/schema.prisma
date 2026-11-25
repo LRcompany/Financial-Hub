@@ -642,9 +642,10 @@ model WebauthnCredential {
 // pula o suficiente numa janela de poucas horas pra isso distorcer o valor
 // investido de um jeito que importe.
 model FxRateCache {
-  pair      String   @id // "USD-BRL"
+  pair      String   @id // "USD-BRL"; fechamento do mês: "USD-BRL@2026-10"
   rate      Float
-  fetchedAt DateTime
+  fetchedAt DateTime // fechamento: o DIA da cotação (meio-dia UTC)
+  source    String? // fechamento (25/11): "ptax_venda" | "awesomeapi" | "manual"
 }
 
 // ---------- Conector do Claude (MCP) — login OAuth 2.1 (16/10) ----------

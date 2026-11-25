@@ -24,7 +24,7 @@ for (const c of changes) {
 for (const [k, list] of byMonth) {
   const before = list.reduce((s, c) => s + c.marketBefore, 0);
   const after = list.reduce((s, c) => s + c.marketAfter, 0);
-  console.log(`${k} (dólar de ${list[0].rateDay}): ${brl(before)} → ${brl(after)} (${after - before >= 0 ? "+" : ""}${brl(after - before)})`);
+  console.log(`${k} (dólar de ${list[0].rateDay}, ${list[0].rateSource}): ${brl(before)} → ${brl(after)} (${after - before >= 0 ? "+" : ""}${brl(after - before)})`);
   for (const c of list) console.log(`   ${c.broker.padEnd(6)} ${c.asset.padEnd(28)} ${c.rateBefore.toFixed(4)} → ${c.rateAfter.toFixed(4)}   ${brl(c.marketBefore)} → ${brl(c.marketAfter)}`);
 }
 if (!changes.length) console.log("Nada a recotar.");
