@@ -10,7 +10,7 @@ import styles from './DataHealthPanel.module.css'
 const DELETABLE = new Set(['manual-repete-pluggy', 'pluggy-repetido'])
 // Avisos de "revisar" que só pedem confirmação (05/11): mês fechado que mudou
 // de valor ("É assim mesmo" guarda o valor novo) e parcela que o banco atrasou.
-const ACCEPTABLE = new Set(['mes-fechado-mudou', 'parcela-prevista-atrasada', 'investido-caiu-sem-resgate', 'renda-fixa-sem-taxa', 'rendimento-negativo-pos-fixado', 'acao-mantida-sem-dado'])
+const ACCEPTABLE = new Set(['mes-fechado-mudou', 'parcela-prevista-atrasada', 'investido-caiu-sem-resgate', 'renda-fixa-sem-taxa', 'rendimento-negativo-pos-fixado', 'acao-mantida-sem-dado', 'ajuste-sem-transacao', 'investido-zerado-com-cotas'])
 
 /** "Saúde dos dados" (27/10, pedido do Luiz: "não quero depois de 2 meses de
  * uso falar pra você verificar os números novamente"). Mostra as regras de

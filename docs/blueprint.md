@@ -2572,6 +2572,38 @@ Pedido do Luiz em 6 itens ("opah, temos umas novas melhorias aqui").
 - `avgMonthlyLast12` e `last12MissingMonths` (meses antes do primeiro recebimento, hoje dez/2025).
 - Cards: "Média dos últimos 12 meses · dez/2025 sem dado". MCP: `media_mensal_12_meses`, `meses_sem_dado_na_media`.
 
+### Livro de custo de Ação/FII: preço médio do BTG + movimentações (25/11)
+
+Luiz: *"Use o preço médio do BTG como base para TODAS as ações e FIIs... o investido passa a ser calculado pelas movimentações: soma as compras e desconta as vendas pelo custo médio das cotas vendidas. A Pluggy fica responsável só por quantidade, preço atual e saldo."*
+
+**Diagnóstico que levou a isso** (24–25/11, só leitura na API da Pluggy e no banco):
+- A Pluggy não manda custo de ação nem de FII: `amountOriginal` e `amountProfit` vêm `null`, e não existe campo de preço médio. Ela manda quantidade, preço (`value`), saldo (`balance` = `amount`), `status` e datas.
+- Origem do investido em 25/11:
+  - 21 posições vêm da planilha "PLANEJAMENTO - PESSOAL.xlsx", copiada uma vez em 25/08 e nunca mais alterada. Inclui DIRR3, VBBR3 e GGBR4.
+  - AXIA3, AXIA7, CPLE3, AXIA19 e AXIA21 usam o valor de mercado do dia em que apareceram.
+  - Nenhuma vem da Pluggy nem de movimentação.
+- O código não lê a planilha (não há leitura de .xlsx). O histórico até jul/26 (linhas `MANUAL:BTG:*`) também foi copiado dela.
+- **Os −R$ 13.135,38 de nov/26:** DIRR3, VBBR3 e GGBR4 estão alugadas (BTC; o extrato do banco mostra "IR - BTC DIRR3") e vieram com quantidade 0 / `TOTAL_WITHDRAWAL` uns dias de novembro. A regra "valor 0 → investido 0" gravou 0 na foto do mês. Quando voltaram em 24/11, o sync herdou esse 0 da própria foto do mês.
+
+**O que mudou:**
+- `CostEntry` (tabela nova) guarda só a **base** (cotas × preço médio do BTG numa data) e **ajustes**. Compra e venda vêm do extrato (`InvestmentMovement`). Nada é apagado: desfazer = `revertedAt`.
+- `services/costLedger.ts` → `computeCost`:
+  - investido = base + compras depois dela − custo médio das cotas vendidas + ajustes;
+  - movimento sem quantidade (troca de classe, bonificação, direito de subscrição) não mexe no custo e fica em `unresolved`;
+  - `recomputeSnapshotsFromLedger` regrava as fotos mensais a partir da base.
+  - Testes em `test/costLedger.test.ts`.
+- `pluggySync.ts`:
+  - Ação/FII com base usa o livro de custo;
+  - sem base, com cotas na mão, herda da última foto com investido > 0 (nunca o zero do próprio mês).
+- `scripts/apply-cost-base.ts lista.json [--desde 2026-08-01] [--apply]`: carrega a lista do Luiz. Sem `--apply`, só simula.
+  - Base desde 01/08/2026 (início da Pluggy) porque, de ago/26 até hoje, o extrato não tem compra nem venda real de Ação/FII, só eventos da AXIA.
+  - Ago/26 é o mês de "saldo inicial", então a troca de base não vira aporte.
+- Saúde dos dados, 2 avisos novos:
+  - **`investido-zerado-com-cotas`** (erro): cotas e valor de mercado com investido 0;
+  - **`ajuste-sem-transacao`** (aviso): investido andou ≥ R$ 1.000 no mês sem aplicação, resgate, aporte nem lançamento no livro.
+
+**Conferido em cópia de produção** (só DIRR3, VBBR3 e GGBR4 com o preço médio do BTG): nov/26 aporte R$ 1.336,16 → **R$ 14.471,54**; out/26 igual. VBBR3 passa de 4.951,74 (planilha) para 5.072,41 (BTG).
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

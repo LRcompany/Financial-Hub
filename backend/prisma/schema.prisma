@@ -183,16 +183,16 @@ model Recurrence {
 }
 
 model Category {
-  id   String @id @default(uuid())
-  name String
-  type String // income | expense
+  id                 String  @id @default(uuid())
+  name               String
+  type               String // income | expense
   // Só relevante pra expense — 3 estados reais (não dava pra fazer isso com
   // um booleano "essential" só): essential | non_essential | investment.
   // "investment" é a seção separada da planilha do Luiz (Reserva de
   // Emergência, Nomad, Ações...) — não é "gasto" no sentido normal, então
   // nunca deveria ter ficado misturada com Streaming/Cinema em "não
   // essencial" (era exatamente isso que a coluna essential=false fazia).
-  kind String @default("non_essential")
+  kind               String  @default("non_essential")
   // Conta pra meta diária de gasto (20/11, Luiz: "aluguel, contas e usina
   // ficam de fora"). Vale pra árvore: categoria fora tira as filhas junto.
   countsForDailyGoal Boolean @default(true)
@@ -294,6 +294,7 @@ model Broker {
   contributions     Contribution[]
   dividendPayments  DividendPayment[]
   movements         InvestmentMovement[]
+  costEntries       CostEntry[]
 }
 
 model Security {
@@ -325,6 +326,7 @@ model Security {
   contributions     Contribution[]
   dividendPayments  DividendPayment[]
   movements         InvestmentMovement[]
+  costEntries       CostEntry[]
 }
 
 // Registro de aporte/resgate lançado à mão (05/09) — histórico auditável de
@@ -381,12 +383,40 @@ model InvestmentMovement {
   @@index([securityId])
 }
 
-model PositionSnapshot {
-  id             String   @id @default(uuid())
+// Livro de custo de Ação/FII (25/11) — ver services/costLedger.ts. Luiz:
+// "Use o preço médio do BTG como base para TODAS as ações e FIIs... o
+// investido passa a ser calculado pelas movimentações: soma as compras e
+// desconta as vendas pelo custo médio das cotas vendidas. A Pluggy fica
+// responsável só por quantidade, preço atual e saldo."
+// Só guarda o que NÃO vem do extrato: a base (quantidade × preço médio do
+// BTG numa data) e ajustes manuais. Compra/venda vêm de InvestmentMovement.
+// Nada é apagado: desfazer = marcar revertedAt (o histórico fica).
+model CostEntry {
+  id             String    @id @default(uuid())
   brokerId       String
-  broker         Broker   @relation(fields: [brokerId], references: [id])
+  broker         Broker    @relation(fields: [brokerId], references: [id])
   securityId     String
-  security       Security @relation(fields: [securityId], references: [id])
+  security       Security  @relation(fields: [securityId], references: [id])
+  date           DateTime // a partir de quando vale (meio-dia UTC do dia no Brasil)
+  kind           String // base | ajuste
+  quantity       Float? // base: nº de cotas na data
+  unitCost       Float? // base: preço médio do BTG
+  amount         Float // base: custo total (quantity × unitCost); ajuste: diferença em R$ (+/−)
+  source         String // btg_preco_medio | app | mcp | script
+  reason         String?
+  createdAt      DateTime  @default(now())
+  revertedAt     DateTime?
+  revertedReason String?
+
+  @@index([securityId, date])
+}
+
+model PositionSnapshot {
+  id             String    @id @default(uuid())
+  brokerId       String
+  broker         Broker    @relation(fields: [brokerId], references: [id])
+  securityId     String
+  security       Security  @relation(fields: [securityId], references: [id])
   month          Int
   year           Int
   investedAmount Float // sempre em BRL — já convertido na gravação se a security for USD

@@ -379,6 +379,10 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
   const snapByKey = new Map(invSnaps.map((s) => [`${s.securityId}|${s.year * 12 + s.month}`, s]));
   const monthLabel = (ym: number) => `${MONTHS[(ym - 1) % 12]}/${Math.floor((ym - 1) / 12)}`;
   const fell: HealthItem[] = [];
+  const bigAdjust: HealthItem[] = [];
+  const costEntryMonths = new Set(
+    (await prisma.costEntry.findMany({ where: { revertedAt: null }, select: { securityId: true, date: true } })).map((e) => `${e.securityId}|${ymNum(e.date)}`)
+  );
   const negative: HealthItem[] = [];
   for (const cur of invSnaps) {
     const ym = cur.year * 12 + cur.month;
@@ -387,6 +391,17 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
     const flow = flowOf.get(`${cur.securityId}|${ym}`) ?? { net: 0, resgates: 0 };
     const sameQuantity = cur.quantity == null || prev.quantity == null || Math.abs(cur.quantity - prev.quantity) < 1e-6;
     const drop = prev.investedAmount - cur.investedAmount;
+    // Ajuste grande sem transação (25/11, Luiz: "ajuste acima de R$ 1.000 sem
+    // transação"): o investido andou ≥ R$1.000 no mês (pra cima ou pra baixo)
+    // sem aplicação/resgate no extrato, aporte registrado nem lançamento no
+    // livro de custo. Foi assim que o −R$13.135 de nov/26 passou batido.
+    if (Math.abs(drop) >= 1000 && Math.abs(flow.net) < 1 && !costEntryMonths.has(`${cur.securityId}|${ym}`)) {
+      bigAdjust.push({
+        key: `ajuste-sem-transacao:${cur.securityId}:${ym}`,
+        label: `${cur.broker.name} ${cur.security.ticker ?? cur.security.name} — ${monthLabel(ym)}: investido ${brl(prev.investedAmount)} → ${brl(cur.investedAmount)} (${brl(-drop)}), sem transação`,
+        ref: { kind: "snapshot", id: cur.id },
+      });
+    }
     if (drop >= 1 && sameQuantity && flow.resgates < 1) {
       fell.push({
         key: `investido-caiu-sem-resgate:${cur.securityId}:${ym}`,
@@ -407,6 +422,14 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
       }
     }
   }
+  push(
+    "ajuste-sem-transacao",
+    "aviso",
+    "review",
+    "Investido mudou mais de R$ 1.000 sem transação",
+    "O valor investido de um ativo andou R$ 1.000 ou mais no mês sem aplicação, resgate ou ajuste registrado. Aporte e rendimento do mês ficam errados até explicar de onde veio.",
+    bigAdjust
+  );
   push(
     "investido-caiu-sem-resgate",
     "aviso",
@@ -457,6 +480,24 @@ export async function runDataHealth(now = new Date()): Promise<{ checkedAt: stri
       .map((s) => ({
         key: `acao-mantida-sem-dado:${s.securityId}`,
         label: `${s.broker.name} ${s.security.ticker ?? s.security.name} — ${s.quantity ?? "?"} cotas, último valor ${brl(s.marketValue)}`,
+        ref: { kind: "snapshot" as const, id: s.id },
+      }))
+  );
+  // Cotas na mão e investido zero (25/11): sem custo, todo o valor vira
+  // "rendimento" e a próxima compra/venda calcula errado. Achado real:
+  // DIRR3/VBBR3/GGBR4 em nov/26. Direito de subscrição (ALZR12, KNCR12…)
+  // pode ter custo zero de verdade — "É assim mesmo".
+  push(
+    "investido-zerado-com-cotas",
+    "erro",
+    "review",
+    "Ativo com cotas e investido zerado",
+    "A posição tem quantidade e valor de mercado, mas o valor investido está zero. Informe o preço médio da corretora pra corrigir (ou marque \"É assim mesmo\" se for direito de subscrição sem custo).",
+    [...latestBySecurity.values()]
+      .filter((s) => (s.quantity ?? 0) > 0 && s.marketValue > 0 && s.investedAmount <= 0 && s.security.type !== "Conta Corrente")
+      .map((s) => ({
+        key: `investido-zerado-com-cotas:${s.securityId}`,
+        label: `${s.broker.name} ${s.security.ticker ?? s.security.name} — ${s.quantity} cotas, ${brl(s.marketValue)} de mercado, investido R$ 0,00`,
         ref: { kind: "snapshot" as const, id: s.id },
       }))
   );

@@ -19,6 +19,7 @@
 // activePositions.ts). Por isso `syncBrokerInvestments` busca as duas coisas.
 
 import { prisma } from "../prisma.js";
+import { ledgerCostAt } from "./costLedger.js";
 import { getInvestments, getAccounts, getAllInvestmentTransactions } from "./pluggy.js";
 import { getRateToBrl, isForeignCurrency, type ForeignCurrency } from "./fx.js";
 import { movementFromPluggy, dropSupersededManualMovements } from "./investmentFlows.js";
@@ -274,8 +275,14 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         investedAmount = previousMonth!.investedAmount;
       }
     } else {
+      // Herda o investido da última foto que TINHA custo (25/11). Achado real:
+      // DIRR3/VBBR3/GGBR4 vieram zeradas uns dias de nov/26 (ação alugada no
+      // BTC), a foto do mês gravou investido 0 e, quando voltaram em 24/11,
+      // herdaram esse 0 da própria foto do mês — virou "resgate" de R$13.135.
+      // Com cotas na mão, investido nunca herda zero. (Com base no livro de
+      // custo, o livro manda — ver abaixo.)
       const previous = await prisma.positionSnapshot.findFirst({
-        where: { brokerId: broker.id, securityId: security.id },
+        where: { brokerId: broker.id, securityId: security.id, ...((quantity ?? 0) > 0 || marketValue > 0 ? { investedAmount: { gt: 0 } } : {}) },
         orderBy: [{ year: "desc" }, { month: "desc" }],
       });
       investedAmount = previous?.investedAmount ?? marketValue;
@@ -354,6 +361,14 @@ export async function syncBrokerInvestments(brokerId: string, itemId: string) {
         unitValue = previousMonth.unitValue;
         console.log(`[pluggySync] ${inv.name}: a corretora zerou sem venda no extrato — mantém ${quantity} cotas (R$ ${marketValue.toFixed(2)}) da foto de ${previousMonth.month}/${previousMonth.year}`);
       }
+    }
+
+    // Livro de custo (25/11): Ação/FII com base (preço médio do BTG) tem o
+    // investido calculado por base + compras − custo das vendas. A Pluggy fica
+    // só com quantidade, preço e saldo. Ver services/costLedger.ts.
+    if (secType === "Ação" || secType === "FII") {
+      const cost = await ledgerCostAt(security.id, now);
+      if (cost && !(marketValue <= 0 && (quantity ?? 0) <= 0)) investedAmount = cost.invested;
     }
 
     await prisma.positionSnapshot.upsert({
