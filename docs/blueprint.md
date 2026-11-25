@@ -2644,6 +2644,12 @@ O que muda e o que não muda:
 | Rendimento | 20.145,74 → 21.006,35 | −8.724,46 → −6.942,90 | −5.190,06 → −7.111,99 |
 | Aporte | igual | igual | igual |
 
+**Em produção (25/11):**
+- Do droplet, a cotação histórica da AwesomeAPI não respondeu, e o script deixou set e out como estavam.
+- Os fechamentos de 30/09 (5,1840) e 30/10 (5,4397) foram buscados na mesma API, de outra máquina, e gravados em `FxRateCache`; depois o script rodou de novo.
+- Resultado: out/26 = R$ 629.824,31.
+- Risco: se a API continuar bloqueando o droplet, o fechamento de cada mês fica com a última cotação do dia que o agendador pegou (perto do fechamento) até a histórica responder.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
