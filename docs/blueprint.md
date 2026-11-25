@@ -2604,6 +2604,13 @@ Luiz: *"Use o preço médio do BTG como base para TODAS as ações e FIIs... o i
 
 **Conferido em cópia de produção** (só DIRR3, VBBR3 e GGBR4 com o preço médio do BTG): nov/26 aporte R$ 1.336,16 → **R$ 14.471,54**; out/26 igual. VBBR3 passa de 4.951,74 (planilha) para 5.072,41 (BTG).
 
+**AXIA19 e AXIA21 com custo zero (25/11, dado, sem código).** Luiz: *"AXIA19 e AXIA21: custo zero, igual aos direitos (ALZR12, KNCR12). O preço médio da AXIA3 e da AXIA7 já vem do BTG e já carrega o custo da família inteira; não mover custo para a AXIA7. Tratar como evento sem dinheiro."*
+- Base no livro de custo: 3 cotas × R$ 0 para cada uma (`apply-cost-base.ts`, desde 01/08/2026). As fotos de out e nov passaram de 178,44 / 176,16 para 0.
+- O aviso `investido-zerado-com-cotas` das duas foi marcado "É assim mesmo" (`DataHealthIgnore`), como o de ALZR12/KNCR12.
+- Efeito: out/26 aporte 15.276,48 → **14.921,88** (BTG · Ação 354,60 → 0); rendimento −9.079,06 → **−8.724,46**. Nov/26 igual (14.471,54 / −5.190,06).
+
+**Patrimônio de out/26 R$ 607.180,33 → R$ 627.180,33 (25/11, explicação).** Não é dado novo: desde o deploy de 24/11 (regra "em trânsito"), o total de out/26 soma o CDB Sofisa de R$ 20.000 aplicado em 30/10, que a foto de outubro ainda não mostrava (aparece na de novembro com 20.160,58). Fotos de out = 607.081,73, mais Wise carregada de set = 98,60, mais 20.000 em trânsito. O rendimento de out e de nov não muda com isso: antes os 20 mil eram descontados do rendimento de nov, agora entram no início de nov.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.
