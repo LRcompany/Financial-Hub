@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react'
 import { currency } from '../lib/format'
 import { HoverCard, HoverRow } from './HoverCard'
+import { Money } from './Money'
 import styles from './VerticalBarChart.module.css'
 
 interface Item {
@@ -35,15 +37,17 @@ export function VerticalBarChart({ data, max = 20 }: { data: Item[]; max?: numbe
       {ordered.map((b) => (
         <div key={b.label} className={styles.col}>
           <span className={styles.pct}>{((b.value / total) * 100).toFixed(1)}%</span>
-          <div
-            className={styles.bar}
-            style={{ height: `${Math.max((b.value / maxValue) * 100, 6)}%` }}
-            title={`R$ ${currency(b.value)}`}
-          />
+          <div className={styles.track}>
+            <div
+              className={styles.bar}
+              style={{ '--bar-size': `${Math.max((b.value / maxValue) * 100, 6)}%` } as CSSProperties}
+              title={`R$ ${currency(b.value)}`}
+            />
+          </div>
           <HoverCard
             content={
               b.breakdown && b.breakdown.length > 1
-                ? b.breakdown.map((d) => <HoverRow key={d.label} label={d.label} value={`R$ ${currency(d.value)}`} />)
+                ? b.breakdown.map((d) => <HoverRow key={d.label} label={d.label} value={<Money>{`R$ ${currency(d.value)}`}</Money>} />)
                 : null
             }
           >

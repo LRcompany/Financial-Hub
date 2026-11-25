@@ -1,7 +1,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   min-width: 160px;
 }
@@ -18,7 +18,11 @@
   height: 38px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 0 var(--space-3);
+  /* var(--space-4), não var(--space-3) — respiro igual ao dos botões
+     pill (.saveBtn/.addBtn usam var(--space-4)); com var(--space-3) o
+     texto do campo ficava mais colado na borda do que o texto de um
+     botão do lado, dando a sensação de "esmagado". */
+  padding: 0 var(--space-4);
   font-size: 13.5px;
   font-family: inherit;
   color: var(--ink);
@@ -40,4 +44,28 @@
 
 .input[type='number'] {
   -moz-appearance: textfield;
+}
+
+/* Seta de <select> — nativa varia demais entre navegador/SO (achado real,
+   08/09: ficava "esmagada no canto" em alguns), então some com ela e
+   desenha uma própria, consistente em qualquer lugar que usa <Select>.
+   Cor hardcoded batendo com --ink-soft dos dois temas (não dá pra referenciar
+   variável CSS dentro de um data-URI de background-image). */
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 34px;
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 11px 7px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%236B7076' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root:not([data-theme='light']) select.input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23A6ABB2' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='dark'] select.input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23A6ABB2' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
