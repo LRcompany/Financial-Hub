@@ -199,7 +199,9 @@ brokersRouter.get("/brokers/:id/positions", async (req, res) => {
         quantity: s.quantity,
         unitValue: usd && s.unitValue != null ? round2(s.unitValue / fx) : s.unitValue,
         marketValue: usd ? round2(s.marketValue / fx) : s.marketValue,
-        investedAmount: usd ? round2(s.investedAmount / fx) : s.investedAmount,
+        // investedOriginal (25/11): a cotação da foto passou a ser a de
+        // fechamento do mês, então R$ ÷ cotação não dá mais o investido em dólar.
+        investedAmount: usd ? round2(s.investedOriginal ?? s.investedAmount / fx) : s.investedAmount,
         lastUpdated: `${String(s.month).padStart(2, "0")}/${s.year}`,
       };
     })
@@ -297,7 +299,9 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       // vez disso, converte só a DIFERENÇA em dólar (o aporte/resgate de
       // verdade) pela cotação de hoje, e soma em cima do BRL que já estava
       // registrado — histórico velho nunca é recotado, só o que muda de fato.
-      const previousRawInvested = previous ? (previous.fxRateToBRL ? previous.investedAmount / previous.fxRateToBRL : previous.investedAmount) : null;
+      const previousRawInvested = previous
+        ? previous.investedOriginal ?? (previous.fxRateToBRL ? previous.investedAmount / previous.fxRateToBRL : previous.investedAmount)
+        : null;
       if (previous && previousRawInvested != null) {
         const deltaRaw = investedAmountRawInput - previousRawInvested;
         investedAmount = previous.investedAmount + deltaRaw * fxRate;
@@ -308,10 +312,13 @@ brokersRouter.put("/brokers/:id/positions", async (req, res) => {
       investedAmount = investedAmountRawInput; // BRL: sem conversão, sem essa pegadinha
     }
 
+    // Investido na moeda original (25/11) — o que ele digitou; sem campo de
+    // investido (Wise), herda o da foto anterior.
+    const investedOriginal = fxRate == null ? null : investedAmountRawInput ?? previous?.investedOriginal ?? investedAmount / fxRate;
     await prisma.positionSnapshot.upsert({
       where: { brokerId_securityId_month_year: { brokerId: broker.id, securityId, month, year } },
-      update: { marketValue, investedAmount, quantity, unitValue, fxRateToBRL: fxRate },
-      create: { brokerId: broker.id, securityId, month, year, marketValue, investedAmount, quantity, unitValue, fxRateToBRL: fxRate },
+      update: { marketValue, investedAmount, investedOriginal, quantity, unitValue, fxRateToBRL: fxRate },
+      create: { brokerId: broker.id, securityId, month, year, marketValue, investedAmount, investedOriginal, quantity, unitValue, fxRateToBRL: fxRate },
     });
     count++;
   }

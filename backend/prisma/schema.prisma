@@ -422,6 +422,12 @@ model PositionSnapshot {
   investedAmount Float // sempre em BRL — já convertido na gravação se a security for USD
   marketValue    Float // idem
   fxRateToBRL    Float? // cotação USD/BRL usada na conversão daquele mês; null quando currency já é BRL
+  // Investido na moeda original (USD/EUR) — corretora manual em moeda
+  // estrangeira (Nomad, Wise), 25/11. Antes isso era deduzido como
+  // investido em R$ ÷ cotação da foto; com a cotação passando a ser a de
+  // fechamento do mês (ver services/foreignFx.ts), a dedução mudaria sozinha
+  // e a próxima atualização veria um aporte em dólar que não existiu.
+  investedOriginal Float?
   dividends      Float?
   // monthlyRatePct/annualRatePct: a Pluggy tem esses campos no payload, mas
   // vêm sempre null nesse tier de conta pessoal — não é bug, não tem o que

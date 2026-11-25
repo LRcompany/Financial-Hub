@@ -2611,6 +2611,39 @@ Luiz: *"Use o preço médio do BTG como base para TODAS as ações e FIIs... o i
 
 **Patrimônio de out/26 R$ 607.180,33 → R$ 627.180,33 (25/11, explicação).** Não é dado novo: desde o deploy de 24/11 (regra "em trânsito"), o total de out/26 soma o CDB Sofisa de R$ 20.000 aplicado em 30/10, que a foto de outubro ainda não mostrava (aparece na de novembro com 20.160,58). Fotos de out = 607.081,73, mais Wise carregada de set = 98,60, mais 20.000 em trânsito. O rendimento de out e de nov não muda com isso: antes os 20 mil eram descontados do rendimento de nov, agora entram no início de nov.
 
+### Dólar de fechamento do mês pra Nomad e Wise (25/11)
+
+Luiz: *"usar o dólar de fechamento de cada mês para NOMAD e Wise, e no mês corrente, o dólar do dia."*
+
+**Achado:**
+- A foto de out/26 da Nomad estava com o dólar a 5,0906, uma cotação velha guardada de quando a API falhou. Em 30/10 ele estava a 5,4397.
+- Outubro saiu R$ 2.642 menor, e esse pedaço do câmbio caiu como "rendimento" em novembro.
+- A Wise de nov também estava em 5,0906.
+
+**Regra** (`services/foreignFx.ts`), pra toda foto de corretora manual em moeda estrangeira a partir de set/2026:
+- mês fechado: cotação do último dia útil do mês (AwesomeAPI histórica), guardada em `FxRateCache` como `USD-BRL@2026-10`; uma vez achada, não muda mais;
+- mês corrente: cotação do dia, só se a API respondeu de verdade nas últimas 36 h (a reserva velha não entra);
+- sem cotação confiável, a foto fica como está e o log diz qual ficou.
+
+O que muda e o que não muda:
+- Muda só o valor de mercado (e o preço unitário). O investido em R$ é custo e não é recotado, então o aporte de nenhum mês muda.
+- O agendador roda isso todo dia junto com o sync de investimentos (21:00 UTC). `scripts/refresh-foreign-fx.ts [--desde 2026-09] [--apply]` mostra o antes → depois.
+
+**`PositionSnapshot.investedOriginal`** (coluna nova): investido na moeda original.
+- Antes, a tela "Atualizar posições" deduzia o investido em dólar como R$ ÷ cotação da foto. Com a cotação mudando, a próxima atualização veria um aporte em dólar que não existiu.
+- A migração preenche a coluna com essa mesma conta, antes de qualquer recotação.
+- `brokers.ts` (tela e gravação) e `contributions.ts` (Registrar aporte em USD) passam a usá-la.
+
+**Conferido em cópia de produção (25/11):**
+
+| | set/26 | out/26 | nov/26 (dólar de 24/11) |
+|---|---|---|---|
+| Cotação | 5,0736 → 5,1840 | 5,0906 → 5,4397 | 5,8098 / Wise 5,0906 → 5,9053 |
+| Nomad + Wise | +862,42 | +2.642,17 | +1.822,07 |
+| Total | 617.263,01 → 618.125,43 | 627.180,33 → 629.824,31 | 638.569,68 → 640.391,75 |
+| Rendimento | 20.145,74 → 21.006,35 | −8.724,46 → −6.942,90 | −5.190,06 → −7.111,99 |
+| Aporte | igual | igual | igual |
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

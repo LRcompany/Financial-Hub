@@ -61,7 +61,7 @@ export async function applyContribution(input: ApplyContributionInput) {
     },
   });
 
-  await applyDeltaToSnapshots(input.brokerId, input.securityId, targetYm, amountBRL, fxRateToBRL);
+  await applyDeltaToSnapshots(input.brokerId, input.securityId, targetYm, amountBRL, fxRateToBRL, input.currency === "USD" ? input.amount : null);
 
   return contribution;
 }
@@ -72,11 +72,22 @@ export async function applyContribution(input: ApplyContributionInput) {
 export async function revertContribution(contributionId: string) {
   const c = await prisma.contribution.findUniqueOrThrow({ where: { id: contributionId } });
   const targetYm = yearMonth(c.date.getFullYear(), c.date.getMonth() + 1);
-  await applyDeltaToSnapshots(c.brokerId, c.securityId, targetYm, -c.amountBRL, null);
+  await applyDeltaToSnapshots(c.brokerId, c.securityId, targetYm, -c.amountBRL, null, c.currency === "USD" ? -c.amount : null);
   await prisma.contribution.delete({ where: { id: contributionId } });
 }
 
-async function applyDeltaToSnapshots(brokerId: string, securityId: string, targetYm: number, amountBRL: number, fxRateForNewRow: number | null) {
+async function applyDeltaToSnapshots(
+  brokerId: string,
+  securityId: string,
+  targetYm: number,
+  amountBRL: number,
+  fxRateForNewRow: number | null,
+  amountOriginal: number | null
+) {
+  // Investido na moeda original (25/11, ver foreignFx.ts) anda junto com o em R$.
+  const originalDelta = (row: { fxRateToBRL: number | null }) => amountOriginal ?? (row.fxRateToBRL ? amountBRL / row.fxRateToBRL : 0);
+  const withOriginal = (row: { investedOriginal: number | null; fxRateToBRL: number | null }) =>
+    row.investedOriginal == null ? {} : { investedOriginal: row.investedOriginal + originalDelta(row) };
   const all = await prisma.positionSnapshot.findMany({
     where: { brokerId, securityId },
     orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -88,7 +99,7 @@ async function applyDeltaToSnapshots(brokerId: string, securityId: string, targe
   if (targetRow) {
     await prisma.positionSnapshot.update({
       where: { id: targetRow.id },
-      data: { investedAmount: targetRow.investedAmount + amountBRL },
+      data: { investedAmount: targetRow.investedAmount + amountBRL, ...withOriginal(targetRow) },
     });
   } else {
     const year = Math.floor((targetYm - 1) / 12);
@@ -106,6 +117,7 @@ async function applyDeltaToSnapshots(brokerId: string, securityId: string, targe
         // sync/atualização trazer o valor de mercado real).
         marketValue: baseline?.marketValue ?? baselineInvested + amountBRL,
         fxRateToBRL: baseline?.fxRateToBRL ?? fxRateForNewRow,
+        ...(baseline ? withOriginal(baseline) : {}),
       },
     });
   }
@@ -118,7 +130,7 @@ async function applyDeltaToSnapshots(brokerId: string, securityId: string, targe
   for (const row of laterRows) {
     await prisma.positionSnapshot.update({
       where: { id: row.id },
-      data: { investedAmount: row.investedAmount + amountBRL },
+      data: { investedAmount: row.investedAmount + amountBRL, ...withOriginal(row) },
     });
   }
 }

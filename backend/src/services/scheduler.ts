@@ -17,6 +17,7 @@ import { linkManualPurchases } from "./purchases.js";
 import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "./pluggySync.js";
 import { syncOnchainWallet } from "./onchainSync.js";
+import { refreshForeignSnapshotFx } from "./foreignFx.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Espera 1 minuto após o boot antes do primeiro sync — dá tempo do resto do
@@ -101,6 +102,15 @@ async function runInvestmentSync() {
     console.log(`[investimentos] sync automático em ${new Date().toISOString()}: ${done.join(", ")}`);
   } catch (err) {
     console.error("[investimentos] sync automático falhou:", (err as Error).message);
+  }
+  // Dólar de fechamento (25/11, ver foreignFx.ts): mês fechado com a cotação
+  // do último dia útil, mês corrente com a do dia — Nomad e Wise.
+  try {
+    const fx = await refreshForeignSnapshotFx();
+    if (fx.changes.length) console.log(`[câmbio] ${fx.changes.length} foto(s) recotada(s): ${fx.changes.map((c) => `${c.broker} ${c.asset} ${c.month}/${c.year} ${c.rateBefore.toFixed(4)}→${c.rateAfter.toFixed(4)}`).join("; ")}`);
+    if (fx.skipped.length) console.log(`[câmbio] sem cotação confiável, ficou como estava: ${fx.skipped.join("; ")}`);
+  } catch (err) {
+    console.error("[câmbio] falhou:", (err as Error).message);
   }
   try {
     const health = await runDataHealth();
