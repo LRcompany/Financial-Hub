@@ -2673,6 +2673,43 @@ Detalhes:
 
 Sem fechamento guardado, o aviso aparece em todas as posições do mês.
 
+### Conector MCP, fase 1: ferramentas de detalhe com origem e data (25/11)
+
+Luiz: *"Ampliar o conector MCP do Command OS para TODAS as áreas... Todo número mostra a ORIGEM e a data da última alteração."* A fase 1 é só leitura. A escrita (fase 2) fica pra depois: aprovação no app, log do valor antigo e novo com o motivo, e opção de desfazer.
+
+**Ferramentas novas** (`backend/src/mcp/detailTools.ts`):
+
+| Área | Ferramenta | O que traz |
+|---|---|---|
+| Orçamento | `lancamentos_detalhe` | Cada lançamento do mês: categoria/divisão, conta, parcela, nota, pendente, origem (Pluggy/digitado), criado/alterado em |
+| Parcelas | `parcelas_detalhe` | Cada compra parcelada: lançadas, que faltam (data e valor), quando termina, origem |
+| Patrimônio | `posicoes_detalhe` | Cada posição: qtd, preço, mercado, investido, câmbio com a fonte (PTAX de dd/mm, dólar do dia), origem do mercado (sync da Pluggy com data, digitado, on-chain, repetida) e do investido (livro de custo com data da base, valor aplicado da corretora, digitado) |
+| Patrimônio | `ajustes_do_mes` | Por ativo: investido antes → depois, movimentações, livro de custo e se está explicado ou é **ajuste sem transação** |
+| Patrimônio | `pluggy_bruto` | O que a Pluggy manda agora (item, contas, investimentos, transações). CPF/CNPJ, documento, titular, webhook e credenciais ocultos; número de conta/cartão só com o final |
+| Projetos | `recebimentos` | Cada recebimento: moeda, bruto, tarifa/IOF na moeda, cotação efetiva, R$, lançamento do banco casado; total por mês e por cliente |
+| Projetos | `a_receber` | Por cliente: falta na moeda e em R$, estimativa no câmbio de hoje, parcelas recebidas, data esperada (fim do contrato) e se está atrasado |
+| Geral | `historico_sync` | Cada sincronização (tipo, quem disparou, duração, ok/erro, resumo), última sync por corretora e status da conexão na Pluggy agora |
+| Geral | `changelog` | Versões publicadas (git log no servidor), livro de custo, avisos aceitos ("É assim mesmo"), lançamentos alterados |
+
+`saude_dos_dados` agora traz a chave e a referência de cada item, e a última sincronização de cada tipo.
+
+**Pra ter origem e data:**
+- `updatedAt` (preenchido sozinho pelo Prisma) em Transaction, UpcomingInstallment, Project, ProjectReceipt e PositionSnapshot. Linha antiga vem `null`, e a ferramenta diz "sem registro (alteração anterior a 25/11/2026 não era guardada)". Nunca inventa uma data.
+- Tabela nova **`SyncRun`**: uma linha por sincronização (cartão, investimentos, on-chain, câmbio), com quem disparou (`agendador`, `botao`, `webhook:<evento>`), início, fim, ok, resumo e erro. O `logSync` (`services/syncLog.ts`) grava a linha mesmo quando a sync falha, devolve o erro pra quem chamou e nunca quebra a sync por causa do log. O histórico existe a partir deste deploy.
+- Migração `20261125140000_mcp_origin_and_sync_log`.
+
+**Detalhe de `ajustes_do_mes`:**
+- Agrupa por corretora + código do ativo. Em out/26 a Pluggy trocou o id interno de três títulos do Tesouro no BTG (dois Selic e o IPCA+ 2040). Agrupando por id, apareciam uma "posição nova" e um "ajuste sem transação" falsos pro mesmo título. Quando acontece, o item ganha um aviso.
+- Ação/FII com base no livro de custo comparam com o livro, não com as movimentações. Evento sem dinheiro (direitos da AXIA) não mexe no custo e não aparece como não explicado.
+- Moeda estrangeira traz também o investido na moeda, antes e depois.
+
+**Achados ao testar na cópia de produção** (não corrigidos, ficam pra decisão do Luiz):
+- **Sofisa `CDB526D5Q1P`:** resgate de R$ 9.843 no extrato em set/26, mas o investido da posição só caiu em out/26 (−9.369, sem transação no mês).
+- **NOMAD AOK:**
+  - o investido em dólar mudou sem aporte: 5.214,86 (set) → 5.150,31 (out) → 4.532,26 (nov);
+  - em reais, o investido variou −240 em out e +114 em nov.
+- **TAP (C6, 10x):** 3 parcelas casadas com a compra (a última de set/26) e 5 pela frente. As de out e nov não estão ligadas à compra.
+
 ## Decisões de navegação/IA
 
 - **"Transações" e "Dia a dia" deixaram de existir como conceitos separados** (24/08/2026) — viraram **"Orçamento"** (nav + seção do dashboard): lançamentos, meta diária e orçamento por categoria moram juntos ali, espelhando a aba "ORÇAMENTO" da planilha.

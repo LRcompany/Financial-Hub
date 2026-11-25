@@ -28,7 +28,7 @@ async function triggerSync(reason: string) {
   }
   syncInFlight = true;
   try {
-    const result = await syncAllBrokersCreditCardTransactions();
+    const result = await syncAllBrokersCreditCardTransactions(`webhook:${reason}`);
     console.log(
       `[pluggy webhook] sync disparado por "${reason}": ${result.transactionsSynced} nova(s), ` +
         `${result.transactionsReconciled} reconciliada(s), ${result.installmentsCreated} parcela(s) futura(s).`

@@ -18,6 +18,7 @@ import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "./pluggySync.js";
 import { syncOnchainWallet } from "./onchainSync.js";
 import { refreshForeignSnapshotFx } from "./foreignFx.js";
+import { logSync } from "./syncLog.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Espera 1 minuto após o boot antes do primeiro sync — dá tempo do resto do
@@ -27,7 +28,7 @@ const FIRST_RUN_DELAY_MS = 60 * 1000;
 async function runSync() {
   const startedAt = new Date().toISOString();
   try {
-    const result = await syncAllBrokersCreditCardTransactions();
+    const result = await syncAllBrokersCreditCardTransactions("agendador");
     console.log(
       `[scheduler] sync de transação de cartão em ${startedAt}: ${result.transactionsSynced} nova(s), ` +
         `${result.transactionsReconciled} reconciliada(s) (pendente virou confirmada), ${result.descriptionsUpdated} com o nome do lojista atualizado, ` +
@@ -76,16 +77,16 @@ export function startCreditCardSyncScheduler() {
 // carteira on-chain; corretora manual continua sendo digitada no dia 1.
 const INVESTMENT_SYNC_UTC_HOUR = 21;
 
-export async function syncAllInvestments() {
+export async function syncAllInvestments(trigger = "agendador") {
   const brokers = await prisma.broker.findMany({ where: { archivedAt: null } });
   const done: string[] = [];
   for (const b of brokers) {
     try {
       if (b.dataSource === "pluggy" && b.pluggyConnectorId) {
-        const r = await syncBrokerInvestments(b.id, b.pluggyConnectorId);
+        const r = await logSync("investimentos", b.name, trigger, () => syncBrokerInvestments(b.id, b.pluggyConnectorId!), (x) => `${x.investmentsCount} posição(ões), ${x.movementsSynced} movimentação(ões)`);
         done.push(`${b.name} ${r.investmentsCount} posição(ões)/${r.movementsSynced} mov.`);
       } else if (b.dataSource === "onchain_query" && b.onchainAddress) {
-        await syncOnchainWallet(b.id);
+        await logSync("onchain", b.name, trigger, () => syncOnchainWallet(b.id));
         done.push(b.name);
       }
     } catch (err) {
@@ -106,7 +107,7 @@ async function runInvestmentSync() {
   // Dólar de fechamento (25/11, ver foreignFx.ts): mês fechado com a cotação
   // do último dia útil, mês corrente com a do dia — Nomad e Wise.
   try {
-    const fx = await refreshForeignSnapshotFx();
+    const fx = await logSync("cambio", null, "agendador", () => refreshForeignSnapshotFx(), (x) => `${x.changes.length} foto(s) recotada(s), ${x.skipped.length} sem cotação`);
     if (fx.changes.length) console.log(`[câmbio] ${fx.changes.length} foto(s) recotada(s): ${fx.changes.map((c) => `${c.broker} ${c.asset} ${c.month}/${c.year} ${c.rateBefore.toFixed(4)}→${c.rateAfter.toFixed(4)}`).join("; ")}`);
     if (fx.skipped.length) console.log(`[câmbio] sem cotação confiável, ficou como estava: ${fx.skipped.join("; ")}`);
   } catch (err) {

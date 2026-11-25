@@ -3,6 +3,7 @@ import { prisma } from "../prisma.js";
 import { syncBrokerInvestments } from "../services/pluggySync.js";
 import { syncBrokerCreditCardTransactions } from "../services/pluggyTransactionSync.js";
 import { syncOnchainWallet } from "../services/onchainSync.js";
+import { logSync } from "../services/syncLog.js";
 import { getRateToBrl, isForeignCurrency, type ForeignCurrency } from "../services/fx.js";
 import { getAccounts } from "../services/pluggy.js";
 
@@ -29,13 +30,13 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
 
   if (broker.dataSource === "pluggy" && broker.pluggyConnectorId) {
     try {
-      const result = await syncBrokerInvestments(broker.id, broker.pluggyConnectorId);
+      const result = await logSync("investimentos", broker.name, "botao", () => syncBrokerInvestments(broker.id, broker.pluggyConnectorId!), (x) => `${x.investmentsCount} posição(ões), ${x.movementsSynced} movimentação(ões)`);
       // Nem todo broker Pluggy tem escopo de transação (alguns só investem)
       // — `scope` é a mesma lista já usada em outro lugar do arquivo pra
       // decidir isso (`["transactions","investments"]`).
       const scope: string[] = JSON.parse(broker.scope);
       const transactions = scope.includes("transactions")
-        ? await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId)
+        ? await logSync("cartao", broker.name, "botao", () => syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!), (x) => `${x.transactionsSynced} nova(s), ${x.transactionsReconciled} reconciliada(s)`)
         : null;
       return res.json({ synced: true, ...result, transactions });
     } catch (err) {
@@ -45,7 +46,7 @@ brokersRouter.post("/brokers/:id/sync", async (req, res) => {
 
   if (broker.dataSource === "onchain_query" && broker.onchainAddress) {
     try {
-      const result = await syncOnchainWallet(broker.id);
+      const result = await logSync("onchain", broker.name, "botao", () => syncOnchainWallet(broker.id));
       return res.json({ synced: true, ...result });
     } catch (err) {
       return res.status(502).json({ error: `Falha ao consultar a blockchain: ${(err as Error).message}` });

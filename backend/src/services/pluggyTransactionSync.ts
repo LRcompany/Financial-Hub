@@ -18,6 +18,7 @@
 // contas próprias), nunca vira Transaction — nem como transferência, nem
 // como receita, pra não sujar o histórico com ruído que não importa.
 import crypto from "node:crypto";
+import { logSync } from "./syncLog.js";
 import { prisma } from "../prisma.js";
 import { brCalendarDay, brDayString } from "./dates.js";
 import { getAccounts, getTransactions } from "./pluggy.js";
@@ -908,7 +909,7 @@ export async function syncBrokerCreditCardTransactions(brokerId: string, itemId:
  * pelo botão manual ("Atualizar transações") e pelo agendador automático
  * (scheduler.ts). Erro num broker não trava os outros.
  */
-export async function syncAllBrokersCreditCardTransactions() {
+export async function syncAllBrokersCreditCardTransactions(trigger = "botao") {
   const brokers = await prisma.broker.findMany({ where: { dataSource: "pluggy", pluggyConnectorId: { not: null }, archivedAt: null } });
 
   const perBroker: {
@@ -929,7 +930,9 @@ export async function syncAllBrokersCreditCardTransactions() {
 
   for (const broker of brokers) {
     try {
-      const result = await syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!);
+      const result = await logSync("cartao", broker.name, trigger, () => syncBrokerCreditCardTransactions(broker.id, broker.pluggyConnectorId!), (r) =>
+        `${r.transactionsSynced} nova(s), ${r.transactionsReconciled} reconciliada(s), ${r.descriptionsUpdated} nome(s) atualizado(s), ${r.installmentsCreated} parcela(s) futura(s)`
+      );
       perBroker.push({ broker: broker.name, ...result });
     } catch (err) {
       perBroker.push({

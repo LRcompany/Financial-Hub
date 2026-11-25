@@ -15,6 +15,7 @@ import { prisma } from "../prisma.js";
 import { createSessionToken, SESSION_COOKIE_NAME } from "../services/session.js";
 import { expenseLedger, ledgerTotal } from "../services/ledger.js";
 import { runDataHealth } from "../services/integrity.js";
+import { registerDetailTools } from "./detailTools.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Json = any;
@@ -67,7 +68,9 @@ export function buildMcpServer() {
       instructions:
         "Finanças pessoais do Luiz no Command OS (command.luizrodrigues.com): orçamento, gastos, parcelas, patrimônio/investimentos e projetos (renda de freelancer). " +
         "Só leitura. Siga a skill \"command-os\": comece com `resumo_financeiro`, aprofunde com as outras ferramentas e responda com números reais, nunca de memória. " +
-        "Valores em R$. Parcela de compra parcelada é gasto certo (nunca previsão). Conta corrente não conta como investimento.",
+        "Valores em R$. Parcela de compra parcelada é gasto certo (nunca previsão). Conta corrente não conta como investimento. " +
+        "Pra conferir um número, use as ferramentas de detalhe (`lancamentos_detalhe`, `posicoes_detalhe`, `ajustes_do_mes`, `recebimentos`, `parcelas_detalhe`...): " +
+        "cada item traz a ORIGEM (Pluggy, digitado, livro de custo, PTAX...) e a data da última alteração — cite as duas quando explicar um número.",
     }
   );
 
@@ -435,9 +438,30 @@ export function buildMcpServer() {
     reply(async () => {
       // Só o texto de cada item — os ids/refs são pros botões do app.
       const health = await runDataHealth();
-      return { ...health, issues: health.issues.map((i) => ({ ...i, items: i.items.map((it) => it.label) })) };
+      // 25/11: última sincronização de cada tipo, pra saber se o número é fresco.
+      const runs = await prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 200 });
+      const lastByKind = new Map<string, (typeof runs)[number]>();
+      const lastOkByKind = new Map<string, (typeof runs)[number]>();
+      for (const r of runs) {
+        if (!lastByKind.has(r.kind)) lastByKind.set(r.kind, r);
+        if (r.ok && !lastOkByKind.has(r.kind)) lastOkByKind.set(r.kind, r);
+      }
+      const ultima_sincronizacao = [...lastByKind.entries()].map(([tipo, r]) => ({
+        tipo,
+        ultima: r.startedAt.toISOString().slice(0, 16).replace("T", " ") + " UTC",
+        ok: r.ok,
+        erro: r.error,
+        ultima_ok: lastOkByKind.get(tipo)?.startedAt.toISOString().slice(0, 16).replace("T", " ") + " UTC" || null,
+      }));
+      return {
+        ...health,
+        issues: health.issues.map((i) => ({ ...i, items: i.items.map((it) => ({ item: it.label, chave: it.key, ref: it.ref ? `${it.ref.kind}:${it.ref.id}` : null })) })),
+        ultima_sincronizacao: ultima_sincronizacao.length ? ultima_sincronizacao : "sem registro ainda (o histórico de sync começou em 25/11/2026)",
+      };
     })
   );
+
+  registerDetailTools(server, reply, api);
 
   return server;
 }

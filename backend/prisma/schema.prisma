@@ -104,6 +104,8 @@ model Transaction {
 
   @@index([date])
   @@index([categoryId])
+  // Última alteração (25/11, conector MCP: "todo número mostra a origem e a data da última alteração").
+  updatedAt DateTime? @updatedAt
 }
 
 // Divide uma Transaction real (boleto/fatura que junta mais de uma
@@ -170,6 +172,8 @@ model UpcomingInstallment {
   createdAt DateTime @default(now())
 
   @@index([dueDate])
+  // Última alteração (25/11, conector MCP: "todo número mostra a origem e a data da última alteração").
+  updatedAt DateTime? @updatedAt
 }
 
 model Recurrence {
@@ -447,6 +451,8 @@ model PositionSnapshot {
   carriedForward Boolean   @default(false)
 
   @@unique([brokerId, securityId, month, year])
+  // Última alteração (25/11, conector MCP: "todo número mostra a origem e a data da última alteração").
+  updatedAt DateTime? @updatedAt
 }
 
 // Provento (dividendo/JCP/rendimento) por ativo/mês — separado de
@@ -544,6 +550,8 @@ model Project {
 
   receipts      ProjectReceipt[]
   supplierCosts ProjectSupplierCost[]
+  // Última alteração (25/11, conector MCP: "todo número mostra a origem e a data da última alteração").
+  updatedAt DateTime? @updatedAt
 }
 
 model ProjectReceipt {
@@ -563,6 +571,8 @@ model ProjectReceipt {
   iofAmount          Float? // IOF, na moeda do contrato
 
   transactions Transaction[]
+  // Última alteração (25/11, conector MCP: "todo número mostra a origem e a data da última alteração").
+  updatedAt DateTime? @updatedAt
 }
 
 model TaxPayment {
@@ -723,4 +733,21 @@ model MonthTotal {
   total      Float
   byCategory String // JSON { categoryId|"uncategorized": total }
   recordedAt DateTime @default(now())
+}
+
+// Histórico de sincronização (25/11, conector MCP: `historico_sync`). Uma
+// linha por execução: cartão/conta, investimentos, on-chain ou câmbio, por
+// corretora, com quem disparou (agendador, botão, webhook) e o resultado.
+model SyncRun {
+  id         String   @id @default(uuid())
+  kind       String // cartao | investimentos | onchain | cambio
+  brokerName String?
+  trigger    String // agendador | botao | webhook:<evento> | script
+  startedAt  DateTime
+  finishedAt DateTime
+  ok         Boolean
+  summary    String?
+  error      String?
+
+  @@index([startedAt])
 }
